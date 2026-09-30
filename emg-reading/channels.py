@@ -1,5 +1,5 @@
 # Pads with no electrical connection (see hardware-status.md). Drop these before any processing.
-DEAD_CHANNELS = (0, 2, 5)
+DEAD_CHANNELS = ()
 
 
 def live_channels(num_channels):
