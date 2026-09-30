@@ -12,7 +12,7 @@ from pyqtgraph.Qt import QtCore, QtGui
 from mindrove.board_shim import BoardShim, BoardIds, MindRoveInputParams
 
 from channels import live_channels
-from processing import filter_channel
+from processing import filter_channel, spectrum
 
 WINDOW_S = 4
 UPDATE_MS = 50
@@ -87,8 +87,8 @@ def main():
             rms = np.sqrt(np.mean(x ** 2))
             plots[i].setTitle(f"ch {ch}   rms {rms:.1f} uV", size="9pt")
             if state["spectrum"]:
-                mag = np.abs(np.fft.rfft(x * np.hanning(len(x)))) / len(x)
-                curves[i].setData(np.fft.rfftfreq(len(x), 1 / rate), mag + 1e-9)
+                f, mag = spectrum(x, rate)
+                curves[i].setData(f, mag + 1e-9)
             else:
                 # Sweep like a heart monitor: overwrite the oldest samples and leave a gap after the cursor
                 if k:

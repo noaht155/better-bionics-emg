@@ -59,6 +59,35 @@ def record(band, prompt, seconds):
     return band.read()[:, int(REACTION_S * band.rate):]
 
 
+def compute(relaxed, squeezed, rate, channels, car):
+    """relaxed, squeezed: live channels x samples of raw data.
+    Returns ({channel: {"rest", "max"}}, report lines to show)."""
+    lines = []
+    lost = lost_channels(relaxed, rate) | lost_channels(squeezed, rate)
+    if lost.any():
+        lines.append(f"warning: channels {[ch for ch, l in zip(channels, lost) if l]} lost pad contact, "
+                     "check them and run again")
+    relaxed_y, squeezed_y = process(relaxed, rate, car), process(squeezed, rate, car)
+
+    result = {}
+    lines.append("ch    rest     max   ratio")
+    for i, ch in enumerate(channels):
+        rest = float(np.percentile(envelope_series(relaxed_y[i], rate), REST_PERCENTILE))
+        max_ = float(np.percentile(envelope_series(squeezed_y[i], rate), MAX_PERCENTILE))
+        note = ""
+        if max_ < MIN_RATIO * rest:
+            note = "  barely changed, check the pad"
+            max_ = MIN_RATIO * rest
+        result[ch] = {"rest": round(rest, 2), "max": round(max_, 2)}
+        lines.append(f"{ch}  {rest:6.1f}  {max_:6.1f}  {max_ / rest:5.1f}x{note}")
+    return result, lines
+
+
+def save(result, car):
+    CAL_FILE.write_text(json.dumps({"date": time.strftime("%Y-%m-%d %H:%M"), "filter_version": FILTER_VERSION,
+                                    "common_average": car, "channels": result}, indent=2) + "\n")
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--synthetic", action="store_true", help="use the synthetic board instead of the armband")
@@ -74,25 +103,9 @@ def main():
         raise SystemExit("no data received, run check_connection.py")
 
     car = not args.no_car
-    lost = lost_channels(relaxed, rate) | lost_channels(squeezed, rate)
-    if lost.any():
-        print(f"warning: channels {[ch for ch, l in zip(channels, lost) if l]} lost pad contact, check them and run again")
-    relaxed_y, squeezed_y = process(relaxed, rate, car), process(squeezed, rate, car)
-
-    result = {}
-    print("ch    rest     max   ratio")
-    for i, ch in enumerate(channels):
-        rest = float(np.percentile(envelope_series(relaxed_y[i], rate), REST_PERCENTILE))
-        max_ = float(np.percentile(envelope_series(squeezed_y[i], rate), MAX_PERCENTILE))
-        note = ""
-        if max_ < MIN_RATIO * rest:
-            note = "  barely changed, check the pad"
-            max_ = MIN_RATIO * rest
-        result[ch] = {"rest": round(rest, 2), "max": round(max_, 2)}
-        print(f"{ch}  {rest:6.1f}  {max_:6.1f}  {max_ / rest:5.1f}x{note}")
-
-    CAL_FILE.write_text(json.dumps({"date": time.strftime("%Y-%m-%d %H:%M"), "filter_version": FILTER_VERSION,
-                                    "common_average": car, "channels": result}, indent=2) + "\n")
+    result, lines = compute(relaxed, squeezed, rate, channels, car)
+    print("\n".join(lines))
+    save(result, car)
     print(f"saved {CAL_FILE.name}")
 
 

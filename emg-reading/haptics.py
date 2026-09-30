@@ -27,6 +27,20 @@ def level(env, rest, max_):
     return float(np.clip((env - rest) / (max_ - rest), 0.0, 1.0))
 
 
+def output_duties(raw, filtered, channels, ranges, car):
+    """raw, filtered: live channels x one envelope window. Returns (duty per output in %, lost per channel)."""
+    lost = contact_lost(raw)
+    y = common_average(filtered, ~lost) if car else filtered
+    levels = {}
+    for i, ch in enumerate(channels):
+        levels[ch] = 0.0 if lost[i] else level(envelope(y[i]), *ranges[ch])
+    duties = []
+    for chs in OUTPUTS:
+        live = [levels[ch] for ch in chs if ch in levels]
+        duties.append(int(round(100 * np.mean(live))) if live else 0)
+    return duties, lost
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--synthetic", action="store_true", help="use the synthetic board instead of the armband")
@@ -72,15 +86,7 @@ def main():
                     raw = np.hstack([raw, new])[:, -env_len:]
                     filtered = np.hstack([filtered, stream.process(new)])[:, -env_len:]
                     if received >= settle_len + env_len:
-                        lost = contact_lost(raw)
-                        y = common_average(filtered, ~lost) if car else filtered
-                        levels = {}
-                        for i, ch in enumerate(band.channels):
-                            levels[ch] = 0.0 if lost[i] else level(envelope(y[i]), *ranges[ch])
-                        duties = []
-                        for chs in OUTPUTS:
-                            live = [levels[ch] for ch in chs if ch in levels]
-                            duties.append(int(round(100 * np.mean(live))) if live else 0)
+                        duties, lost = output_duties(raw, filtered, band.channels, ranges, car)
                         esp.set_outputs(duties)
                         if time.perf_counter() - last_print >= PRINT_EVERY_S:
                             last_print = time.perf_counter()

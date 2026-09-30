@@ -201,33 +201,33 @@ def add_link_args(parser):
                         help=f"use WiFi even if a board is plugged in (default address {WIFI_IP})")
 
 
-def self_test(board):
-    print(f"connected to {board.link.name}, firmware {board.fw_version}")
-    print(board.ping())
+def self_test(board, log=print):
+    log(f"connected to {board.link.name}, firmware {board.fw_version}")
+    log(board.ping())
 
-    print("channels one at a time")
+    log("channels one at a time")
     for ch in range(NUM_CH):
         board.set(ch, 100)
         time.sleep(0.3)
         board.set(ch, 0)
 
-    print("all channels fading up and down")
+    log("all channels fading up and down")
     for duty in list(range(0, 101, 10)) + list(range(90, -1, -10)):
         board.set_all(duty)
         time.sleep(0.08)
 
-    print("staircase across the outputs")
+    log("staircase across the outputs")
     board.set_outputs([round(100 * ch / (NUM_CH - 1)) for ch in range(NUM_CH)])
     time.sleep(1.0)
     board.off()
 
-    print("pulse on channel 3 for 500 ms")
+    log("pulse on channel 3 for 500 ms")
     board.pulse(3, 100, 500)
     time.sleep(0.8)
 
     times = sorted(board.round_trip_ms(i) for i in range(50))
-    print(f"round trip: median {times[len(times) // 2]:.1f} ms, worst {times[-1]:.1f} ms")
-    print("self-test passed")
+    log(f"round trip: median {times[len(times) // 2]:.1f} ms, worst {times[-1]:.1f} ms")
+    log("self-test passed")
 
 
 def main():

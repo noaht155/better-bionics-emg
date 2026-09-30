@@ -73,6 +73,13 @@ def contact_lost(raw):
     return np.ptp(raw, axis=1) > CONTACT_LOSS_UV
 
 
+def spectrum(x, rate):
+    """Magnitude spectrum of one channel. Without removing the trend and windowing, the raw DC drift
+    leaks into every bin. Returns (frequencies, magnitudes)."""
+    x = signal.detrend(np.asarray(x, dtype=np.float64))
+    return np.fft.rfftfreq(len(x), 1 / rate), np.abs(np.fft.rfft(x * np.hanning(len(x)))) / len(x)
+
+
 def envelope(x):
     return float(np.sqrt(np.mean(np.square(x))))
 
