@@ -55,6 +55,22 @@ The ESP32 is reached over USB if it's plugged into this computer, otherwise over
 `live_plot.py` shows the signals (f toggles filtering, s the spectrum). `esp32_link.py` runs a self-test of the ESP32 outputs.
 Add `--synthetic` to any of these to run without the armband.
 
+## Recording sessions
+
+Connect the armband, plug in the webcam, then:
+
+```powershell
+.venv\Scripts\python app.py
+```
+
+Open http://localhost:8000, fill in the form and start. The first run downloads MediaPipe's hand model (about 8 MB) into `models/`.
+
+- Put the camera where it sees the tracked hand in every posture. The warning bar shows when the hand is out of view.
+- Space pauses and continues. b marks the current cue as bad, or the gesture before it during the first 1.5 s of a rest. Stop needs two clicks.
+- Each session is saved to `data/<date>_<time>_<subject>/` as it records. `session.load_session()` reads it back.
+- `--camera 1` picks another webcam, `--no-camera` records EMG only, `--host 0.0.0.0` allows a tablet on the same network.
+- `--replay data/2026-09-30-filter` plays recorded EMG instead of the armband, `--camera clip.mp4` uses a video file, for testing the app.
+
 ## Undo the static IP
 
 The WiFi adapter won't work on normal networks until this is reverted. Run in an admin PowerShell:
