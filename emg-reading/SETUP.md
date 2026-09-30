@@ -42,6 +42,8 @@ Close the PlatformIO monitor first, only one program can use the ESP32's serial 
    .venv\Scripts\python haptics.py
    ```
 
+The ESP32 is reached over USB if it's plugged into this computer, otherwise over WiFi. It joins the armband's network by itself at `192.168.4.10`, so it only needs power. Add `--wifi` to use WiFi while the USB cable is plugged in. USB has priority: the ESP32 refuses WiFi commands for 3 s after any USB command.
+
 `live_plot.py` shows the signals (f toggles filtering, s the spectrum). `esp32_link.py` runs a self-test of the ESP32 outputs.
 Add `--synthetic` to any of these to run without the armband.
 

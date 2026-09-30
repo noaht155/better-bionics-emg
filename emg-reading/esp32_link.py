@@ -1,20 +1,28 @@
-"""Talk to the ESP32 haptics firmware over USB serial (see protocol.md).
+"""Talk to the ESP32 haptics firmware over USB serial or WiFi (see protocol.md).
 
+USB is used when a board is plugged in, WiFi otherwise. --wifi forces WiFi.
 Run this file directly for a self-test that sweeps the outputs:
-    python esp32_link.py [--port COM3] [--verbose]
+    python esp32_link.py [--port COM3] [--wifi [IP]] [--verbose]
 """
 import argparse
+import socket
 import time
 
 import serial
 import serial.tools.list_ports
 
-PROTO_VERSION = "0.1"
+PROTO_VERSION = "0.2"
 BAUD = 115200
 NUM_CH = 7
 
+# Must match motor-control/include/wifi_config.h
+WIFI_IP = "192.168.4.10"
+TCP_PORT = 4211
+
 # USB to serial chips used on ESP32 dev boards: CP210x and CH340
 KNOWN_USB_IDS = {(0x10C4, 0xEA60), (0x1A86, 0x7523)}
+
+READ_TIMEOUT_S = 1.0
 
 
 class Esp32Error(Exception):
@@ -22,34 +30,96 @@ class Esp32Error(Exception):
 
 
 def find_port():
+    """The serial port of the one plugged-in board, or None if there is none."""
     matches = [p.device for p in serial.tools.list_ports.comports() if (p.vid, p.pid) in KNOWN_USB_IDS]
-    if not matches:
-        raise Esp32Error("no ESP32 found, pass the port explicitly")
     if len(matches) > 1:
         raise Esp32Error(f"several possible boards {matches}, pass the port explicitly")
-    return matches[0]
+    return matches[0] if matches else None
 
 
-class Esp32:
-    def __init__(self, port=None, verbose=False):
-        self.verbose = verbose
-        self.watchdog_fired = False
-        port = port or find_port()
+class SerialTransport:
+    def __init__(self, port):
+        self.name = port
         try:
-            self.ser = serial.Serial(port, BAUD, timeout=1.0)
+            self.ser = serial.Serial(port, BAUD, timeout=READ_TIMEOUT_S)
         except serial.SerialException as e:
             raise Esp32Error(f"can't open {port}, is the PlatformIO monitor or another script using it? ({e})")
-        self.fw_version = self._reset_and_wait_ready()
-
-    def _reset_and_wait_ready(self):
-        # DTR high would hold GPIO0 low and boot into the flasher, so keep it low and pulse EN through RTS
+        # Reset the board so it sends READY. DTR high would hold GPIO0 low and boot into the
+        # flasher, so keep it low and pulse EN through RTS
         self.ser.dtr = False
         self.ser.rts = True
         time.sleep(0.1)
         self.ser.rts = False
-        deadline = time.time() + 3.0
+
+    def write(self, data):
+        self.ser.write(data)
+
+    def readline(self):
+        # The ROM bootloader prints at a different baud rate, so boot output can be garbage
+        return self.ser.readline().decode(errors="replace").strip()
+
+    def discard_input(self):
+        self.ser.reset_input_buffer()
+
+    def close(self):
+        self.ser.close()
+
+
+class TcpTransport:
+    def __init__(self, host):
+        self.name = f"{host} (wifi)"
+        try:
+            self.sock = socket.create_connection((host, TCP_PORT), timeout=5.0)
+        except OSError as e:
+            raise Esp32Error(f"can't reach the ESP32 at {host}:{TCP_PORT}, is this computer on the armband's WiFi? ({e})")
+        # Commands are tiny, so send each one at once and don't wait to batch them
+        self.sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+        self.sock.settimeout(READ_TIMEOUT_S)
+        self.buf = b""
+
+    def write(self, data):
+        self.sock.sendall(data)
+
+    def readline(self):
+        while b"\n" not in self.buf:
+            try:
+                chunk = self.sock.recv(256)
+            except socket.timeout:
+                return ""
+            if not chunk:
+                raise Esp32Error("the ESP32 closed the WiFi connection")
+            self.buf += chunk
+        line, self.buf = self.buf.split(b"\n", 1)
+        return line.decode(errors="replace").strip()
+
+    def discard_input(self):
+        self.buf = b""
+        self.sock.settimeout(0.05)
+        try:
+            while self.sock.recv(256):
+                pass
+        except OSError:
+            pass
+        self.sock.settimeout(READ_TIMEOUT_S)
+
+    def close(self):
+        self.sock.close()
+
+
+class Esp32:
+    def __init__(self, port=None, wifi=None, verbose=False):
+        """port: serial port. wifi: IP address. With neither, USB if a board is plugged in, else WiFi."""
+        self.verbose = verbose
+        self.watchdog_fired = False
+        if port is None and wifi is None:
+            port = find_port()
+        self.link = SerialTransport(port) if port else TcpTransport(wifi or WIFI_IP)
+        self.fw_version = self._wait_ready()
+
+    def _wait_ready(self):
+        deadline = time.time() + 5.0
         while time.time() < deadline:
-            line = self._readline()
+            line = self.link.readline()
             if line.startswith("READY,"):
                 _, proto, fw = line.split(",")
                 if proto != PROTO_VERSION:
@@ -57,16 +127,12 @@ class Esp32:
                 return fw
         raise Esp32Error("no READY from board")
 
-    def _readline(self):
-        # The ROM bootloader prints at a different baud rate, so boot output can be garbage
-        return self.ser.readline().decode(errors="replace").strip()
-
     def _send(self, msg, reply_prefix):
-        self.ser.write((msg + "\n").encode())
+        self.link.write((msg + "\n").encode())
         if self.verbose:
             print(">", msg)
         while True:
-            line = self._readline()
+            line = self.link.readline()
             if self.verbose and line:
                 print("<", line)
             if not line:
@@ -74,6 +140,10 @@ class Esp32:
             if line == "WDT":
                 self.watchdog_fired = True
                 continue
+            if line.startswith("WIFI,"):
+                continue
+            if line == "ERR,BUSY,serial":
+                raise Esp32Error("the ESP32 is being controlled over USB, WiFi commands are refused")
             if line.startswith("ERR,"):
                 raise Esp32Error(f"{msg} -> {line}")
             if line.startswith(reply_prefix):
@@ -85,6 +155,10 @@ class Esp32:
 
     def set(self, ch, duty):
         self._send(f"M,{ch},{duty}", f"ACK,M,{ch},{duty}")
+
+    def set_outputs(self, duties):
+        """Set all outputs in one message. duties: one percentage per channel."""
+        self._send("S," + ",".join(str(d) for d in duties), "ACK,S")
 
     def set_all(self, duty):
         self._send(f"A,{duty}", f"ACK,A,{duty}")
@@ -106,13 +180,13 @@ class Esp32:
     def close(self):
         # Ctrl+C can land mid-command and leave a stale reply behind, so skip anything before ACK,X
         try:
-            self.ser.reset_input_buffer()
-            self.ser.write(b"X\n")
+            self.link.discard_input()
+            self.link.write(b"X\n")
             deadline = time.time() + 1.0
-            while time.time() < deadline and self._readline() != "ACK,X":
+            while time.time() < deadline and self.link.readline() != "ACK,X":
                 pass
         finally:
-            self.ser.close()
+            self.link.close()
 
     def __enter__(self):
         return self
@@ -121,8 +195,14 @@ class Esp32:
         self.close()
 
 
+def add_link_args(parser):
+    parser.add_argument("--port", help="ESP32 serial port, auto-detected if omitted")
+    parser.add_argument("--wifi", nargs="?", const=WIFI_IP, metavar="IP",
+                        help=f"use WiFi even if a board is plugged in (default address {WIFI_IP})")
+
+
 def self_test(board):
-    print(f"connected to {board.ser.port}, firmware {board.fw_version}")
+    print(f"connected to {board.link.name}, firmware {board.fw_version}")
     print(board.ping())
 
     print("channels one at a time")
@@ -136,6 +216,11 @@ def self_test(board):
         board.set_all(duty)
         time.sleep(0.08)
 
+    print("staircase across the outputs")
+    board.set_outputs([round(100 * ch / (NUM_CH - 1)) for ch in range(NUM_CH)])
+    time.sleep(1.0)
+    board.off()
+
     print("pulse on channel 3 for 500 ms")
     board.pulse(3, 100, 500)
     time.sleep(0.8)
@@ -147,10 +232,10 @@ def self_test(board):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--port", help="serial port, auto-detected if omitted")
+    add_link_args(parser)
     parser.add_argument("--verbose", action="store_true", help="print every message sent and received")
     args = parser.parse_args()
-    with Esp32(args.port, verbose=args.verbose) as board:
+    with Esp32(args.port, args.wifi, verbose=args.verbose) as board:
         self_test(board)
 
 
