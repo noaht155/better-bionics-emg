@@ -1,6 +1,11 @@
+fastapi==0.142.2
+mediapipe==1.0.1
 mindrove==5.3.0
 numpy==2.5.3
+opencv-contrib-python==5.0.0.93
 PyQt6==6.11.0
 pyqtgraph==0.14.0
 pyserial==3.5
 scipy==1.18.1
+uvicorn==0.54.0
+websockets==17.1

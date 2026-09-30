@@ -24,3 +24,6 @@ emg-reading/calibration.json
 
 # Recorded EMG sessions, personal data and too big for git
 emg-reading/data/
+
+# Downloaded on first run of the recorder
+emg-reading/models/
