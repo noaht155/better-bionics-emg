@@ -2,9 +2,9 @@
 
 Each EMG channel's envelope is scaled between its rest and max level from
 calibrate.py: 0% at or below rest, 100% at or above max, linear in between.
-Ctrl+C to stop.
+A channel whose pad loses contact is set to 0% until it recovers. Ctrl+C to stop.
 
-    python haptics.py [--synthetic] [--port COM3] [--wifi [IP]] [--rest 8 --max 80]
+    python haptics.py [--synthetic] [--port COM3] [--wifi [IP]] [--rest 8 --max 80 [--no-car]]
 """
 import argparse
 import time
@@ -14,13 +14,12 @@ import numpy as np
 from armband import Armband
 from calibrate import load_calibration
 from esp32_link import Esp32, add_link_args
-from processing import ENVELOPE_MS, envelope, filter_channel
+from processing import ENVELOPE_MS, FILTER_SETTLE_S, StreamFilter, common_average, contact_lost, envelope
 
 # EMG channels feeding each output. Channels 6 and 7 sit on the base module and share the last output
 OUTPUTS = [(0,), (1,), (2,), (3,), (4,), (5,), (6, 7)]
 
 UPDATE_HZ = 20
-HISTORY_S = 1.0
 PRINT_EVERY_S = 0.5
 
 
@@ -34,6 +33,7 @@ def main():
     add_link_args(parser)
     parser.add_argument("--rest", type=float, help="envelope in uV that maps to 0%%, for all channels")
     parser.add_argument("--max", type=float, help="envelope in uV that maps to 100%%, for all channels")
+    parser.add_argument("--no-car", action="store_true", help="with --rest/--max: don't subtract the common average")
     args = parser.parse_args()
     if (args.rest is None) != (args.max is None):
         parser.error("give both --rest and --max, or neither")
@@ -43,31 +43,40 @@ def main():
     with Armband(args.synthetic) as band:
         if args.rest is not None:
             ranges = {ch: (args.rest, args.max) for ch in band.channels}
+            car = not args.no_car
         else:
-            ranges = load_calibration()
-            if ranges is None:
+            loaded = load_calibration()
+            if loaded is None:
                 raise SystemExit("no calibration.json, run calibrate.py first (or pass --rest and --max)")
+            ranges, car = loaded
             missing = [ch for ch in band.channels if ch not in ranges]
             if missing:
                 raise SystemExit(f"calibration.json has no entry for channels {missing}, run calibrate.py again")
 
-        history_len = int(HISTORY_S * band.rate)
         env_len = int(ENVELOPE_MS / 1000 * band.rate)
-        history = np.zeros((len(band.channels), 0))
+        settle_len = int(FILTER_SETTLE_S * band.rate)
+        stream = StreamFilter(len(band.channels), band.rate)
+        raw = np.zeros((len(band.channels), 0))
+        filtered = np.zeros((len(band.channels), 0))
+        received = 0
 
         with Esp32(args.port, args.wifi) as esp:
-            print(f"ESP32 on {esp.link.name}")
+            print(f"ESP32 on {esp.link.name}, common average {'on' if car else 'off'}")
             print("output <- EMG ch: " + "  ".join(f"{out}<-{'+'.join(map(str, chs))}" for out, chs in enumerate(OUTPUTS)))
             last_print = 0.0
             next_tick = time.perf_counter()
             try:
                 while True:
-                    history = np.hstack([history, band.read()])[:, -history_len:]
-                    # Wait for a full history so the filter start-up transient is well before the envelope window
-                    if history.shape[1] == history_len:
+                    new = band.read()
+                    received += new.shape[1]
+                    raw = np.hstack([raw, new])[:, -env_len:]
+                    filtered = np.hstack([filtered, stream.process(new)])[:, -env_len:]
+                    if received >= settle_len + env_len:
+                        lost = contact_lost(raw)
+                        y = common_average(filtered, ~lost) if car else filtered
                         levels = {}
-                        for ch, x in zip(band.channels, history):
-                            levels[ch] = level(envelope(filter_channel(x, band.rate)[-env_len:]), *ranges[ch])
+                        for i, ch in enumerate(band.channels):
+                            levels[ch] = 0.0 if lost[i] else level(envelope(y[i]), *ranges[ch])
                         duties = []
                         for chs in OUTPUTS:
                             live = [levels[ch] for ch in chs if ch in levels]
@@ -75,7 +84,10 @@ def main():
                         esp.set_outputs(duties)
                         if time.perf_counter() - last_print >= PRINT_EVERY_S:
                             last_print = time.perf_counter()
-                            print("  ".join(f"out{out} {duty:3d}%" for out, duty in enumerate(duties)))
+                            line = "  ".join(f"out{out} {duty:3d}%" for out, duty in enumerate(duties))
+                            if lost.any():
+                                line += f"   pad contact lost on ch {[ch for ch, l in zip(band.channels, lost) if l]}"
+                            print(line)
                         if esp.watchdog_fired:
                             print("warning: ESP32 watchdog fired, outputs were off for a moment")
                             esp.watchdog_fired = False
