@@ -10,31 +10,12 @@ import numpy as np
 import pyqtgraph as pg
 from pyqtgraph.Qt import QtCore, QtGui
 from mindrove.board_shim import BoardShim, BoardIds, MindRoveInputParams
-from mindrove.data_filter import DataFilter, DetrendOperations, FilterTypes
 
 from channels import live_channels
+from processing import filter_channel
 
 WINDOW_S = 4
 UPDATE_MS = 50
-
-# At 500 Hz the highest frequency the armband can represent is 250 Hz
-BAND_LOW = 20.0
-BAND_HIGH = 200.0
-MAINS_HZ = (60.0, 120.0, 180.0)
-
-
-def filter_channel(x, rate):
-    # DataFilter works in place, so filter a copy and leave the caller's data untouched
-    x = np.array(x, dtype=np.float64)
-    DataFilter.detrend(x, DetrendOperations.CONSTANT.value)
-    # Filters above half the sample rate blow up (the synthetic board runs at 250 Hz)
-    nyquist = rate / 2
-    DataFilter.perform_bandpass(x, rate, BAND_LOW, min(BAND_HIGH, 0.8 * nyquist), 4, FilterTypes.BUTTERWORTH.value, 0)
-    # remove_environmental_noise only cuts 60 Hz to about 10% and leaves the harmonics
-    for hz in MAINS_HZ:
-        if hz + 2 < nyquist:
-            DataFilter.perform_bandstop(x, rate, hz - 2, hz + 2, 4, FilterTypes.BUTTERWORTH.value, 0)
-    return x
 
 
 def main():
