@@ -10,6 +10,9 @@
 
 * { box-sizing: border-box; }
 
+/* Elements with their own display (main is a grid) would otherwise ignore the hidden attribute */
+[hidden] { display: none !important; }
+
 body {
   margin: 0;
   background: var(--bg);
@@ -114,3 +117,50 @@ canvas { display: block; width: 100%; height: auto; }
 .mirror { position: relative; transform: scaleX(-1); }
 .mirror img { display: block; width: 100%; }
 .mirror canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
+
+#tabs {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+  padding: 12px 16px 0;
+  flex-wrap: wrap;
+}
+
+#tabs button { border-radius: 6px 6px 0 0; border-bottom: none; }
+#tabs button.active { background: var(--panel); color: var(--text); border-color: var(--panel); }
+
+#rec-badge {
+  margin-left: auto;
+  padding: 4px 10px;
+  border-radius: 12px;
+  background: var(--bad);
+  color: #fff;
+  font-weight: 600;
+}
+
+main.single { grid-template-columns: 1fr; }
+
+h2 { font-size: 16px; margin: 20px 0 6px; }
+
+.toolbar { display: flex; gap: 16px; align-items: center; flex-wrap: wrap; margin-bottom: 8px; }
+label.check { display: inline-flex; gap: 6px; align-items: center; color: var(--text); margin: 0; }
+.row.narrow { max-width: 720px; align-items: end; }
+
+button.primary { background: var(--accent); border-color: var(--accent); color: #0b1a2b; font-weight: 600; }
+button:disabled { opacity: 0.5; cursor: default; }
+
+pre {
+  background: #16181c;
+  border-radius: 6px;
+  padding: 10px 12px;
+  margin: 8px 0;
+  overflow-x: auto;
+  font-size: 14px;
+}
+
+pre:empty { display: none; }
+
+#cal-prompt { font-size: 36px; font-weight: 700; margin: 16px 0 8px; min-height: 1.2em; }
+#tab-calibrate .bar, #tab-connection .bar { max-width: 720px; margin: 8px 0; }
+#cal-bar, #conn-bar { height: 100%; width: 0; background: var(--accent); }
+#outputs { max-width: 900px; margin-top: 8px; }

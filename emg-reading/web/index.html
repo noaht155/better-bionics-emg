@@ -9,7 +9,16 @@
 <body>
 <div id="warnings"></div>
 
-<main>
+<nav id="tabs">
+  <button data-tab="record" class="active">Record</button>
+  <button data-tab="signals">Signals</button>
+  <button data-tab="calibrate">Calibrate</button>
+  <button data-tab="haptics">Haptics</button>
+  <button data-tab="connection">Connection</button>
+  <span id="rec-badge" hidden>recording</span>
+</nav>
+
+<main id="tab-record" class="tab">
   <section id="left">
     <form id="setup">
       <h1>New session</h1>
@@ -77,7 +86,77 @@
   </section>
 </main>
 
+<main id="tab-signals" class="tab single" hidden>
+  <section>
+    <div class="toolbar">
+      <label class="check"><input type="checkbox" id="sig-filtered" checked> Filtered (f)</label>
+      <label class="check"><input type="checkbox" id="sig-spectrum"> Spectrum (s)</label>
+      <span class="muted">Same filter as the recordings and the haptics. Raw has each channel's mean removed.</span>
+    </div>
+    <canvas id="signals" width="1200" height="760"></canvas>
+  </section>
+</main>
+
+<main id="tab-calibrate" class="tab single" hidden>
+  <section>
+    <h1>Calibration</h1>
+    <p class="muted">Measures each channel's rest and squeeze level for the haptics and saves calibration.json.
+      Redo it whenever the armband is taken off or moved.</p>
+    <div class="row narrow">
+      <label>Seconds per phase <input id="cal-seconds" type="number" min="2" max="30" value="5"></label>
+      <label class="check"><input type="checkbox" id="cal-car" checked> Common average reference</label>
+    </div>
+    <button id="cal-start" class="primary">Start calibration</button>
+    <div id="cal-prompt"></div>
+    <div class="bar"><div id="cal-bar"></div></div>
+    <p id="cal-error" class="error"></p>
+    <pre id="cal-result"></pre>
+    <h2>Current calibration</h2>
+    <pre id="cal-current"></pre>
+  </section>
+</main>
+
+<main id="tab-haptics" class="tab single" hidden>
+  <section>
+    <h1>Haptics</h1>
+    <p class="muted">Drives the ESP32 outputs from each channel's envelope, scaled between the calibrated rest and max.
+      Close the PlatformIO monitor first.</p>
+    <div class="row narrow">
+      <label>Link
+        <select id="esp-link">
+          <option value="auto">USB if plugged in, else WiFi</option>
+          <option value="usb">USB port</option>
+          <option value="wifi">WiFi</option>
+        </select>
+      </label>
+      <label id="esp-port-label" hidden>Port <input id="esp-port" placeholder="COM5 or /dev/cu.usbserial-..."></label>
+      <label id="esp-ip-label" hidden>ESP32 address <input id="esp-ip"></label>
+    </div>
+    <div class="controls">
+      <button id="hap-start" class="primary">Start haptics</button>
+      <button id="hap-stop">Stop</button>
+      <button id="esp-test">Test outputs</button>
+    </div>
+    <p id="hap-status" class="muted"></p>
+    <p id="hap-error" class="error"></p>
+    <canvas id="outputs" width="900" height="260"></canvas>
+    <pre id="esp-log"></pre>
+  </section>
+</main>
+
+<main id="tab-connection" class="tab single" hidden>
+  <section>
+    <h1>Connection check</h1>
+    <p id="conn-source" class="muted"></p>
+    <button id="conn-start" class="primary">Check for 5 s</button>
+    <div class="bar"><div id="conn-bar"></div></div>
+    <p id="conn-error" class="error"></p>
+    <pre id="conn-result"></pre>
+  </section>
+</main>
+
 <script src="/web/hand.js"></script>
 <script src="/web/app.js"></script>
+<script src="/web/tools.js"></script>
 </body>
 </html>

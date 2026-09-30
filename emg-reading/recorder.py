@@ -21,6 +21,8 @@ HAND_LOST_S = 0.5
 CAMERA_SLOW_FPS = 15
 # Mark bad within this long of a rest cue starting still means the gesture before it
 BAD_GRACE_S = 1.5
+# EMG history kept for the signal view and the haptics
+HISTORY_S = 4
 
 
 class Recorder:
@@ -30,7 +32,11 @@ class Recorder:
         self.quality = SignalQuality(band.channels, band.rate)
         self.stream = StreamFilter(len(band.channels), band.rate)
         self.env_len = int(ENVELOPE_MS / 1000 * band.rate)
+        self.history = HISTORY_S * band.rate
+        self.raw = np.zeros((len(band.channels), 0))
         self.filtered = np.zeros((len(band.channels), 0))
+        self.received = 0
+        self._captures = []
         self.env = [0.0] * len(band.channels)
         self.accel = None
         self.hand_seen = 0.0
@@ -68,11 +74,43 @@ class Recorder:
                     emg = data[self.band.emg_rows]
                     battery = data[rows["battery"], -1] if self.band.source == "armband" else None
                     self.quality.update(emg, data[rows["package"]], battery)
-                    self.filtered = np.hstack([self.filtered, self.stream.process(emg)])[:, -self.env_len:]
-                    self.env = [envelope(y) for y in self.filtered]
+                    self.raw = np.hstack([self.raw, emg])[:, -self.history:]
+                    self.filtered = np.hstack([self.filtered, self.stream.process(emg)])[:, -self.history:]
+                    self.received += emg.shape[1]
+                    self.env = [envelope(y) for y in self.filtered[:, -self.env_len:]]
                     self.accel = data[rows["accel"], -1].tolist()
+                for capture in self._captures:
+                    capture["chunks"].append(data)
+                    if time.time() >= capture["until"]:
+                        capture["done"].set()
+                self._captures = [c for c in self._captures if not c["done"].is_set()]
                 self._advance()
             time.sleep(TICK_S)
+
+    def capture(self, seconds):
+        """Blocks for seconds and returns every board row that arrived meanwhile, like calibrate.py's record."""
+        capture = {"chunks": [], "until": time.time() + seconds, "done": threading.Event()}
+        with self._lock:
+            self._captures.append(capture)
+        capture["done"].wait(seconds + 2)
+        with self._lock:
+            if capture in self._captures:
+                self._captures.remove(capture)
+        chunks = capture["chunks"] or [np.zeros((self.band.rows["num_rows"], 0))]
+        return np.hstack(chunks)
+
+    def window(self, samples):
+        """Newest raw and filtered EMG, live channels x up to samples."""
+        with self._lock:
+            return self.raw[:, -samples:].copy(), self.filtered[:, -samples:].copy()
+
+    def samples_since(self, count):
+        """Raw and filtered EMG that arrived after the first count samples, and the new count."""
+        with self._lock:
+            n = min(self.received - count, self.raw.shape[1])
+            if n <= 0:
+                return self.received, None, None
+            return self.received, self.raw[:, -n:].copy(), self.filtered[:, -n:].copy()
 
     def _on_frame(self, record):
         if record[2]:

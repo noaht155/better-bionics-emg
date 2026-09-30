@@ -1,4 +1,5 @@
-"""Recording web app. Serves the page in web/ and streams the live state to it.
+"""Recording web app, also runs the existing tools (connection check, live signals, calibration, haptics).
+Serves the page in web/ and streams the live state to it.
 
     python app.py [--synthetic | --replay data/2026-09-30-filter] [--camera 0 | --camera clip.mp4 | --no-camera]
                   [--host 0.0.0.0] [--port 8000]
@@ -10,6 +11,7 @@ import asyncio
 from pathlib import Path
 from typing import Literal
 
+import numpy as np
 import uvicorn
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.responses import FileResponse, StreamingResponse
@@ -19,9 +21,12 @@ from pydantic import BaseModel, Field
 from armband import Armband, Replay
 from calibrate import load_calibration
 from camera import Camera
+from esp32_link import WIFI_IP
 from gestures import GESTURES, POSTURES
 from hand_angles import JOINTS, RELIABLE
+from processing import spectrum
 from recorder import Recorder
+from tools import Tools
 
 WEB_DIR = Path(__file__).with_name("web")
 SEND_HZ = 20
@@ -45,7 +50,21 @@ class HandChoice(BaseModel):
     hand: Literal["right", "left"]
 
 
-def make_app(recorder, band, camera):
+class CalibrationSettings(BaseModel):
+    seconds: float = Field(ge=2, le=30)
+    car: bool
+
+
+class Esp32Link(BaseModel):
+    port: str | None = None
+    wifi: str | None = None
+
+
+def refuse(e):
+    raise HTTPException(409, str(e))
+
+
+def make_app(recorder, band, camera, tools):
     app = FastAPI()
 
     @app.get("/")
@@ -63,14 +82,16 @@ def make_app(recorder, band, camera):
                 "source": band.source, "calibration": calibration,
                 "gestures": {name: {"text": text, "angles": angles} for name, (text, angles) in GESTURES.items()},
                 "postures": POSTURES, "camera": camera is not None,
-                "tracked_hand": camera.hand if camera else None}
+                "tracked_hand": camera.hand if camera else None, "esp32_wifi_ip": WIFI_IP}
 
     @app.post("/api/session/start")
     def start(settings: SessionSettings):
+        if tools.calibration.state["running"]:
+            refuse("wait for the calibration to finish")
         try:
             return {"folder": recorder.start_session(settings.model_dump())}
         except ValueError as e:
-            raise HTTPException(409, str(e))
+            refuse(e)
 
     @app.post("/api/session/{action}")
     def command(action: Literal["continue", "pause", "bad", "stop"]):
@@ -79,6 +100,58 @@ def make_app(recorder, band, camera):
         except ValueError as e:
             raise HTTPException(409, str(e))
         return {"ok": True}
+
+    @app.post("/api/check")
+    def check():
+        try:
+            tools.check.start()
+        except ValueError as e:
+            refuse(e)
+        return {"ok": True}
+
+    @app.post("/api/calibrate")
+    def calibrate(settings: CalibrationSettings):
+        try:
+            tools.calibration.start(settings.seconds, settings.car)
+        except ValueError as e:
+            refuse(e)
+        return {"ok": True}
+
+    @app.post("/api/haptics/start")
+    def haptics_start(link: Esp32Link):
+        try:
+            tools.haptics.start(link.port, link.wifi)
+        except ValueError as e:
+            refuse(e)
+        return {"ok": True}
+
+    @app.post("/api/haptics/stop")
+    def haptics_stop():
+        tools.haptics.stop()
+        return {"ok": True}
+
+    @app.post("/api/esp32/test")
+    def esp32_test(link: Esp32Link):
+        try:
+            tools.test.start(link.port, link.wifi)
+        except ValueError as e:
+            refuse(e)
+        return {"ok": True}
+
+    @app.get("/api/spectrum")
+    def spectra(filtered: bool = False):
+        raw, filt = recorder.window(recorder.history)
+        x = filt if filtered else raw
+        if x.shape[1] < band.rate:
+            return {"f": [], "mag": []}
+        # 1 Hz bins are plenty for a screen and keep the message small
+        per_hz = x.shape[1] // band.rate
+        out = []
+        for row in x:
+            f, mag = spectrum(row, band.rate)
+            n = len(mag) // per_hz * per_hz
+            out.append(np.round(mag[:n].reshape(-1, per_hz).mean(axis=1), 4).tolist())
+        return {"f": f[:n].reshape(-1, per_hz).mean(axis=1).round(1).tolist(), "mag": out}
 
     @app.post("/api/hand")
     def hand(choice: HandChoice):
@@ -91,7 +164,21 @@ def make_app(recorder, band, camera):
         await ws.accept()
         try:
             while True:
-                await ws.send_json(recorder.snapshot())
+                await ws.send_json(dict(recorder.snapshot(), tools=tools.snapshot()))
+                await asyncio.sleep(1 / SEND_HZ)
+        except WebSocketDisconnect:
+            pass
+
+    @app.websocket("/ws/signals")
+    async def signals(ws: WebSocket):
+        """New raw and filtered EMG samples as they arrive, for the signal view."""
+        await ws.accept()
+        count = max(0, recorder.received - recorder.history)
+        try:
+            while True:
+                count, raw, filt = recorder.samples_since(count)
+                if raw is not None:
+                    await ws.send_json({"raw": np.round(raw, 1).tolist(), "filtered": np.round(filt, 1).tolist()})
                 await asyncio.sleep(1 / SEND_HZ)
         except WebSocketDisconnect:
             pass
@@ -134,10 +221,14 @@ def main():
     with band:
         recorder = Recorder(band, camera)
         recorder.start()
+        tools = Tools(recorder)
         print(f"EMG from {band.source}, open http://localhost:{args.port}")
         try:
-            uvicorn.run(make_app(recorder, band, camera), host=args.host, port=args.port, log_level="warning")
+            uvicorn.run(make_app(recorder, band, camera, tools), host=args.host, port=args.port, log_level="warning")
         finally:
+            # Leaving the haptics thread running would leave the motors on until the ESP32 watchdog fires
+            tools.haptics.stop()
+            tools.haptics.join(timeout=3)
             recorder.stop()
             if camera is not None:
                 camera.stop()

@@ -71,6 +71,8 @@ Open http://localhost:8000, fill in the form and start. The first run downloads 
 - `--camera 1` picks another webcam, `--no-camera` records EMG only, `--host 0.0.0.0` allows a tablet on the same network.
 - `--replay data/2026-09-30-filter` plays recorded EMG instead of the armband, `--camera clip.mp4` uses a video file, for testing the app.
 
+The other tabs run the existing programs on the app's armband stream: Signals (`live_plot.py`, f and s work there too), Calibrate (`calibrate.py`), Haptics (`haptics.py`, plus the `esp32_link.py` output test) and Connection (`check_connection.py`). The scripts still work on their own. Stop the app first, they would both try to open the armband. Haptics running during a recording is logged in the session's events.
+
 ## Undo the static IP
 
 The WiFi adapter won't work on normal networks until this is reverted. Run in an admin PowerShell:

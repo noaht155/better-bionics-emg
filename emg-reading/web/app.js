@@ -9,6 +9,7 @@ const TRACKED_COLOR = "#4fa3ff";
 
 let config = null;
 let state = null;
+let currentTab = "record";
 // Seen a little from the little-finger side, where curled fingers and the thumb stay readable
 const view = { yaw: -45, pitch: -25 };
 
@@ -136,7 +137,7 @@ $("btn-stop").addEventListener("click", () => {
 });
 
 document.addEventListener("keydown", (e) => {
-  if (!state?.session || e.target.tagName === "INPUT") return;
+  if (!state?.session || currentTab !== "record" || e.target.tagName === "INPUT") return;
   if (e.code === "Space") { e.preventDefault(); mainAction(); }
   if (e.key === "b") command("bad");
 });
@@ -332,6 +333,7 @@ function connect() {
     drawWarnings();
     drawSession();
     drawView();
+    drawTools();
   };
   ws.onclose = () => {
     $("warnings").innerHTML = '<div class="serious">Lost the connection to the recorder, retrying</div>';
@@ -344,6 +346,7 @@ async function init() {
   $("source").textContent = `EMG from ${config.source}, ${config.channels.length} channels at ${config.rate} Hz`
     + (config.calibration ? ", calibration loaded" : ", no calibration");
   loadSettings();
+  initTools();
   if (!config.camera) $("view").value = "pose";
   showView();
   connect();
