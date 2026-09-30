@@ -21,3 +21,6 @@ Thumbs.db
 
 # Per-person EMG calibration
 emg-reading/calibration.json
+
+# Recorded EMG sessions, personal data and too big for git
+emg-reading/data/
