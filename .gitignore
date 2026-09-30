@@ -18,3 +18,6 @@ venv/
 # OS
 .DS_Store
 Thumbs.db
+
+# Per-person EMG calibration
+emg-reading/calibration.json
