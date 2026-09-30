@@ -18,6 +18,14 @@ python -m venv .venv
 
    The armband is at `192.168.4.1`. No gateway is set, so internet stays on ethernet.
 
+   **After every armband power-up, toggle DHCP once before streaming.** With only the static IP the armband streams nothing (0 samples) after it restarts. Switching the adapter to DHCP for about 20 s and back fixed it on 2026-09-30, likely because the armband only streams to a device that has asked it for an address since it booted. Admin PowerShell:
+
+   ```powershell
+   netsh interface ip set address name="WiFi" source=dhcp
+   # wait about 20 s, ipconfig shows 169.254.x.x, that's expected
+   netsh interface ip set address name="WiFi" static 192.168.4.2 255.255.255.0
+   ```
+
 3. Check the connection:
 
    ```powershell

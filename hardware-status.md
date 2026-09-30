@@ -16,4 +16,5 @@
 
 ## Computers
 - Windows desktop (Realtek 8852CE WiFi card, no antennas attached): never gets a DHCP address from the armband, needs the static IP 192.168.4.2. Streaming stopped on 2026-09-29 and came back after a reboot and two adapter settings, see `emg-reading/SETUP.md`
+- Desktop, 2026-09-30: after an armband power cycle the static IP alone gives 0 samples. Toggling the adapter to DHCP and back to static fixed it (likely the armband only streams to a device that asked it for an address since it booted, confirmed once)
 - MacBook: gets a DHCP address from the armband and streams without any changes
