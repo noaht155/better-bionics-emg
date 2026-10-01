@@ -192,15 +192,15 @@ function drawSession() {
     $("cue-bar").style.width = "0";
     $("cue-time").textContent = "";
   }
-  // Gesture name and its description, without the reminder line every gesture shares
-  const next = s.next && cue.kind !== "break" ? s.next.text.split("\n").slice(0, 2).join("\n") : null;
-  $("next").innerHTML = next ? `<span>Next</span>${cueTitle(next)}` : "";
+  // Only when the hand below shows the next gesture, so the text and the picture always agree. Name and
+  // description, without the reminder line every gesture shares
+  const target = targetPose();
+  $("next").innerHTML = target?.upcoming ? `<span>Next</span>${cueTitle(target.text)}` : "";
   $("btn-main").textContent = s.paused || cue.kind === "break" ? "Continue (space)" : "Pause (space)";
   $("session-info").textContent = `${s.folder}   ${s.samples} EMG samples, ${s.frames} camera frames`;
 
   const ctx = $("target").getContext("2d");
   ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
-  const target = targetPose();
   const caption = $("target-label");
   caption.textContent = target ? `${target.upcoming ? "Next" : "Now"}: ${target.title}` : "";
   caption.classList.toggle("upcoming", !!target?.upcoming);
@@ -224,7 +224,7 @@ function drawSummary() {
 }
 
 // Target pose of the current cue, or the next gesture during a rest so it can be prepared
-// Returns {angles, title, upcoming}, upcoming is true when it shows the next gesture
+// Returns {angles, title, text, upcoming}, upcoming is true when it shows the next gesture
 function targetPose() {
   const s = state.session;
   if (!s) return null;
@@ -233,7 +233,8 @@ function targetPose() {
   const upcoming = cue.label === "rest" && s.next && !!config.gestures[s.next.label];
   if (upcoming) cue = s.next;
   const g = config.gestures[cue.label];
-  return g ? { angles: anglesByName(g.angles), title: cue.text.split("\n")[0], upcoming } : null;
+  const [title, description] = cue.text.split("\n");
+  return g ? { angles: anglesByName(g.angles), title, text: `${title}\n${description ?? ""}`.trim(), upcoming } : null;
 }
 
 function drawPose() {
