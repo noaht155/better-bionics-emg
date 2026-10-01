@@ -157,6 +157,9 @@ and straightened 3 times on its own (8 s), then all fingers one after another. A
 - The dropped-samples figure in the summary and `session.json` counted every drop since the app started, not per
   session (a sync check with 0 real drops showed 62). Fixed; earlier session files still have the inflated number,
   count drops from the package numbers instead.
+- With the camera read in its own thread, frames arrive in pairs (two within 10 ms, then about 55 ms), still
+  30 fps on average. Arrival times jitter by up to a frame, which widens the tap spread (69 ms on the first check,
+  delay 77 ms). Fixable offline with a straight-line fit of time against the grab number, like the EMG clock.
 - Calibration max levels vary 20 to 100 % between single clenches (effort isn't controlled), rest levels within
   about 1 uV. Only affects the haptics, left as is.
 
