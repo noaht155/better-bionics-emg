@@ -108,6 +108,22 @@ threshold), over the 200 ms target. During free finger movement the output still
 in everyday use it would trigger grips that weren't meant. Not yet measured: false grips per minute during normal
 activity.
 
+**Recalibrating after the band moves.** Train on one session, test on repetitions 2 and 3 of the other (7 grips):
+
+| | old to new | new to old |
+|---|---|---|
+| Old session only | 52 % | 52 % |
+| Adapt without labels (move averages towards its own confident guesses) | 60 % | 51 % |
+| Shift everything by the new rest level (about 10 s of rest) | 57 % | 58 % |
+| 1 repetition of the new session alone | 85 % | 75 % |
+| Old session pooled with that repetition | 74 % | 69 % |
+| Adaptive LDA: old spread, class averages from that repetition | 83 % | 73 % |
+
+One repetition at the new position (about 3 minutes) gets close to a full session. With only one other placement,
+old data adds nothing and pooling it hurts. Adapting without labels follows its own mistakes. Old sessions should
+only start to help once a model learns features that survive the band moving, which needs many placements (a
+network trained across 5+ sessions with an LDA head refitted per fitting is the idea to test then).
+
 **Smaller fixes the same day:**
 - An error in the armband loop ended its thread for good, which looked like a disconnect. The loop now keeps going
   and shows the error.
@@ -122,7 +138,9 @@ activity.
 ## Open
 
 - More sessions with the 7 grips, firm holds and a marked band position.
-- Test rotation augmentation, per-session normalisation and top-up recordings on unseen sessions.
+- Quick recalibration in the app: 1 repetition after putting the band on, retrain with one click.
+- Test rotation augmentation and per-session normalisation on unseen sessions.
+- With 5+ sessions: a small network as a placement-independent feature extractor with an LDA head per fitting.
 - Measure false grips per minute in everyday activity, and a "hold to switch" rule.
 - Bring latency under 200 ms: shorter windows and vote, at some cost in accuracy.
 - Protocol B (continuous joint angles), which may also replace LDA for gestures.
