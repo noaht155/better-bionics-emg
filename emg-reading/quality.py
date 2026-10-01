@@ -14,6 +14,12 @@ HUM_MEDIAN_OF = 5
 NO_DATA_S = 1.0
 DROP_WINDOW_S = 10.0
 BATTERY_LOW = 15
+# Drain estimate: one reading every 10 s, a straight line over the last 15 minutes. The armband reports whole
+# percent, so it needs a few minutes and an actual drop before the slope means anything. While streaming it went
+# from 35 to 29 % in an 11 minute session on 2026-10-01
+BATTERY_SAMPLE_S = 10
+BATTERY_WINDOW_S = 15 * 60
+BATTERY_MIN_SPAN_S = 5 * 60
 
 
 def line_rms(x, rate, hz=MAINS_HZ[0]):
@@ -42,6 +48,7 @@ class SignalQuality:
         self.last_data = time.time()
         self.lost = np.zeros(len(channels), bool)
         self.battery = None
+        self.battery_log = deque()
 
     def update(self, emg, package, battery=None):
         """emg: live channels x new raw samples, package: their package numbers."""
@@ -51,6 +58,10 @@ class SignalQuality:
         self.last_data = now
         if battery is not None:
             self.battery = float(battery)
+            if not self.battery_log or now - self.battery_log[-1][0] >= BATTERY_SAMPLE_S:
+                self.battery_log.append((now, self.battery))
+            while now - self.battery_log[0][0] > BATTERY_WINDOW_S:
+                self.battery_log.popleft()
         if self.last_package is not None:
             gaps = np.diff(np.concatenate([[self.last_package], package]))
             # Counter resets and wraps show up as negative or huge steps, those aren't drops
@@ -69,6 +80,21 @@ class SignalQuality:
 
     def hum_uv(self):
         return np.median(np.array(self.hum), axis=0) if self.hum else np.zeros(len(self.channels))
+
+    def battery_status(self):
+        """{"percent", "per_min", "minutes_left"}, the last two None until there is enough history, or None
+        without an armband battery reading."""
+        if self.battery is None:
+            return None
+        out = {"percent": self.battery, "per_min": None, "minutes_left": None}
+        t = np.array([x[0] for x in self.battery_log])
+        pct = np.array([x[1] for x in self.battery_log])
+        if len(t) > 2 and t[-1] - t[0] >= BATTERY_MIN_SPAN_S and pct.max() > pct.min():
+            drain = -np.polyfit((t - t[0]) / 60, pct, 1)[0]
+            if drain > 0:
+                out["per_min"] = round(float(drain), 2)
+                out["minutes_left"] = round(float(self.battery / drain))
+        return out
 
     def warnings(self):
         """List of (code, message) for everything wrong right now."""

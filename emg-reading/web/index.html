@@ -16,6 +16,7 @@
   <button data-tab="train">Train</button>
   <button data-tab="haptics">Haptics</button>
   <button data-tab="connection">Connection</button>
+  <span id="battery-chip" hidden></span>
   <span id="rec-badge" hidden>recording</span>
 </nav>
 
@@ -195,6 +196,10 @@
     <div class="bar"><div id="conn-bar"></div></div>
     <p id="conn-error" class="error"></p>
     <pre id="conn-result"></pre>
+    <h2>Armband battery</h2>
+    <div id="battery-detail" class="battery-detail"></div>
+    <p class="muted">The drain rate comes from the last 15 minutes and needs about 5 minutes of streaming and a drop of
+      at least 1 % before it shows. Don't run the armband flat, it was recovered from a deep discharge once already.</p>
   </section>
 </main>
 

@@ -297,6 +297,7 @@ class Recorder:
             state = {"env": [round(e, 1) for e in self.env], "accel": self.accel,
                      "hum": [round(float(h), 1) for h in self.quality.hum_uv()],
                      "lost": self.quality.lost.tolist(), "warnings": self.warnings(),
+                     "battery": self.quality.battery_status(),
                      "hand": None, "camera_fps": round(self.camera.fps, 1) if self.camera else None,
                      "session": None, "summary": self.last_summary}
             track = self.camera.latest if self.camera is not None else None

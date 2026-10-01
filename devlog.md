@@ -164,6 +164,9 @@ and straightened 3 times on its own (8 s), then all fingers one after another. A
 - Firefox kept an old `hand.js` after an update and the camera overlay froze on gesture cues. Page files are sent
   with `Cache-Control: no-cache`, and one failing drawing step can no longer stop the others.
 - Practice runs: the same session flow with nothing saved, for checking the camera and setup.
+- Battery in the app: level in the top bar (yellow below 30 %, red below 15 %), and on the Connection tab the drain
+  per minute, time left and full sessions left, from a straight line over the last 15 minutes. Streaming drained
+  about 0.5 % a minute.
 - The dropped-samples figure in the summary and `session.json` counted every drop since the app started, not per
   session (a sync check with 0 real drops showed 62). Fixed; earlier session files still have the inflated number,
   count drops from the package numbers instead.

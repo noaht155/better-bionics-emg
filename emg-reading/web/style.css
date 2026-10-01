@@ -131,6 +131,23 @@ canvas { display: block; width: 100%; height: auto; }
 #tabs button { border-radius: 6px 6px 0 0; border-bottom: none; }
 #tabs button.active { background: var(--panel); color: var(--text); border-color: var(--panel); }
 
+#battery-chip {
+  margin-left: auto;
+  padding: 4px 10px;
+  border-radius: 12px;
+  background: #2a2e36;
+  color: var(--text);
+  font-weight: 600;
+}
+
+#battery-chip.low { background: var(--warn); color: #1b1b1b; }
+#battery-chip.critical { background: var(--bad); color: #fff; }
+#battery-chip:not([hidden]) + #rec-badge { margin-left: 8px; }
+
+.battery-detail { display: flex; gap: 32px; flex-wrap: wrap; margin: 8px 0; }
+.battery-detail div { font-size: 28px; font-weight: 700; }
+.battery-detail small { display: block; font-size: 13px; font-weight: 400; color: var(--muted); }
+
 #rec-badge {
   margin-left: auto;
   padding: 4px 10px;

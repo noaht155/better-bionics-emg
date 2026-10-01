@@ -443,8 +443,32 @@ function drawConnection(t) {
   $("conn-source").textContent = `EMG from ${config.source}, ${config.channels.length} channels at ${config.rate} Hz, ${cam}`;
 }
 
+// Same thresholds as the warning bar (quality.BATTERY_LOW) plus an earlier yellow step
+const BATTERY_LOW = 30, BATTERY_CRITICAL = 15;
+// A full three-posture session with its breaks, for the "sessions left" estimate
+const SESSION_MINUTES = 14;
+
+function drawBattery(b) {
+  const chip = $("battery-chip");
+  chip.hidden = !b;
+  if (!b) {
+    $("battery-detail").innerHTML = `<div>none<small>${config.source} has no battery reading</small></div>`;
+    return;
+  }
+  chip.textContent = `Battery ${Math.round(b.percent)} %`;
+  chip.classList.toggle("low", b.percent < BATTERY_LOW && b.percent >= BATTERY_CRITICAL);
+  chip.classList.toggle("critical", b.percent < BATTERY_CRITICAL);
+  const rate = b.per_min != null ? `${b.per_min.toFixed(2)} %` : "measuring";
+  const left = b.minutes_left != null ? `${Math.floor(b.minutes_left / 60)} h ${b.minutes_left % 60} min` : "measuring";
+  const sessions = b.minutes_left != null ? `${Math.floor(b.minutes_left / SESSION_MINUTES)}` : "measuring";
+  $("battery-detail").innerHTML = `<div>${Math.round(b.percent)} %<small>level</small></div>
+    <div>${rate}<small>used per minute</small></div><div>${left}<small>left at that rate</small></div>
+    <div>${sessions}<small>full sessions (${SESSION_MINUTES} min each)</small></div>`;
+}
+
 function drawTools() {
   const t = state.tools;
+  drawBattery(state.battery);
   $("rec-badge").hidden = !state.session;
   $("rec-badge").textContent = state.session?.practice ? "practice, not saved" : "recording";
   $("rec-badge").classList.toggle("practice", !!state.session?.practice);
