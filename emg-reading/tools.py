@@ -2,17 +2,22 @@
 
 Each tool runs in its own thread and keeps a small state dict for the browser. The logic lives in the
 original scripts (check_connection.report, calibrate.compute, haptics.output_duties, esp32_link.self_test,
-gesture_model.train and LivePredictor), this only feeds them the shared stream instead of opening the
+ml.gesture_model's train and LivePredictor), this only feeds them the shared stream instead of opening the
 armband again.
 """
+import sys
 import threading
 import time
+from pathlib import Path
 
 import calibrate
 import check_connection
-import gesture_model
 from esp32_link import Esp32, self_test
 from haptics import OUTPUTS, UPDATE_HZ, output_duties
+
+# The ml package sits next to emg-reading/ in the repo
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+from ml import gesture_model  # noqa: E402
 
 CHECK_S = 5.0
 COUNTDOWN_S = 3

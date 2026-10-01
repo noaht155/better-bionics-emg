@@ -9,6 +9,7 @@ Then open http://localhost:8000. --host 0.0.0.0 makes it reachable from a tablet
 import argparse
 import asyncio
 import json
+import sys
 from pathlib import Path
 from typing import Literal
 
@@ -22,7 +23,6 @@ from pydantic import BaseModel, Field
 
 from armband import Armband, Replay
 from calibrate import load_calibration
-import gesture_model
 from camera import Camera
 from esp32_link import WIFI_IP
 from gestures import GESTURE_SET, GESTURES, POSTURES, session_plan
@@ -31,6 +31,10 @@ from processing import spectrum
 from recorder import Recorder
 from session import DATA_DIR
 from tools import Tools
+
+# The ml package sits next to emg-reading/ in the repo
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+from ml import gesture_model  # noqa: E402
 
 WEB_DIR = Path(__file__).with_name("web")
 SEND_HZ = 20

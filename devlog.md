@@ -163,6 +163,14 @@ and straightened 3 times on its own (8 s), then all fingers one after another. A
 - Calibration max levels vary 20 to 100 % between single clenches (effort isn't controlled), rest levels within
   about 1 uV. Only affects the haptics, left as is.
 
+**Model code moved to `ml/`** at the repo root, so `emg-reading/` stays about recording. `gesture_model.py` is the
+first file there; the general network, dataset building and evaluation go there too. Saved models and data stay in
+`emg-reading/`. Run with `python -m ml.gesture_model` from the repo root. Checked after the move: same evaluation
+numbers, all saved models load, training and live prediction work in the app.
+
+Data policy for the general network: all good data from all users and calibrations, where good means a completed
+session (not stopped early).
+
 ## Open
 
 - More sessions with the 7 grips, firm holds and a marked band position.

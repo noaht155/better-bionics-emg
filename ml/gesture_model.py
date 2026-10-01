@@ -5,10 +5,10 @@ waveform length, zero crossings and slope sign changes. Training windows come fr
 cues of recorded sessions, minus the start of each cue where the hand is still changing. Live prediction
 computes the same features on the newest window and smooths the output with a majority vote.
 
-    python gesture_model.py data/<session> data/<session> ... [--save]
+    python -m ml.gesture_model emg-reading/data/<session> emg-reading/data/<session> ... [--save]
 
-prints the leave-one-session-out and leave-one-posture-out evaluation, --save also trains on all the given
-sessions and saves the model to models/gestures/.
+from the repo root, prints the leave-one-session-out and leave-one-posture-out evaluation, --save also trains on
+all the given sessions and saves the model to emg-reading/models/gestures/.
 """
 import argparse
 import json
@@ -21,11 +21,13 @@ import numpy as np
 from numpy.lib.stride_tricks import sliding_window_view
 from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
 
-from processing import FILTER_SETTLE_S, FILTER_VERSION, filter_block
 from gestures import GESTURE_SET
+from ml import EMG_READING
+from processing import FILTER_SETTLE_S, FILTER_VERSION, filter_block
 from session import load_session, segments
 
-MODEL_DIR = Path(__file__).with_name("models") / "gestures"
+# Next to the recordings, where the app has always kept them
+MODEL_DIR = EMG_READING / "models" / "gestures"
 
 WINDOW_MS = 200
 STEP_MS = 50

@@ -1,5 +1,5 @@
 // Tabs for the existing tools: live signals (live_plot.py), calibration (calibrate.py), the gesture model
-// (gesture_model.py), haptics and the output test (haptics.py, esp32_link.py) and the connection check
+// (ml/gesture_model.py), haptics and the output test (haptics.py, esp32_link.py) and the connection check
 // (check_connection.py).
 
 const LINK_KEY = "esp32-link";
