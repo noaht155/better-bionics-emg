@@ -188,7 +188,9 @@ function drawSession() {
     $("cue-bar").style.width = "0";
     $("cue-time").textContent = "";
   }
-  $("next").textContent = s.next && cue.kind !== "break" ? `next: ${s.next.text.split("\n")[0]}` : "";
+  // Gesture name and its description, without the reminder line every gesture shares
+  const next = s.next && cue.kind !== "break" ? s.next.text.split("\n").slice(0, 2).join("\n") : null;
+  $("next").innerHTML = next ? `<span>Next</span>${cueTitle(next)}` : "";
   $("btn-main").textContent = s.paused || cue.kind === "break" ? "Continue (space)" : "Pause (space)";
   $("session-info").textContent = `${s.folder}   ${s.samples} EMG samples, ${s.frames} camera frames`;
 

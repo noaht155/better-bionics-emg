@@ -102,7 +102,9 @@ button.armed { background: var(--bad); color: #fff; }
 #cue-bar { height: 100%; width: 0; background: var(--accent); }
 
 #cue-time { font-size: 22px; margin-top: 6px; font-variant-numeric: tabular-nums; }
-#next { color: var(--muted); min-height: 1.4em; }
+#next { font-size: 28px; font-weight: 700; line-height: 1.15; margin-top: 14px; min-height: 2.6em; }
+#next span { display: block; font-size: 13px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+#next small { display: block; font-size: 17px; font-weight: 400; color: var(--muted); margin-top: 4px; }
 
 canvas { display: block; width: 100%; height: auto; }
 #target { max-width: 360px; margin: 8px auto; }
