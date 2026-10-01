@@ -146,6 +146,9 @@ with a network the alignment layer could be trained on the classification itself
 - Firefox kept an old `hand.js` after an update and the camera overlay froze on gesture cues. Page files are sent
   with `Cache-Control: no-cache`, and one failing drawing step can no longer stop the others.
 - Practice runs: the same session flow with nothing saved, for checking the camera and setup.
+- The dropped-samples figure in the summary and `session.json` counted every drop since the app started, not per
+  session (a sync check with 0 real drops showed 62). Fixed; earlier session files still have the inflated number,
+  count drops from the package numbers instead.
 - Calibration max levels vary 20 to 100 % between single clenches (effort isn't controlled), rest levels within
   about 1 uV. Only affects the haptics, left as is.
 

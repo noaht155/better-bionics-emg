@@ -169,6 +169,8 @@ class Recorder:
             self.plan = plan
             self.paused = False
             self.last_summary = None
+            # The quality check counts drops since the app started, the session only wants its own
+            self.dropped_at_start = self.quality.dropped_total
             self._go_to(0)
             return _folder_text(self.session)
 
@@ -219,7 +221,7 @@ class Recorder:
         session = self.session
         self.session = None
         session.add_event("stop", completed=completed)
-        summary = {"completed": completed, "dropped_samples": self.quality.dropped_total}
+        summary = {"completed": completed, "dropped_samples": self.quality.dropped_total - self.dropped_at_start}
         session.close(**summary)
         seconds = session.meta["ended"] - session.meta["started"]
         detected = session.detected / session.frames if session.frames else None
