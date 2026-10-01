@@ -138,6 +138,14 @@ Inconsistent and below plain retraining on the same repetition (75 to 85 %). The
 movement with the effort difference (session 1 had no firm-hold cue). The covariance matching is only a stand-in;
 with a network the alignment layer could be trained on the classification itself. Retest with consistent sessions.
 
+**Is the data usable for individual finger flexion (protocol B)?** Partly. The camera angles are believable (in a
+held point the index reads -4 degrees, the other fingers 112 to 142; in a fist every finger 144 to 160) and tracking
+covered 93 % of the session. But the fingers hardly move on their own: held grips are 7 fixed shapes, and in the 90 s
+of free movement per session the fingers moved together (middle and ring 0.87, ring and pinky 0.93). A model would
+learn 7 hand shapes, not single fingers. Sessions now add a single-finger block in every posture: each finger bent
+and straightened 3 times on its own (8 s), then all fingers one after another. About 3.5 minutes more per session
+(12 instead of 8.6). Sessions recorded before this (up to `150735`) don't have it.
+
 **Smaller fixes the same day:**
 - An error in the armband loop ended its thread for good, which looked like a disconnect. The loop now keeps going
   and shows the error.

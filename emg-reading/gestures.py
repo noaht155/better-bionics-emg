@@ -5,7 +5,7 @@ The labels for protocol B are the tracked angles.
 """
 import random
 
-from hand_angles import JOINTS
+from hand_angles import FINGERS, JOINTS
 
 
 def _pose(thumb, index, middle, ring, pinky):
@@ -63,6 +63,27 @@ SYNC_TAPS = 3
 SYNC_TEXT = "TAP\nlift your hand and slap the table once with your palm, sharply"
 FREE_TEXT = "MOVE YOUR FINGERS\nslowly, any way: open, close, one finger at a time"
 
+# Protocol B has to learn each finger on its own. The held grips are 7 fixed shapes, and in free movement the fingers
+# mostly moved together (middle and ring correlated 0.87, ring and pinky 0.93 on 2026-10-01). In every posture
+FINGER_S = 8.0
+WAVE_S = 10.0
+FINGER_TEXT = "FLEX YOUR {}\nslowly bend and straighten it 3 times, keep the others still"
+WAVE_TEXT = "WAVE YOUR FINGERS\none after another, like drumming, slowly"
+
+
+def _bent(finger):
+    """Open hand with one finger bent, the target shown for that finger's cue."""
+    pose = dict(zip(JOINTS, GESTURES["open"][1]))
+    if finger == "thumb":
+        pose.update(thumb_cmc_flex=45, thumb_cmc_abd=30, thumb_mcp=40, thumb_ip=40)
+    else:
+        pose.update({f"{finger}_mcp_flex": 60, f"{finger}_pip": 80, f"{finger}_dip": 40})
+    return [float(pose[j]) for j in JOINTS]
+
+
+for _f in FINGERS:
+    GESTURES[f"flex_{_f}"] = (FINGER_TEXT.format(_f.upper()), _bent(_f))
+
 
 def _cue(kind, label, text, seconds, posture):
     return {"kind": kind, "label": label, "text": text, "seconds": seconds, "posture": posture}
@@ -81,8 +102,10 @@ def session_plan(postures, reps=3, hold_s=4.0, rest_s=3.0, free_s=30.0, seed=Non
     """Cue list: sync taps, then per posture every gesture of GESTURE_SET reps times in shuffled order with rest in
     between, then free movement, and sync taps again at the end.
 
-    kind is "hold" (a held gesture or rest, protocol A), "free" (continuous movement), "sync" (a tap) or
-    "break" (waits for Continue). seconds is None for breaks."""
+    In every posture each finger is also bent on its own, then all of them one after another.
+
+    kind is "hold" (a held gesture or rest, protocol A), "finger" (one finger moving, protocol B), "free"
+    (continuous movement), "sync" (a tap) or "break" (waits for Continue). seconds is None for breaks."""
     rng = random.Random(seed)
     moves = [g for g in GESTURE_SET if g != "rest"]
     rest = GESTURES["rest"][0]
@@ -95,6 +118,10 @@ def session_plan(postures, reps=3, hold_s=4.0, rest_s=3.0, free_s=30.0, seed=Non
             for g in moves:
                 cues += [_cue("hold", g, f"{GESTURES[g][0]}\n{HOLD_TEXT}", hold_s, posture),
                          _cue("hold", "rest", rest, rest_s, posture)]
+        for f in FINGERS:
+            cues += [_cue("finger", f"flex_{f}", GESTURES[f"flex_{f}"][0], FINGER_S, posture),
+                     _cue("hold", "rest", rest, rest_s, posture)]
+        cues += [_cue("finger", "wave", WAVE_TEXT, WAVE_S, posture), _cue("hold", "rest", rest, rest_s, posture)]
         if free_s > 0:
             cues += [_cue("free", "free", FREE_TEXT, free_s, posture), _cue("hold", "rest", rest, rest_s, posture)]
     return cues + _sync_block()

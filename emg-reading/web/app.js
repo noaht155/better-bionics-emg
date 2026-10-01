@@ -234,7 +234,7 @@ function targetPose() {
   const s = state.session;
   if (!s) return null;
   let cue = s.cue;
-  if (cue.kind === "free" || cue.kind === "sync") return null;
+  if (cue.kind === "free" || cue.kind === "sync" || cue.kind === "break") return null;
   const upcoming = cue.label === "rest" && s.next && !!config.gestures[s.next.label];
   if (upcoming) cue = s.next;
   const g = config.gestures[cue.label];
@@ -247,7 +247,7 @@ function drawPose() {
   ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
   const s = state.session;
   const cue = s?.cue;
-  const g = cue && cue.kind === "hold" ? config.gestures[cue.label] : null;
+  const g = cue && (cue.kind === "hold" || cue.kind === "finger") ? config.gestures[cue.label] : null;
   const target = g ? anglesByName(g.angles) : null;
   const tracked = state.hand ? anglesByName(state.hand.angles) : null;
   if (target) drawHand(ctx, target, { view, mirror: mirrored(), color: TARGET_COLOR, width: 9, alpha: 0.6 });
