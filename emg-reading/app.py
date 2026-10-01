@@ -78,6 +78,10 @@ class ModelChoice(BaseModel):
     name: str
 
 
+class Threshold(BaseModel):
+    value: float = Field(ge=0, le=1)
+
+
 def session_list():
     """Recorded sessions, newest first, from their session.json only."""
     out = []
@@ -236,6 +240,11 @@ def make_app(recorder, band, camera, tools):
             tools.predictor.use(path)
         except ValueError as e:
             refuse(e)
+        return {"ok": True}
+
+    @app.post("/api/model/threshold")
+    def set_threshold(threshold: Threshold):
+        tools.predictor.set_threshold(threshold.value)
         return {"ok": True}
 
     @app.post("/api/model/stop")

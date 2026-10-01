@@ -337,6 +337,10 @@ $("model-use").addEventListener("click", async () => {
   }
 });
 $("model-stop").addEventListener("click", () => post("/api/model/stop").catch(() => {}));
+$("model-threshold").addEventListener("change", () => {
+  const value = Math.min(0.99, Math.max(0, Number($("model-threshold").value)));
+  post("/api/model/threshold", { value }).catch((err) => { $("model-error").textContent = err.message; });
+});
 
 let trainWasRunning = false;
 function drawTrain(t) {
@@ -351,8 +355,15 @@ function drawTrain(t) {
 function predictionLabel(p) {
   if (!p.running) return "";
   if (!p.label) return "<small>waiting for EMG</small>";
+  const name = (g) => g.replace("_", " ");
+  if (p.label === "unsure") {
+    const [best, prob] = Object.entries(p.probs || {}).sort((a, b) => b[1] - a[1])[0] || ["-", 0];
+    // The label is the vote over the last windows, so the newest window alone can be above the threshold
+    const guess = `best guess ${name(best)} at ${Math.round(100 * prob)} %`;
+    return `unsure<small>${guess}, not steadily above the ${p.threshold} threshold</small>`;
+  }
   const conf = Math.round(100 * (p.probs?.[p.label] ?? 0));
-  return `${p.label.replace("_", " ")}<small>${conf} % sure, raw window says ${p.raw.replace("_", " ")}</small>`;
+  return `${name(p.label)}<small>${conf} % sure, this window says ${name(p.raw)}</small>`;
 }
 
 function drawProbs(p) {
@@ -374,6 +385,11 @@ function drawProbs(p) {
     ctx.fillStyle = c === p.label ? TRACKED_COLOR : "#4b5563";
     ctx.fillRect(left, y + 3, (w - left) * v, rowH - 6);
   });
+  // A gesture's bar has to cross this line before it is shown
+  const x = left + (w - left) * (p.threshold ?? 0);
+  ctx.strokeStyle = "#e0a02a";
+  ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, h); ctx.stroke();
 }
 
 // The virtual hand shows the predicted gesture's target pose
@@ -392,6 +408,8 @@ function drawModelView() {
 
 function drawPredictor(p) {
   $("model-stop").disabled = !p.running;
+  const box = $("model-threshold");
+  if (p.threshold != null && document.activeElement !== box) box.value = p.threshold;
   $("model-status").textContent = p.running ? `Running ${p.model}` : "No model running";
   if (p.error) $("model-error").textContent = p.error;
   $("live-label").innerHTML = predictionLabel(p);

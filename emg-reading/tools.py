@@ -186,6 +186,15 @@ class Predictor(Tool):
         super().__init__()
         self.recorder = recorder
         self._stop = threading.Event()
+        # Kept here so it stays the same when another model is picked
+        self.threshold = gesture_model.THRESHOLD
+        self._live = None
+
+    def set_threshold(self, value):
+        self.threshold = value
+        if self._live is not None:
+            self._live.threshold = value
+        self.state["threshold"] = value
 
     def use(self, path):
         model = gesture_model.load(path)
@@ -202,7 +211,9 @@ class Predictor(Tool):
 
     def _run(self, model, name):
         live = gesture_model.LivePredictor(model)
-        self.state.update(model=name, classes=model["classes"], label=None)
+        live.threshold = self.threshold
+        self._live = live
+        self.state.update(model=name, classes=model["classes"], label=None, threshold=self.threshold)
         period = model["step_ms"] / 1000
         next_tick = time.perf_counter()
         while not self._stop.is_set():

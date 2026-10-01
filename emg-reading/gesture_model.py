@@ -31,6 +31,10 @@ STEP_MS = 50
 # The EMG changed 0.2 to 1.4 s after a cue on 2026-09-30 (mostly about 0.5 s), for gestures and for letting go
 TRIM_START_S = 1.0
 VOTE = 5
+# Below this probability the live output says unsure instead of guessing. On 2026-10-01 at 0.8, within one band
+# position, wrong outputs fell from 27 % of windows to 5 % while 92 % of the answers given were right
+THRESHOLD = 0.8
+UNSURE = "unsure"
 # Zero crossings and slope sign changes ignore steps smaller than this, so noise at rest isn't counted.
 # Filtered EMG at rest is about 5 uV RMS
 COUNT_THRESHOLD_UV = 1.0
@@ -112,6 +116,20 @@ def score(true, pred, classes):
             "confusion": cm.tolist()}
 
 
+def threshold_score(true, probs, classes, threshold):
+    """What a confidence threshold does: how often an answer is given, how often it's right, and how often the
+    output is a wrong gesture or rest is taken for a gesture (both as a share of all windows)."""
+    classes = np.asarray(classes)
+    best = probs.max(axis=1)
+    pred = classes[probs.argmax(axis=1)]
+    answer = best >= threshold
+    rest = true == "rest"
+    return {"threshold": threshold, "answers": float(answer.mean()),
+            "right": float(np.mean(pred[answer] == true[answer])) if answer.any() else None,
+            "wrong": float(np.mean(answer & (pred != true))),
+            "rest_false": float(np.mean(answer[rest] & (pred[rest] != "rest"))) if rest.any() else None}
+
+
 def evaluate(sessions, options, votes=(1, 3, 5, 7)):
     """sessions: {name: session_windows output}. Leave one session out and leave one posture out.
     Predictions are smoothed over each held-out session's whole window stream, transitions included, then
@@ -119,12 +137,19 @@ def evaluate(sessions, options, votes=(1, 3, 5, 7)):
     classes = sorted({str(l) for s in sessions.values() for l in s[2] if l is not None})
     result = {"classes": classes, "sessions": {}, "postures": {}}
     by_vote = {v: ([], []) for v in votes}
+    sure = ([], [])
     if len(sessions) > 1:
         for name, (feats, _, labels, _) in sessions.items():
             train = [(f[l != None], l[l != None]) for n, (f, _, l, _) in sessions.items() if n != name]  # noqa: E711
             model = make_lda().fit(np.vstack([f for f, _ in train]), np.concatenate([l for _, l in train]))
-            raw = model.predict(feats)
+            probs = model.predict_proba(feats)
+            raw = model.classes_[probs.argmax(axis=1)]
             known = labels != None  # noqa: E711
+            # Columns in the order of all classes, in case a class is missing from the training sessions
+            full = np.zeros((len(feats), len(classes)))
+            full[:, [classes.index(str(c)) for c in model.classes_]] = probs
+            sure[0].append(labels[known].astype(str))
+            sure[1].append(full[known])
             result["sessions"][name] = {}
             for v in votes:
                 pred = majority(raw, v)
@@ -132,6 +157,7 @@ def evaluate(sessions, options, votes=(1, 3, 5, 7)):
                 by_vote[v][1].append(pred[known])
                 result["sessions"][name][v] = score(labels[known], pred[known], classes)["accuracy"]
         result["loso"] = {v: score(np.concatenate(t), np.concatenate(p), classes) for v, (t, p) in by_vote.items()}
+        result["threshold"] = threshold_score(np.concatenate(sure[0]), np.vstack(sure[1]), classes, THRESHOLD)
 
     # Leave one posture out, over all sessions together, without smoothing (postures aren't one stream)
     feats = np.vstack([s[0] for s in sessions.values()])
@@ -181,8 +207,9 @@ def train(folders, options, evaluate_it=True):
     labels = np.concatenate([s[2] for s in sessions.values()])
     known = labels != None  # noqa: E711
     lda = make_lda().fit(feats[known], labels[known])
-    model = {"lda": lda, "options": options, "classes": [str(c) for c in lda.classes_], "channels": list(channels.pop()),
-             "rate": metas[0]["rate"], "filter_version": FILTER_VERSION, "window_ms": WINDOW_MS, "step_ms": STEP_MS,
+    model = {"lda": lda, "options": options, "classes": [str(c) for c in lda.classes_],
+             "channels": list(channels.pop()), "rate": metas[0]["rate"], "filter_version": FILTER_VERSION,
+             "window_ms": WINDOW_MS, "step_ms": STEP_MS,
              "vote": options["vote"], "sessions": list(sessions), "subject": metas[0].get("subject"),
              "trained": time.strftime("%Y-%m-%d %H:%M"), "windows": int(known.sum())}
     result = evaluate(sessions, options) if evaluate_it else None
@@ -211,16 +238,18 @@ class LivePredictor:
         self.model = model
         self.win = int(model["window_ms"] / 1000 * model["rate"])
         self.recent = deque(maxlen=model["vote"])
+        self.threshold = THRESHOLD
 
     def predict(self, filtered, accel=None):
         """filtered: channels x at least one window of filtered EMG, accel: 3 x the same samples (only if the
-        model uses it). Returns (smoothed label, raw label, {class: probability})."""
+        model uses it). Returns (smoothed label, raw label, {class: probability}). A label is UNSURE when no
+        class reaches the threshold."""
         x = filtered[:, -self.win:]
         feats = window_features(x, self.model["options"]["log"])
         if self.model["options"]["accel"]:
             feats = np.concatenate([feats, accel[:, -self.win:].mean(axis=1)])
         probs = self.model["lda"].predict_proba(feats[None])[0]
-        raw = self.model["classes"][int(np.argmax(probs))]
+        raw = self.model["classes"][int(np.argmax(probs))] if probs.max() >= self.threshold else UNSURE
         self.recent.append(raw)
         counts = Counter(self.recent)
         best = max(counts.values())
@@ -244,6 +273,13 @@ def report(result):
         for c, row in zip(classes, cm):
             pct = 100 * row / max(row.sum(), 1)
             lines.append(f"{c:>10s} " + "".join(f"{p:7.0f}" for p in pct))
+        t = result.get("threshold")
+        if t:
+            right = f"{100 * t['right']:.0f} %" if t["right"] is not None else "-"
+            lines.append(f"with a {t['threshold']:.2f} confidence threshold, no vote: answers "
+                         f"{100 * t['answers']:.0f} % of the time, right {right} when it answers, "
+                         f"wrong gesture {100 * t['wrong']:.1f} %, rest taken for a gesture "
+                         f"{100 * (t['rest_false'] or 0):.1f} %")
     else:
         lines.append("only one session, leave one session out needs at least two")
     if result["postures"]:
