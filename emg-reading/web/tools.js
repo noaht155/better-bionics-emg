@@ -321,7 +321,8 @@ $("train-start").addEventListener("click", async () => {
   const sessions = [...$("train-sessions").querySelectorAll("input:checked")].map((c) => c.value);
   try {
     await post("/api/train", {
-      sessions, log: $("train-log").checked, accel: $("train-accel").checked, vote: Number($("train-vote").value),
+      sessions, log: $("train-log").checked, accel: $("train-accel").checked, extended: $("train-extended").checked,
+      vote: Number($("train-vote").value),
     });
   } catch (err) {
     $("train-error").textContent = err.message;

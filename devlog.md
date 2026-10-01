@@ -188,6 +188,28 @@ Other checks on the same data:
   calibrations, not checked yet.
 - The three repetitions of one session scored 83, 85 and 93 %, so single figures carry about 5 points of noise.
 
+**Extended features are the new default** (`ml/gesture_model.py`, `--base-features` or the Train tab checkbox for
+the old set). On top of the 5 features per channel: 4 autoregressive coefficients per channel (the shape of the
+frequency content) and the 28 channel-to-channel correlations (the pattern across the band), 100 features in all.
+Live prediction 0.3 ms, live and batch agree on every window, saved models keep the feature set they were trained
+with. Three sessions, balanced accuracy:
+
+| | base, 40 features | extended, 100 features |
+|---|---|---|
+| Calibrated on 1 repetition, tested on the other 2 | 67.9 % | 76.7 % |
+| Calibrated on 2 repetitions, tested on the third | 72.1 % | 80.4 % |
+| Rest taken for a grip, 1 / 2 repetitions | 4.4 / 2.8 % | 4.4 / 3.6 % |
+| Wrong grip shown at 0.8, 1 / 2 repetitions (answers given) | 7.9 / 5.5 % (73 %) | 9.7 / 7.1 % (88 %) |
+| No calibration (leave one session out) | 35.7 % | 45.5 % |
+| No calibration, rest taken for a grip | 13.7 % | 26.2 % |
+
+With calibration the extended set is clearly better: more grips right, about the same share of wrong answers, and
+it answers far more often. Without calibration it finds more grips but fires twice as often at rest, one more
+reason calibration is required. A 300 ms window added another 1.5 to 2 points but costs 50 ms of delay, not adopted.
+
+Target for protocol A, defined: 85 % balanced accuracy on a session the model hasn't seen, after a 2-repetition
+calibration at the start of that session. Best so far 80 % (one session reached 86 to 88 %).
+
 **Model code moved to `ml/`** at the repo root, so `emg-reading/` stays about recording. `gesture_model.py` is the
 first file there; the general network, dataset building and evaluation go there too. Saved models and data stay in
 `emg-reading/`. Run with `python -m ml.gesture_model` from the repo root. Checked after the move: same evaluation

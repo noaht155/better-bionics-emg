@@ -1,7 +1,8 @@
 """Protocol A: discrete gestures from EMG with LDA.
 
 Features per channel on sliding windows of the shared filtered EMG (never CAR): RMS, mean absolute value,
-waveform length, zero crossings and slope sign changes. Training windows come from the held-gesture and rest
+waveform length, zero crossings and slope sign changes, and by default also autoregressive coefficients per
+channel and the correlation of every pair of channels (100 features in all). Training windows come from the held-gesture and rest
 cues of recorded sessions, minus the start of each cue where the hand is still changing. Live prediction
 computes the same features on the newest window and smooths the output with a majority vote.
 
@@ -43,12 +44,38 @@ UNSURE = "unsure"
 COUNT_THRESHOLD_UV = 1.0
 
 FEATURES = ["rms", "mav", "wl", "zc", "ssc"]
+# Extended set: per channel the coefficients of an order 4 autoregressive model (the shape of the frequency
+# content), and the correlation of every pair of channels (the pattern across the band). On three sessions on
+# 2026-10-01 this raised balanced accuracy by 9 to 10 points, with or without recalibration
+AR_ORDER = 4
 
 
-def window_features(x, log=True):
+def autoregressive(x, order=AR_ORDER):
+    """Yule-Walker coefficients per channel. x: (..., channels, samples)."""
+    x = x - x.mean(axis=-1, keepdims=True)
+    n = x.shape[-1]
+    r = np.stack([np.mean(x[..., :n - k] * x[..., k:], axis=-1) for k in range(order + 1)], axis=-1)
+    toeplitz = np.stack([np.stack([r[..., abs(i - j)] for j in range(order)], axis=-1) for i in range(order)], axis=-2)
+    # A tiny ridge keeps a flat (silent) channel from making the system singular
+    toeplitz = toeplitz + 1e-6 * np.eye(order)
+    return np.linalg.solve(toeplitz, r[..., 1:, None])[..., 0]
+
+
+def channel_correlations(x):
+    """Correlation of every pair of channels, upper triangle. x: (..., channels, samples)."""
+    x = x - x.mean(axis=-1, keepdims=True)
+    cov = np.einsum("...ci,...di->...cd", x, x)
+    std = np.sqrt(np.einsum("...cc->...c", cov))
+    corr = cov / (std[..., :, None] * std[..., None, :] + 1e-9)
+    upper = np.triu_indices(x.shape[-2], 1)
+    return corr[..., upper[0], upper[1]]
+
+
+def window_features(x, log=True, extended=False):
     """x: channels x samples of filtered EMG, or a batch (..., channels, samples). Returns the 5 features per
-    channel, flattened channel by channel. log puts the amplitude features on a log scale, which suits LDA's
-    assumption of normal distributions better, EMG amplitudes are skewed."""
+    channel, flattened channel by channel, then with extended the autoregressive coefficients and the channel
+    correlations. log puts the amplitude features on a log scale, which suits LDA's assumption of normal
+    distributions better, EMG amplitudes are skewed."""
     d = np.diff(x, axis=-1)
     rms = np.sqrt(np.mean(x ** 2, axis=-1))
     mav = np.mean(np.abs(x), axis=-1)
@@ -59,7 +86,11 @@ def window_features(x, log=True):
     if log:
         rms, mav, wl = (np.log(np.maximum(v, 1e-3)) for v in (rms, mav, wl))
     feats = np.stack([rms, mav, wl, zc, ssc], axis=-1)
-    return feats.reshape(*feats.shape[:-2], -1)
+    feats = feats.reshape(*feats.shape[:-2], -1)
+    if extended:
+        ar = autoregressive(x)
+        feats = np.concatenate([feats, ar.reshape(*ar.shape[:-2], -1), channel_correlations(x)], axis=-1)
+    return feats
 
 
 def session_windows(data, rate, options):
@@ -72,7 +103,7 @@ def session_windows(data, rate, options):
     ends = np.arange(max(win, int(FILTER_SETTLE_S * rate)), y.shape[1] + 1, step)
     starts = ends - win
     feats = np.concatenate([window_features(sliding_window_view(y, win, axis=1)[:, s].transpose(1, 0, 2),
-                                            options["log"])
+                                            options["log"], options.get("extended", False))
                             for s in np.array_split(starts, max(1, len(starts) // 2000))])
     if options["accel"]:
         acc = data["accel"]
@@ -256,7 +287,8 @@ class LivePredictor:
         model uses it). Returns (smoothed label, raw label, {class: probability}). A label is UNSURE when no
         class reaches the threshold."""
         x = filtered[:, -self.win:]
-        feats = window_features(x, self.model["options"]["log"])
+        # Models saved before the extended set existed have no "extended" option and keep the base features
+        feats = window_features(x, self.model["options"]["log"], self.model["options"].get("extended", False))
         if self.model["options"]["accel"]:
             feats = np.concatenate([feats, accel[:, -self.win:].mean(axis=1)])
         probs = self.model["lda"].predict_proba(feats[None])[0]
@@ -306,11 +338,12 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("folders", nargs="+")
     parser.add_argument("--no-log", action="store_true", help="amplitude features without the log")
+    parser.add_argument("--base-features", action="store_true", help="only the 5 features per channel")
     parser.add_argument("--accel", action="store_true", help="add the mean accelerometer reading as features")
     parser.add_argument("--vote", type=int, default=VOTE, help="majority vote length for live use")
     parser.add_argument("--save", action="store_true", help="train on all sessions and save the model")
     args = parser.parse_args()
-    options = {"log": not args.no_log, "accel": args.accel, "vote": args.vote}
+    options = {"log": not args.no_log, "accel": args.accel, "vote": args.vote, "extended": not args.base_features}
     model, result = train(args.folders, options)
     print(f"{model['windows']} labelled windows from {len(model['sessions'])} sessions, classes {model['classes']}")
     print("\n".join(report(result)))

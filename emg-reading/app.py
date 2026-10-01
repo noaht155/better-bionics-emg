@@ -83,6 +83,7 @@ class TrainSettings(BaseModel):
     sessions: list[str] = Field(min_length=1)
     log: bool = True
     accel: bool = False
+    extended: bool = True
     vote: int = Field(ge=1, le=15)
 
 
@@ -243,7 +244,8 @@ def make_app(recorder, band, camera, tools):
             refuse("unknown session")
         try:
             tools.trainer.start([str(f) for f in folders],
-                                {"log": settings.log, "accel": settings.accel, "vote": settings.vote})
+                                {"log": settings.log, "accel": settings.accel, "vote": settings.vote,
+                                 "extended": settings.extended})
         except ValueError as e:
             refuse(e)
         return {"ok": True}
