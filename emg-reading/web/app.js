@@ -303,11 +303,14 @@ const LINKS = [[0, 1], [1, 2], [2, 3], [3, 4], [0, 5], [5, 6], [6, 7], [7, 8], [
 function drawCamera() {
   const img = $("video");
   const canvas = $("overlay");
-  if (!img.naturalWidth) return;
-  canvas.width = img.naturalWidth;
-  canvas.height = img.naturalHeight;
   const ctx = canvas.getContext("2d");
+  // Firefox reports a size of 0 between the frames of the video stream. Clear first and keep the last size,
+  // otherwise the old skeleton stays drawn after the hand is lost
   ctx.clearRect(0, 0, canvas.width, canvas.height);
+  if (img.naturalWidth && canvas.width !== img.naturalWidth) {
+    canvas.width = img.naturalWidth;
+    canvas.height = img.naturalHeight;
+  }
   if (!state.hand) return;
   const pts = state.hand.image.map(([x, y]) => [x * canvas.width, y * canvas.height]);
   ctx.strokeStyle = TRACKED_COLOR;
