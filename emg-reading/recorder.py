@@ -28,6 +28,8 @@ BAD_GRACE_S = 1.5
 HISTORY_S = 4
 # How long a failed armband read stays in the warning bar
 ERROR_SHOWN_S = 10
+# Fraction of the picture at each edge where the wrist is too close to the border to track reliably
+EDGE_MARGIN = 0.12
 
 
 class Recorder:
@@ -46,6 +48,7 @@ class Recorder:
         self.env = [0.0] * len(band.channels)
         self.accel = None
         self.hand_seen = 0.0
+        self.wrist = None
         self.session = None
         self.plan = []
         self.index = -1
@@ -137,6 +140,8 @@ class Recorder:
     def _on_frame(self, record):
         if record[2]:
             self.hand_seen = record[0]
+            # Wrist position in the image, 0 to 1
+            self.wrist = (record[4], record[5])
         session = self.session
         if session is not None:
             session.add_frame(record)
@@ -257,11 +262,34 @@ class Recorder:
         elif not self.camera.ok:
             out.append(("camera", self.camera.error or "Camera starting"))
         else:
+            edge = self._wrist_edge()
+            hand = f"{self.camera.hand.capitalize()} hand"
             if time.time() - self.hand_seen > HAND_LOST_S:
-                out.append(("hand", f"{self.camera.hand.capitalize()} hand out of view"))
+                out.append(("hand", f"{hand} lost at the {edge} edge of the picture, move the camera so the "
+                                    "whole hand is well inside" if edge else f"{hand} out of view"))
+            elif edge:
+                out.append(("hand_edge", f"{hand} near the {edge} edge of the picture, tracking may drop"))
             if 0 < self.camera.fps < CAMERA_SLOW_FPS:
                 out.append(("camera_slow", f"Camera at {self.camera.fps:.0f} fps"))
         return [{"code": c, "text": t} for c, t in out]
+
+    def _wrist_edge(self):
+        """Which edge of the picture the wrist was last seen near, as the mirrored preview shows it, or None.
+        The tracker finds the palm first, so a hand with its wrist on the edge gets lost even with the fingers
+        still in view (2026-10-01, lost every time the wrist passed about 95 % of the height)."""
+        if self.wrist is None:
+            return None
+        x, y = self.wrist
+        if y > 1 - EDGE_MARGIN:
+            return "bottom"
+        if y < EDGE_MARGIN:
+            return "top"
+        # The preview is mirrored, so the left of the camera image shows on the right
+        if x < EDGE_MARGIN:
+            return "right"
+        if x > 1 - EDGE_MARGIN:
+            return "left"
+        return None
 
     def snapshot(self):
         with self._lock:
