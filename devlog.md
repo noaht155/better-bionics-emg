@@ -92,16 +92,22 @@ so the threshold doesn't fix that.
 common prosthetic grips. Thumbs up, peace and OK are signs rather than grips, hook scored 51 % and was often taken for peace. Merging
 pinch, tripod and OK did worse. Sessions got shorter (about 9 instead of 13 minutes).
 
-Where it stands (two sessions, one person):
+Where it stands (two sessions, one person). Corrected later the same day: plain accuracy is mostly a rest score, rest
+is 46 % of all windows, so balanced accuracy (every class counted equally) is the headline:
 
 | | 11 gestures | 7 grips |
 |---|---|---|
-| Same session, unseen repetition | 73 % | 81 to 87 % |
-| Other session (band moved) | 34 to 42 % | 51 to 52 % |
+| Same session, unseen repetition, balanced | 61 to 62 % | 66 to 80 % |
+| Same, grips only (rest left out) | 58 to 59 % | 61 to 77 % |
+| Same, plain accuracy (first reported) | 73 % | 81 to 87 % |
+| Other session (band moved), balanced | 17 to 22 % | 30 to 34 % |
+| Other session, grips only | 11 to 16 % | 23 to 26 % |
+| Other session, plain accuracy (first reported) | 34 to 42 % | 51 to 52 % |
 | Wrong grip shown, same position, 0.8 threshold | 4.7 % | 4.4 % |
 
-Most of the jump from 74 to 87 % comes from dropping the four weakest gestures, not from a better model. Accuracy on
-the training data is only 4 to 6 points above held-out data, so the model isn't overfitting.
+Across a band move the grips are barely above chance (14 % for 7 grips), the plain number was mostly rest being
+right. Most of the jump from 11 to 7 gestures comes from dropping the four weakest, not from a better model.
+Accuracy on the training data is only 4 to 6 points above held-out data, so the model isn't overfitting.
 
 Latency from muscle change to a steady correct output on recorded gestures: median 290 ms (450 ms with the
 threshold), over the 200 ms target. During free finger movement the output still changes about 3 times a second, so
@@ -118,6 +124,10 @@ activity.
 | 1 repetition of the new session alone | 85 % | 75 % |
 | Old session pooled with that repetition | 74 % | 69 % |
 | Adaptive LDA: old spread, class averages from that repetition | 83 % | 73 % |
+
+These are plain accuracy. Redone later with balanced accuracy on three sessions (each in turn the new one, tested on
+its repetitions 2 and 3): other sessions only 25 / 52 / 28 %, one repetition of the new session alone 58 / 76 / 69 %,
+other sessions pooled with that repetition 35 / 66 / 39 %. Same conclusion, lower level.
 
 One repetition at the new position (about 3 minutes) gets close to a full session. With only one other placement,
 old data adds nothing and pooling it hurts. Adapting without labels follows its own mistakes. Old sessions should
@@ -162,6 +172,21 @@ and straightened 3 times on its own (8 s), then all fingers one after another. A
   delay 77 ms). Fixable offline with a straight-line fit of time against the grab number, like the EMG clock.
 - Calibration max levels vary 20 to 100 % between single clenches (effort isn't controlled), rest levels within
   about 1 uV. Only affects the haptics, left as is.
+
+**Correction: accuracy was mostly a rest score.** Rest is 46 % of the windows (one between every two grips), so
+always answering rest already scores 46 %, not the 14 % chance level quoted earlier. On session 2, unseen
+repetition: plain 87.2 %, balanced 80.1 %, grips only 76.9 %. With three sessions, leave one session out: balanced
+35.7 %, grips only 27.3 %, plain 54.3 %. The evaluation now reports balanced and grips-only accuracy first, and the
+model list in the app shows balanced. The tables above are corrected.
+
+Other checks on the same data:
+- Test splits: random windows 90.6 %, unseen repetition 87.0 %, unseen session 52.4 % (plain). Neighbouring
+  windows leak only a little within a session, the big drop is the band placement.
+- Shrinkage hardly matters here: Ledoit-Wolf picked alpha 0.001, accuracy 86.4 vs 87.0 % same placement, 40.0 vs
+  40.5 % across. The features are very redundant (RMS and mean absolute value correlate 0.999, 18 of 40 directions
+  hold 95 % of the variance), but 7600 windows are enough to estimate the covariance. It may matter for short
+  calibrations, not checked yet.
+- The three repetitions of one session scored 83, 85 and 93 %, so single figures carry about 5 points of noise.
 
 **Model code moved to `ml/`** at the repo root, so `emg-reading/` stays about recording. `gesture_model.py` is the
 first file there; the general network, dataset building and evaluation go there too. Saved models and data stay in

@@ -109,13 +109,20 @@ def majority(predictions, vote):
 
 
 def score(true, pred, classes):
-    """Accuracy, rest falsely taken for a gesture, and the confusion matrix (rows true, columns predicted)."""
+    """Accuracy, balanced accuracy, accuracy on the grips alone, rest falsely taken for a gesture, and the
+    confusion matrix (rows true, columns predicted).
+
+    Rest is about half of all windows (a rest between every two grips), so plain accuracy is mostly a rest score:
+    always answering rest already gets 46 %. Balanced accuracy counts every class equally and is the headline."""
     index = {c: i for i, c in enumerate(classes)}
     cm = np.zeros((len(classes), len(classes)), int)
     for t, p in zip(true, pred):
         cm[index[t], index[p]] += 1
     rest = true == "rest"
+    present = [c for c in classes if np.any(true == c)]
     return {"accuracy": float(np.mean(true == pred)) if len(true) else None,
+            "balanced": float(np.mean([np.mean(pred[true == c] == c) for c in present])) if present else None,
+            "grips": float(np.mean(pred[~rest] == true[~rest])) if (~rest).any() else None,
             "rest_false": float(np.mean(pred[rest] != "rest")) if rest.any() else None,
             "confusion": cm.tolist()}
 
@@ -159,7 +166,7 @@ def evaluate(sessions, options, votes=(1, 3, 5, 7)):
                 pred = majority(raw, v)
                 by_vote[v][0].append(labels[known])
                 by_vote[v][1].append(pred[known])
-                result["sessions"][name][v] = score(labels[known], pred[known], classes)["accuracy"]
+                result["sessions"][name][v] = score(labels[known], pred[known], classes)["balanced"]
         result["loso"] = {v: score(np.concatenate(t), np.concatenate(p), classes) for v, (t, p) in by_vote.items()}
         result["threshold"] = threshold_score(np.concatenate(sure[0]), np.vstack(sure[1]), classes, THRESHOLD)
 
@@ -174,7 +181,7 @@ def evaluate(sessions, options, votes=(1, 3, 5, 7)):
         if not train.any():
             continue
         model = make_lda().fit(feats[train], labels[train])
-        result["postures"][p] = score(labels[test], model.predict(feats[test]), classes)["accuracy"]
+        result["postures"][p] = score(labels[test], model.predict(feats[test]), classes)["balanced"]
     return result
 
 
@@ -265,12 +272,15 @@ def report(result):
     lines = []
     classes = result["classes"]
     if "loso" in result:
-        lines.append("leave one session out (accuracy / rest taken for a gesture / decision delay):")
+        lines.append("leave one session out (balanced accuracy / grips only / plain accuracy / rest taken for a "
+                     "gesture / decision delay):")
         for v, s in result["loso"].items():
-            lines.append(f"  vote {v}: {100 * s['accuracy']:5.1f} %  {100 * (s['rest_false'] or 0):5.1f} %  "
+            lines.append(f"  vote {v}: {100 * s['balanced']:5.1f} %  {100 * s['grips']:5.1f} %  "
+                         f"{100 * s['accuracy']:5.1f} %  {100 * (s['rest_false'] or 0):5.1f} %  "
                          f"~{decision_delay_ms(v):.0f} ms")
         for name, per_vote in result["sessions"].items():
-            lines.append(f"  held out {name}: " + "  ".join(f"vote {v} {100 * a:.1f} %" for v, a in per_vote.items()))
+            lines.append(f"  held out {name}, balanced: "
+                         + "  ".join(f"vote {v} {100 * a:.1f} %" for v, a in per_vote.items()))
         cm = np.array(result["loso"][VOTE]["confusion"])
         lines.append(f"confusion, vote {VOTE} (rows true, columns predicted, % of the row):")
         lines.append(" " * 11 + "".join(f"{c[:6]:>7s}" for c in classes))
@@ -287,7 +297,7 @@ def report(result):
     else:
         lines.append("only one session, leave one session out needs at least two")
     if result["postures"]:
-        lines.append("leave one posture out, no vote: "
+        lines.append("leave one posture out, no vote, balanced: "
                      + "  ".join(f"{p} {100 * a:.1f} %" for p, a in result["postures"].items()))
     return lines
 

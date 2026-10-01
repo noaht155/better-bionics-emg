@@ -305,7 +305,7 @@ async function loadTrainLists() {
   const select = $("model-select");
   const current = select.value;
   select.innerHTML = models.map((m) => {
-    const acc = m.accuracy != null ? `, ${Math.round(100 * m.accuracy)} % on unseen sessions` : "";
+    const acc = m.balanced != null ? `, ${Math.round(100 * m.balanced)} % balanced on unseen sessions` : "";
     // Session folders start with date and time, that's enough to tell them apart
     const from = m.sessions.map((s) => s.slice(0, 17).replace("_", " ")).join(", ");
     return `<option value="${m.name}">${m.name}, trained on ${from}${acc}</option>`;

@@ -117,6 +117,8 @@ def model_list():
         out.append({"name": path.name, "subject": model["subject"], "trained": model["trained"],
                     "sessions": model["sessions"], "classes": model["classes"], "options": model["options"],
                     "accuracy": loso["accuracy"] if loso else None,
+                    # Models trained before balanced accuracy was added don't have it
+                    "balanced": loso.get("balanced") if loso else None,
                     "rest_false": loso["rest_false"] if loso else None})
     return out
 
