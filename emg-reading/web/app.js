@@ -63,15 +63,20 @@ function readSettings() {
 }
 
 // Matches gestures.session_plan, without the breaks that wait for Continue
-function updateDuration() {
+// The server works out the length from the real session plan
+async function updateDuration() {
   const s = readSettings();
-  const moves = config.gesture_set.length - 1;
-  const sync = 2 * (2 + 3 * 4);
-  const perPosture = s.rest_s + moves * s.reps * (s.hold_s + s.rest_s) + (s.free_s > 0 ? s.free_s + s.rest_s : 0);
-  const total = sync + s.postures.length * perPosture;
-  $("duration").textContent = s.postures.length
-    ? `About ${Math.round(total / 60)} min plus breaks between postures`
-    : "No postures: only the sync taps, to check the camera delay";
+  if (!s.postures.length) {
+    $("duration").textContent = "No postures: only the sync taps, to check the camera delay";
+    return;
+  }
+  try {
+    const { postures, reps, hold_s, rest_s, free_s } = s;
+    const plan = await post("/api/plan", { postures, reps, hold_s, rest_s, free_s });
+    $("duration").textContent = `About ${Math.round(plan.seconds / 60)} min plus breaks between postures`;
+  } catch {
+    $("duration").textContent = "";
+  }
 }
 
 async function post(path, body) {

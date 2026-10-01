@@ -25,7 +25,7 @@ from calibrate import load_calibration
 import gesture_model
 from camera import Camera
 from esp32_link import WIFI_IP
-from gestures import GESTURE_SET, GESTURES, POSTURES
+from gestures import GESTURE_SET, GESTURES, POSTURES, session_plan
 from hand_angles import JOINTS, RELIABLE
 from processing import spectrum
 from recorder import Recorder
@@ -65,6 +65,14 @@ class CalibrationSettings(BaseModel):
 class Esp32Link(BaseModel):
     port: str | None = None
     wifi: str | None = None
+
+
+class PlanSettings(BaseModel):
+    postures: list[Literal[tuple(POSTURES)]]
+    reps: int = Field(ge=1, le=20)
+    hold_s: float = Field(ge=1, le=30)
+    rest_s: float = Field(ge=1, le=30)
+    free_s: float = Field(ge=0, le=600)
 
 
 class TrainSettings(BaseModel):
@@ -142,6 +150,12 @@ def make_app(recorder, band, camera, tools):
                 "gesture_set": GESTURE_SET,
                 "postures": POSTURES, "camera": camera is not None,
                 "tracked_hand": camera.hand if camera else None, "esp32_wifi_ip": WIFI_IP}
+
+    @app.post("/api/plan")
+    def plan_length(settings: PlanSettings):
+        """Length of the session these settings give, from the real plan so the page needn't copy its logic."""
+        plan = session_plan(settings.postures, settings.reps, settings.hold_s, settings.rest_s, settings.free_s)
+        return {"seconds": sum(c["seconds"] or 0 for c in plan), "cues": len(plan)}
 
     @app.post("/api/session/start")
     def start(settings: SessionSettings):
