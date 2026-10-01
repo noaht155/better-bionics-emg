@@ -25,7 +25,7 @@ from calibrate import load_calibration
 import gesture_model
 from camera import Camera
 from esp32_link import WIFI_IP
-from gestures import GESTURES, POSTURES
+from gestures import GESTURE_SET, GESTURES, POSTURES
 from hand_angles import JOINTS, RELIABLE
 from processing import spectrum
 from recorder import Recorder
@@ -139,6 +139,7 @@ def make_app(recorder, band, camera, tools):
         return {"joints": JOINTS, "reliable": RELIABLE, "channels": band.channels, "rate": band.rate,
                 "source": band.source, "calibration": calibration,
                 "gestures": {name: {"text": text, "angles": angles} for name, (text, angles) in GESTURES.items()},
+                "gesture_set": GESTURE_SET,
                 "postures": POSTURES, "camera": camera is not None,
                 "tracked_hand": camera.hand if camera else None, "esp32_wifi_ip": WIFI_IP}
 

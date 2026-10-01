@@ -22,6 +22,7 @@ from numpy.lib.stride_tricks import sliding_window_view
 from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
 
 from processing import FILTER_SETTLE_S, FILTER_VERSION, filter_block
+from gestures import GESTURE_SET
 from session import load_session, segments
 
 MODEL_DIR = Path(__file__).with_name("models") / "gestures"
@@ -79,7 +80,8 @@ def session_windows(data, rate, options):
     postures = np.full(len(ends), None, dtype=object)
     trim = int(TRIM_START_S * rate)
     for seg in segments(data["events"]):
-        if seg["kind"] != "hold" or seg["bad"] or seg["sample1"] is None:
+        # Older sessions also cued gestures that were dropped from the set, those windows are left out
+        if seg["kind"] != "hold" or seg["bad"] or seg["sample1"] is None or seg["label"] not in GESTURE_SET:
             continue
         inside = (starts >= seg["sample0"] + trim) & (ends <= seg["sample1"])
         labels[inside] = seg["label"]

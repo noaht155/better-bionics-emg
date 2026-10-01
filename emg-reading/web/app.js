@@ -65,7 +65,7 @@ function readSettings() {
 // Matches gestures.session_plan, without the breaks that wait for Continue
 function updateDuration() {
   const s = readSettings();
-  const moves = Object.keys(config.gestures).length - 1;
+  const moves = config.gesture_set.length - 1;
   const sync = 2 * (2 + 3 * 4);
   const perPosture = s.rest_s + moves * s.reps * (s.hold_s + s.rest_s) + (s.free_s > 0 ? s.free_s + s.rest_s : 0);
   const total = sync + s.postures.length * perPosture;

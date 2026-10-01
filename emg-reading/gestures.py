@@ -45,6 +45,11 @@ GESTURES = {
                                                              (0, 90, 60), (0, 90, 60))),
 }
 
+# The gestures protocol A uses and the sessions cue, chosen on 2026-10-01: the common prosthetic grips. Thumbs up,
+# peace and OK are signs rather than grips, and hook was mostly taken for peace. With these 7 one band position
+# scored 87 % (73 % with all 11). The others stay above so older sessions and models still display
+GESTURE_SET = ["rest", "open", "fist", "pinch", "tripod", "key", "point"]
+
 POSTURES = {
     "table": "Forearm resting on the table",
     "forward": "Arm held straight forward",
@@ -73,13 +78,13 @@ def _sync_block():
 
 
 def session_plan(postures, reps=3, hold_s=4.0, rest_s=3.0, free_s=30.0, seed=None):
-    """Cue list: sync taps, then per posture every gesture reps times in shuffled order with rest in between,
-    then free movement, and sync taps again at the end.
+    """Cue list: sync taps, then per posture every gesture of GESTURE_SET reps times in shuffled order with rest in
+    between, then free movement, and sync taps again at the end.
 
     kind is "hold" (a held gesture or rest, protocol A), "free" (continuous movement), "sync" (a tap) or
     "break" (waits for Continue). seconds is None for breaks."""
     rng = random.Random(seed)
-    moves = [g for g in GESTURES if g != "rest"]
+    moves = [g for g in GESTURE_SET if g != "rest"]
     rest = GESTURES["rest"][0]
     cues = _sync_block()
     for posture in postures:
