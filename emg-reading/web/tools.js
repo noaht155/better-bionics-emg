@@ -288,11 +288,13 @@ async function loadTrainLists() {
   const [sessions, models] = await Promise.all([fetch("/api/sessions"), fetch("/api/models")].map((r) => r.then((x) => x.json())));
   const table = $("train-sessions");
   const checked = new Set([...table.querySelectorAll("input:checked")].map((c) => c.value));
+  const listed = new Set([...table.querySelectorAll("input")].map((c) => c.value));
   const usable = sessions.filter((s) => s.gestures > 0);
   table.innerHTML = "<tr><th></th><th>Session</th><th>Arm</th><th>Postures</th><th>Placement</th><th>Length</th><th>Camera delay</th></tr>";
   for (const s of usable) {
     const tr = document.createElement("tr");
-    const on = checked.size ? checked.has(s.name) : s.completed;
+    // Keep the choice for sessions already listed, a session recorded since then starts ticked if it finished
+    const on = listed.has(s.name) ? checked.has(s.name) : s.completed;
     tr.innerHTML = `<td><input type="checkbox" value="${s.name}" ${on ? "checked" : ""}></td><td>${s.name}</td>
       <td>${s.band_arm ?? ""}</td><td>${(s.postures || []).join(", ")}</td><td>${s.placement || ""}</td>
       <td>${s.seconds ? fmtTime(s.seconds) : ""}${s.completed ? "" : " (stopped early)"}</td>
@@ -304,7 +306,9 @@ async function loadTrainLists() {
   const current = select.value;
   select.innerHTML = models.map((m) => {
     const acc = m.accuracy != null ? `, ${Math.round(100 * m.accuracy)} % on unseen sessions` : "";
-    return `<option value="${m.name}">${m.name} (${m.sessions.length} sessions${acc})</option>`;
+    // Session folders start with date and time, that's enough to tell them apart
+    const from = m.sessions.map((s) => s.slice(0, 17).replace("_", " ")).join(", ");
+    return `<option value="${m.name}">${m.name}, trained on ${from}${acc}</option>`;
   }).join("") || "<option value=''>no models yet</option>";
   // A model that was just trained is already running, show that one
   const running = state?.tools?.predictor?.running && state.tools.predictor.model;
