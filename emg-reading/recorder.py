@@ -18,7 +18,8 @@ from session import SessionWriter
 TICK_S = 0.02
 # Hand counts as out of view after this long without a detection
 HAND_LOST_S = 0.5
-CAMERA_SLOW_FPS = 15
+# The webcam runs at 30 fps, a drop to 15 means frames are being lost somewhere
+CAMERA_SLOW_FPS = 25
 # Mark bad within this long of a rest cue starting still means the gesture before it
 BAD_GRACE_S = 1.5
 # EMG history kept for the signal view and the haptics

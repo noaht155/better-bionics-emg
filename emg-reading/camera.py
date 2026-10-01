@@ -3,11 +3,15 @@
 Each frame is stamped with time.time() as soon as it is read, the same clock as the EMG. What is left is the
 camera's own delay, measured afterwards from the sync taps in each session.
 """
-import sys
+import os
 import threading
 import time
 import urllib.request
 from pathlib import Path
+
+# Windows' default camera backend (Media Foundation) took 31 s to open the Brio 100 with its hardware
+# transforms on, 1.2 s with them off. Has to be set before cv2 is imported
+os.environ.setdefault("OPENCV_VIDEOIO_MSMF_ENABLE_HW_TRANSFORMS", "0")
 
 import cv2
 import mediapipe as mp
@@ -36,13 +40,8 @@ def model_path():
 
 def open_capture(source):
     """source: camera index or a video file (for testing)."""
-    if isinstance(source, int) and sys.platform == "win32":
-        # The default Windows backend takes seconds to open a webcam, DirectShow is quick
-        cap = cv2.VideoCapture(source, cv2.CAP_DSHOW)
-        if not cap.isOpened():
-            cap = cv2.VideoCapture(source)
-    else:
-        cap = cv2.VideoCapture(source)
+    # Not DirectShow: with hand tracking between reads it dropped every other frame (15 fps instead of 30)
+    cap = cv2.VideoCapture(source)
     if isinstance(source, int):
         cap.set(cv2.CAP_PROP_FRAME_WIDTH, WIDTH)
         cap.set(cv2.CAP_PROP_FRAME_HEIGHT, HEIGHT)
