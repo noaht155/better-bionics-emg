@@ -171,12 +171,27 @@ numbers, all saved models load, training and live prediction work in the app.
 Data policy for the general network: all good data from all users and calibrations, where good means a completed
 session (not stopped early).
 
+**Architecture decided for the general model:**
+- One network trained on all good data (all users, sessions and calibrations), raw filtered EMG in, a grip head and
+  a finger-angle head out.
+- The 8 electrodes treated as a ring: convolutions wrap around the channels, so rotating the band by whole electrodes
+  only shifts the features. Aimed at the one-electrode rotation measured between sessions.
+- A per-person 8x8 transform in front of the frozen network, trained on that person's calibration, for the rest of
+  the placement and personal differences.
+- Continual learning as the end goal: it learns from each new completed session without getting worse. Each session
+  is tested before it is learned from, updates replay earlier data so nothing is forgotten, and an update only goes
+  live if a fixed set of never-trained sessions doesn't get worse. Versions are kept for rollback. No learning from
+  unlabelled live use.
+- Porting to the ESP32 and the prosthetic's input format are out of scope for now.
+
 ## Open
 
 - More sessions with the 7 grips, firm holds and a marked band position.
 - Quick recalibration in the app: 1 repetition after putting the band on, retrain with one click.
 - Test rotation augmentation and per-session normalisation on unseen sessions.
-- With 5+ sessions: a small network as a placement-independent feature extractor with an LDA head per fitting.
 - Measure false grips per minute in everyday activity, and a "hold to switch" rule.
 - Bring latency under 200 ms: shorter windows and vote, at some cost in accuracy.
-- Protocol B (continuous joint angles), which may also replace LDA for gestures.
+- `ml/` foundations: session cache, dataset builder, shared evaluation harness, model registry, continual update
+  flow tested with LDA first.
+- The general network (ring convolutions, grip and finger heads), then the per-person transform, then continual
+  updates with replay and the benchmark.
