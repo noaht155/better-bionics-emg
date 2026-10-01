@@ -348,10 +348,14 @@ function connect() {
   const ws = new WebSocket(`ws://${location.host}/ws`);
   ws.onmessage = (e) => {
     state = JSON.parse(e.data);
-    drawWarnings();
-    drawSession();
-    drawView();
-    drawTools();
+    // Each part on its own, so an error in one can't freeze the others (it did freeze the camera overlay once)
+    for (const draw of [drawWarnings, drawSession, drawView, drawTools]) {
+      try {
+        draw();
+      } catch (err) {
+        console.error(draw.name, err);
+      }
+    }
   };
   ws.onclose = () => {
     $("warnings").innerHTML = '<div class="serious">Lost the connection to the recorder, retrying</div>';

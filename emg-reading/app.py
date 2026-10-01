@@ -110,6 +110,15 @@ def refuse(e):
 def make_app(recorder, band, camera, tools):
     app = FastAPI()
 
+    @app.middleware("http")
+    async def revalidate(request, call_next):
+        # Without this Firefox kept an old hand.js after an update, the new app.js then failed on every
+        # gesture cue and the camera overlay froze. no-cache still caches, but asks the server first
+        response = await call_next(request)
+        if request.url.path == "/" or request.url.path.startswith("/web/"):
+            response.headers["Cache-Control"] = "no-cache"
+        return response
+
     @app.get("/")
     def index():
         return FileResponse(WEB_DIR / "index.html")
