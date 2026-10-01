@@ -46,7 +46,7 @@ GESTURES = {
 }
 
 # The gestures protocol A uses and the sessions cue, chosen on 2026-10-01: the common prosthetic grips. Thumbs up,
-# peace and OK are signs rather than grips, and hook was mostly taken for peace. With these 7 one band position
+# peace and OK are signs rather than grips, hook scored 51 % and was often taken for peace. With these 7 one band position
 # scored 87 % (73 % with all 11). The others stay above so older sessions and models still display
 GESTURE_SET = ["rest", "open", "fist", "pinch", "tripod", "key", "point"]
 
