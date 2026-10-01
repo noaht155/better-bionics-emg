@@ -13,6 +13,7 @@
   <button data-tab="record" class="active">Record</button>
   <button data-tab="signals">Signals</button>
   <button data-tab="calibrate">Calibrate</button>
+  <button data-tab="train">Train</button>
   <button data-tab="haptics">Haptics</button>
   <button data-tab="connection">Connection</button>
   <span id="rec-badge" hidden>recording</span>
@@ -70,7 +71,7 @@
         <option value="camera">Camera</option>
         <option value="pose">Pose match</option>
         <option value="emg">EMG bars</option>
-        <option value="model" disabled>Model prediction (no model yet)</option>
+        <option value="model" id="model-option" disabled>Model prediction (no model running)</option>
       </select>
       <span id="view-note" class="muted"></span>
     </div>
@@ -80,6 +81,10 @@
     </div>
     <div id="view-emg" class="view" hidden>
       <canvas id="emg" width="480" height="400"></canvas>
+    </div>
+    <div id="view-model" class="view" hidden>
+      <canvas id="model-hand" width="480" height="400"></canvas>
+      <div id="model-label" class="big-label"></div>
     </div>
     <div id="view-camera" class="view">
       <div class="mirror"><img id="video" alt=""><canvas id="overlay"></canvas></div>
@@ -114,6 +119,37 @@
     <pre id="cal-result"></pre>
     <h2>Current calibration</h2>
     <pre id="cal-current"></pre>
+  </section>
+</main>
+
+<main id="tab-train" class="tab single" hidden>
+  <section>
+    <h1>Gesture model (protocol A)</h1>
+    <p class="muted">LDA on 200 ms windows of the filtered EMG. Trains on the ticked sessions, tests each one on a model
+      trained on the others, saves the model and makes it the live one.</p>
+    <h2>Sessions</h2>
+    <table id="train-sessions"></table>
+    <div class="row narrow">
+      <label class="check"><input type="checkbox" id="train-log" checked> Log amplitude features</label>
+      <label class="check"><input type="checkbox" id="train-accel"> Accelerometer features</label>
+      <label>Majority vote <input id="train-vote" type="number" min="1" max="15" value="5"></label>
+    </div>
+    <button id="train-start" class="primary">Train and evaluate</button>
+    <p id="train-step" class="muted"></p>
+    <p id="train-error" class="error"></p>
+    <pre id="train-result"></pre>
+    <h2>Live test</h2>
+    <div class="row narrow">
+      <label>Model <select id="model-select"></select></label>
+    </div>
+    <div class="controls">
+      <button id="model-use">Use this model</button>
+      <button id="model-stop">Stop</button>
+    </div>
+    <p id="model-status" class="muted"></p>
+    <p id="model-error" class="error"></p>
+    <div id="live-label" class="big-label"></div>
+    <canvas id="live-probs" width="900" height="320"></canvas>
   </section>
 </main>
 

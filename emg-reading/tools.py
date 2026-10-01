@@ -1,14 +1,16 @@
 """The existing programs, run inside the web app on the recorder's armband stream.
 
 Each tool runs in its own thread and keeps a small state dict for the browser. The logic lives in the
-original scripts (check_connection.report, calibrate.compute, haptics.output_duties, esp32_link.self_test),
-this only feeds them the shared stream instead of opening the armband again.
+original scripts (check_connection.report, calibrate.compute, haptics.output_duties, esp32_link.self_test,
+gesture_model.train and LivePredictor), this only feeds them the shared stream instead of opening the
+armband again.
 """
 import threading
 import time
 
 import calibrate
 import check_connection
+import gesture_model
 from esp32_link import Esp32, self_test
 from haptics import OUTPUTS, UPDATE_HZ, output_duties
 
@@ -177,6 +179,60 @@ class OutputTest(Tool):
             self.esp_lock.release()
 
 
+class Predictor(Tool):
+    """Runs the active gesture model on the live stream, one prediction per window step."""
+
+    def __init__(self, recorder):
+        super().__init__()
+        self.recorder = recorder
+        self._stop = threading.Event()
+
+    def use(self, path):
+        model = gesture_model.load(path)
+        band = self.recorder.band
+        if model["channels"] != band.channels or model["rate"] != band.rate:
+            raise ValueError("this model was trained on other EMG channels or another sample rate")
+        self.stop()
+        self.join(2)
+        self._stop.clear()
+        self._launch(self._run, model, path.name)
+
+    def stop(self):
+        self._stop.set()
+
+    def _run(self, model, name):
+        live = gesture_model.LivePredictor(model)
+        self.state.update(model=name, classes=model["classes"], label=None)
+        period = model["step_ms"] / 1000
+        next_tick = time.perf_counter()
+        while not self._stop.is_set():
+            filtered = self.recorder.window(live.win)[1]
+            if filtered.shape[1] == live.win:
+                accel = self.recorder.accel_window(live.win) if model["options"]["accel"] else None
+                label, raw, probs = live.predict(filtered, accel)
+                self.state.update(label=label, raw=raw, probs=probs)
+            next_tick = max(next_tick + period, time.perf_counter())
+            time.sleep(max(0.0, next_tick - time.perf_counter()))
+
+
+class Trainer(Tool):
+    def __init__(self, predictor):
+        super().__init__()
+        self.predictor = predictor
+
+    def start(self, folders, options):
+        self._launch(self._run, folders, options)
+
+    def _run(self, folders, options):
+        self.state["step"] = f"loading {len(folders)} sessions and evaluating"
+        model, result = gesture_model.train(folders, options)
+        path = gesture_model.save(model)
+        self.state.update(step=None, model=path.name, lines=[
+            f"{model['windows']} labelled windows from {len(model['sessions'])} sessions, "
+            f"classes {', '.join(model['classes'])}"] + gesture_model.report(result) + [f"saved {path.name}"])
+        self.predictor.use(path)
+
+
 class Tools:
     def __init__(self, recorder):
         esp_lock = threading.Lock()
@@ -184,11 +240,13 @@ class Tools:
         self.calibration = Calibration(recorder)
         self.haptics = Haptics(recorder, esp_lock)
         self.test = OutputTest(esp_lock)
+        self.predictor = Predictor(recorder)
+        self.trainer = Trainer(self.predictor)
 
     def snapshot(self):
         now = time.time()
         out = {}
-        for name in ("check", "calibration", "haptics", "test"):
+        for name in ("check", "calibration", "haptics", "test", "predictor", "trainer"):
             state = dict(getattr(self, name).state)
             if state.get("until"):
                 state["left"] = max(0.0, state["until"] - now)

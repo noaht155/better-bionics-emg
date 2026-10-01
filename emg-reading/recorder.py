@@ -40,6 +40,7 @@ class Recorder:
         self.history = HISTORY_S * band.rate
         self.raw = np.zeros((len(band.channels), 0))
         self.filtered = np.zeros((len(band.channels), 0))
+        self.accel_history = np.zeros((3, 0))
         self.received = 0
         self._captures = []
         self.env = [0.0] * len(band.channels)
@@ -92,6 +93,7 @@ class Recorder:
                 self.quality.update(emg, data[rows["package"]], battery)
                 self.raw = np.hstack([self.raw, emg])[:, -self.history:]
                 self.filtered = np.hstack([self.filtered, self.stream.process(emg)])[:, -self.history:]
+                self.accel_history = np.hstack([self.accel_history, data[rows["accel"]]])[:, -self.history:]
                 self.received += emg.shape[1]
                 self.env = [envelope(y) for y in self.filtered[:, -self.env_len:]]
                 self.accel = data[rows["accel"], -1].tolist()
@@ -118,6 +120,11 @@ class Recorder:
         """Newest raw and filtered EMG, live channels x up to samples."""
         with self._lock:
             return self.raw[:, -samples:].copy(), self.filtered[:, -samples:].copy()
+
+    def accel_window(self, samples):
+        """Accelerometer rows for the same newest samples as window()."""
+        with self._lock:
+            return self.accel_history[:, -samples:].copy()
 
     def samples_since(self, count):
         """Raw and filtered EMG that arrived after the first count samples, and the new count."""

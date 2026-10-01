@@ -1,5 +1,6 @@
-// Tabs for the existing tools: live signals (live_plot.py), calibration (calibrate.py),
-// haptics and the output test (haptics.py, esp32_link.py) and the connection check (check_connection.py).
+// Tabs for the existing tools: live signals (live_plot.py), calibration (calibrate.py), the gesture model
+// (gesture_model.py), haptics and the output test (haptics.py, esp32_link.py) and the connection check
+// (check_connection.py).
 
 const LINK_KEY = "esp32-link";
 const SPECTRUM_MS = 250;
@@ -15,6 +16,7 @@ function showTab(name) {
   else $("video").src = "";
   if (name === "signals") openSignals();
   else closeSignals();
+  if (name === "train") loadTrainLists();
 }
 
 document.querySelectorAll("#tabs button").forEach((b) => b.addEventListener("click", () => showTab(b.dataset.tab)));
@@ -280,6 +282,124 @@ function drawHaptics(h, test) {
   $("esp-log").textContent = (test.lines || []).join("\n");
 }
 
+// Gesture model: training and live test
+
+async function loadTrainLists() {
+  const [sessions, models] = await Promise.all([fetch("/api/sessions"), fetch("/api/models")].map((r) => r.then((x) => x.json())));
+  const table = $("train-sessions");
+  const checked = new Set([...table.querySelectorAll("input:checked")].map((c) => c.value));
+  const usable = sessions.filter((s) => s.gestures > 0);
+  table.innerHTML = "<tr><th></th><th>Session</th><th>Arm</th><th>Postures</th><th>Placement</th><th>Length</th><th>Camera delay</th></tr>";
+  for (const s of usable) {
+    const tr = document.createElement("tr");
+    const on = checked.size ? checked.has(s.name) : s.completed;
+    tr.innerHTML = `<td><input type="checkbox" value="${s.name}" ${on ? "checked" : ""}></td><td>${s.name}</td>
+      <td>${s.band_arm ?? ""}</td><td>${(s.postures || []).join(", ")}</td><td>${s.placement || ""}</td>
+      <td>${s.seconds ? fmtTime(s.seconds) : ""}${s.completed ? "" : " (stopped early)"}</td>
+      <td>${s.camera_delay_s != null ? `${Math.round(1000 * s.camera_delay_s)} ms` : "-"}</td>`;
+    table.append(tr);
+  }
+  if (!usable.length) table.innerHTML = "<tr><td>No sessions with gestures yet, record one on the Record tab.</td></tr>";
+  const select = $("model-select");
+  const current = select.value;
+  select.innerHTML = models.map((m) => {
+    const acc = m.accuracy != null ? `, ${Math.round(100 * m.accuracy)} % on unseen sessions` : "";
+    return `<option value="${m.name}">${m.name} (${m.sessions.length} sessions${acc})</option>`;
+  }).join("") || "<option value=''>no models yet</option>";
+  // A model that was just trained is already running, show that one
+  const running = state?.tools?.predictor?.running && state.tools.predictor.model;
+  if (running && models.some((m) => m.name === running)) select.value = running;
+  else if (current && models.some((m) => m.name === current)) select.value = current;
+}
+
+$("train-start").addEventListener("click", async () => {
+  $("train-error").textContent = "";
+  const sessions = [...$("train-sessions").querySelectorAll("input:checked")].map((c) => c.value);
+  try {
+    await post("/api/train", {
+      sessions, log: $("train-log").checked, accel: $("train-accel").checked, vote: Number($("train-vote").value),
+    });
+  } catch (err) {
+    $("train-error").textContent = err.message;
+  }
+});
+
+$("model-use").addEventListener("click", async () => {
+  $("model-error").textContent = "";
+  try {
+    await post("/api/model/use", { name: $("model-select").value });
+  } catch (err) {
+    $("model-error").textContent = err.message;
+  }
+});
+$("model-stop").addEventListener("click", () => post("/api/model/stop").catch(() => {}));
+
+let trainWasRunning = false;
+function drawTrain(t) {
+  $("train-start").disabled = t.running;
+  $("train-step").textContent = t.running ? `${t.step || "starting"}...` : "";
+  if (t.error) $("train-error").textContent = t.error;
+  $("train-result").textContent = (t.lines || []).join("\n");
+  if (trainWasRunning && !t.running && currentTab === "train") loadTrainLists();
+  trainWasRunning = t.running;
+}
+
+function predictionLabel(p) {
+  if (!p.running) return "";
+  if (!p.label) return "<small>waiting for EMG</small>";
+  const conf = Math.round(100 * (p.probs?.[p.label] ?? 0));
+  return `${p.label.replace("_", " ")}<small>${conf} % sure, raw window says ${p.raw.replace("_", " ")}</small>`;
+}
+
+function drawProbs(p) {
+  const ctx = $("live-probs").getContext("2d");
+  const { width: w, height: h } = ctx.canvas;
+  ctx.clearRect(0, 0, w, h);
+  if (!p.running || !p.probs) return;
+  const classes = p.classes;
+  const rowH = h / classes.length;
+  const left = 110;
+  ctx.font = "14px system-ui";
+  classes.forEach((c, i) => {
+    const v = p.probs[c] ?? 0;
+    const y = i * rowH;
+    ctx.fillStyle = c === p.label ? "#e6e6e6" : "#8b919c";
+    ctx.fillText(c.replace("_", " "), 4, y + rowH * 0.65);
+    ctx.fillStyle = "#2a2e36";
+    ctx.fillRect(left, y + 3, w - left, rowH - 6);
+    ctx.fillStyle = c === p.label ? TRACKED_COLOR : "#4b5563";
+    ctx.fillRect(left, y + 3, (w - left) * v, rowH - 6);
+  });
+}
+
+// The virtual hand shows the predicted gesture's target pose
+function drawModelView() {
+  const p = state.tools?.predictor;
+  const ctx = $("model-hand").getContext("2d");
+  ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+  if (!p?.running) {
+    $("model-label").innerHTML = "<small>no model running, train or pick one on the Train tab</small>";
+    return;
+  }
+  $("model-label").innerHTML = predictionLabel(p);
+  const g = p.label && config.gestures[p.label];
+  if (g) drawSolidHand(ctx, anglesByName(g.angles), { view: solidView, mirror: mirrored(), color: TRACKED_COLOR });
+}
+
+function drawPredictor(p) {
+  $("model-stop").disabled = !p.running;
+  $("model-status").textContent = p.running ? `Running ${p.model}` : "No model running";
+  if (p.error) $("model-error").textContent = p.error;
+  $("live-label").innerHTML = predictionLabel(p);
+  drawProbs(p);
+  // Rewriting an option redraws an open dropdown, so only touch it when the model starts or stops
+  const option = $("model-option");
+  if (option.disabled === !!p.running) {
+    option.disabled = !p.running;
+    option.textContent = p.running ? "Model prediction" : "Model prediction (no model running)";
+  }
+}
+
 // Connection check
 
 $("conn-start").addEventListener("click", async () => {
@@ -307,6 +427,8 @@ function drawTools() {
   drawCalibration(t.calibration);
   drawHaptics(t.haptics, t.test);
   drawConnection(t.check);
+  drawTrain(t.trainer);
+  drawPredictor(t.predictor);
 }
 
 function initTools() {

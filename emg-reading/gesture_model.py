@@ -1,0 +1,272 @@
+"""Protocol A: discrete gestures from EMG with LDA.
+
+Features per channel on sliding windows of the shared filtered EMG (never CAR): RMS, mean absolute value,
+waveform length, zero crossings and slope sign changes. Training windows come from the held-gesture and rest
+cues of recorded sessions, minus the start of each cue where the hand is still changing. Live prediction
+computes the same features on the newest window and smooths the output with a majority vote.
+
+    python gesture_model.py data/<session> data/<session> ... [--save]
+
+prints the leave-one-session-out and leave-one-posture-out evaluation, --save also trains on all the given
+sessions and saves the model to models/gestures/.
+"""
+import argparse
+import json
+import time
+from collections import Counter, deque
+from pathlib import Path
+
+import joblib
+import numpy as np
+from numpy.lib.stride_tricks import sliding_window_view
+from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
+
+from processing import FILTER_SETTLE_S, FILTER_VERSION, filter_block
+from session import load_session, segments
+
+MODEL_DIR = Path(__file__).with_name("models") / "gestures"
+
+WINDOW_MS = 200
+STEP_MS = 50
+# The EMG changed 0.2 to 1.4 s after a cue on 2026-09-30 (mostly about 0.5 s), for gestures and for letting go
+TRIM_START_S = 1.0
+VOTE = 5
+# Zero crossings and slope sign changes ignore steps smaller than this, so noise at rest isn't counted.
+# Filtered EMG at rest is about 5 uV RMS
+COUNT_THRESHOLD_UV = 1.0
+
+FEATURES = ["rms", "mav", "wl", "zc", "ssc"]
+
+
+def window_features(x, log=True):
+    """x: channels x samples of filtered EMG, or a batch (..., channels, samples). Returns the 5 features per
+    channel, flattened channel by channel. log puts the amplitude features on a log scale, which suits LDA's
+    assumption of normal distributions better, EMG amplitudes are skewed."""
+    d = np.diff(x, axis=-1)
+    rms = np.sqrt(np.mean(x ** 2, axis=-1))
+    mav = np.mean(np.abs(x), axis=-1)
+    wl = np.sum(np.abs(d), axis=-1)
+    zc = np.sum((x[..., :-1] * x[..., 1:] < 0) & (np.abs(d) >= COUNT_THRESHOLD_UV), axis=-1)
+    ssc = np.sum((d[..., :-1] * d[..., 1:] < 0)
+                 & ((np.abs(d[..., :-1]) >= COUNT_THRESHOLD_UV) | (np.abs(d[..., 1:]) >= COUNT_THRESHOLD_UV)), axis=-1)
+    if log:
+        rms, mav, wl = (np.log(np.maximum(v, 1e-3)) for v in (rms, mav, wl))
+    feats = np.stack([rms, mav, wl, zc, ssc], axis=-1)
+    return feats.reshape(*feats.shape[:-2], -1)
+
+
+def session_windows(data, rate, options):
+    """Features of every window in a session, in time order. Returns (features, window end sample, label or
+    None, posture or None). Labels only for windows fully inside the trimmed part of a hold cue."""
+    channels = data["meta"]["channels"]
+    y = filter_block(data["emg"][channels], rate)
+    win = int(WINDOW_MS / 1000 * rate)
+    step = int(STEP_MS / 1000 * rate)
+    ends = np.arange(max(win, int(FILTER_SETTLE_S * rate)), y.shape[1] + 1, step)
+    starts = ends - win
+    feats = np.concatenate([window_features(sliding_window_view(y, win, axis=1)[:, s].transpose(1, 0, 2),
+                                            options["log"])
+                            for s in np.array_split(starts, max(1, len(starts) // 2000))])
+    if options["accel"]:
+        acc = data["accel"]
+        feats = np.hstack([feats, np.stack([acc[:, s:e].mean(axis=1) for s, e in zip(starts, ends)])])
+
+    labels = np.full(len(ends), None, dtype=object)
+    postures = np.full(len(ends), None, dtype=object)
+    trim = int(TRIM_START_S * rate)
+    for seg in segments(data["events"]):
+        if seg["kind"] != "hold" or seg["bad"] or seg["sample1"] is None:
+            continue
+        inside = (starts >= seg["sample0"] + trim) & (ends <= seg["sample1"])
+        labels[inside] = seg["label"]
+        postures[inside] = seg["posture"]
+    return feats, ends, labels, postures
+
+
+def make_lda():
+    # Shrinkage keeps the covariance estimate stable with 40 correlated features and a few thousand windows
+    return LinearDiscriminantAnalysis(solver="lsqr", shrinkage="auto")
+
+
+def majority(predictions, vote):
+    """Causal majority vote over the last vote predictions, ties go to the newest."""
+    out = np.empty(len(predictions), dtype=object)
+    recent = deque(maxlen=vote)
+    for i, p in enumerate(predictions):
+        recent.append(p)
+        counts = Counter(recent)
+        best = max(counts.values())
+        out[i] = next(q for q in reversed(recent) if counts[q] == best)
+    return out
+
+
+def score(true, pred, classes):
+    """Accuracy, rest falsely taken for a gesture, and the confusion matrix (rows true, columns predicted)."""
+    index = {c: i for i, c in enumerate(classes)}
+    cm = np.zeros((len(classes), len(classes)), int)
+    for t, p in zip(true, pred):
+        cm[index[t], index[p]] += 1
+    rest = true == "rest"
+    return {"accuracy": float(np.mean(true == pred)) if len(true) else None,
+            "rest_false": float(np.mean(pred[rest] != "rest")) if rest.any() else None,
+            "confusion": cm.tolist()}
+
+
+def evaluate(sessions, options, votes=(1, 3, 5, 7)):
+    """sessions: {name: session_windows output}. Leave one session out and leave one posture out.
+    Predictions are smoothed over each held-out session's whole window stream, transitions included, then
+    scored on the labelled windows only."""
+    classes = sorted({str(l) for s in sessions.values() for l in s[2] if l is not None})
+    result = {"classes": classes, "sessions": {}, "postures": {}}
+    by_vote = {v: ([], []) for v in votes}
+    if len(sessions) > 1:
+        for name, (feats, _, labels, _) in sessions.items():
+            train = [(f[l != None], l[l != None]) for n, (f, _, l, _) in sessions.items() if n != name]  # noqa: E711
+            model = make_lda().fit(np.vstack([f for f, _ in train]), np.concatenate([l for _, l in train]))
+            raw = model.predict(feats)
+            known = labels != None  # noqa: E711
+            result["sessions"][name] = {}
+            for v in votes:
+                pred = majority(raw, v)
+                by_vote[v][0].append(labels[known])
+                by_vote[v][1].append(pred[known])
+                result["sessions"][name][v] = score(labels[known], pred[known], classes)["accuracy"]
+        result["loso"] = {v: score(np.concatenate(t), np.concatenate(p), classes) for v, (t, p) in by_vote.items()}
+
+    # Leave one posture out, over all sessions together, without smoothing (postures aren't one stream)
+    feats = np.vstack([s[0] for s in sessions.values()])
+    labels = np.concatenate([s[2] for s in sessions.values()])
+    postures = np.concatenate([s[3] for s in sessions.values()])
+    known = labels != None  # noqa: E711
+    for p in sorted({p for p in postures[known]}):
+        test = known & (postures == p)
+        train = known & (postures != p)
+        if not train.any():
+            continue
+        model = make_lda().fit(feats[train], labels[train])
+        result["postures"][p] = score(labels[test], model.predict(feats[test]), classes)["accuracy"]
+    return result
+
+
+def decision_delay_ms(vote):
+    """Rough delay from a change in the muscle to a change in the smoothed output: the window is centred half a
+    window back, and a majority of the vote has to see the new gesture."""
+    return WINDOW_MS / 2 + (vote // 2) * STEP_MS
+
+
+def load_sessions(folders, options):
+    out = {}
+    for folder in folders:
+        data = load_session(folder)
+        meta = data["meta"]
+        if meta.get("filter_version") != FILTER_VERSION:
+            raise ValueError(f"{Path(folder).name} was recorded with another filter version")
+        windows = session_windows(data, meta["rate"], options)
+        if not any(l is not None for l in windows[2]):
+            continue
+        out[Path(folder).name] = windows
+    return out
+
+
+def train(folders, options, evaluate_it=True):
+    """Trains on all the given sessions. Returns (model dict ready to save, evaluation or None)."""
+    sessions = load_sessions(folders, options)
+    if not sessions:
+        raise ValueError("none of these sessions has gesture cues")
+    metas = [json.loads((Path(f) / "session.json").read_text()) for f in folders]
+    channels = {tuple(m["channels"]) for m in metas}
+    if len(channels) > 1:
+        raise ValueError("these sessions use different EMG channels")
+    feats = np.vstack([s[0] for s in sessions.values()])
+    labels = np.concatenate([s[2] for s in sessions.values()])
+    known = labels != None  # noqa: E711
+    lda = make_lda().fit(feats[known], labels[known])
+    model = {"lda": lda, "options": options, "classes": [str(c) for c in lda.classes_], "channels": list(channels.pop()),
+             "rate": metas[0]["rate"], "filter_version": FILTER_VERSION, "window_ms": WINDOW_MS, "step_ms": STEP_MS,
+             "vote": options["vote"], "sessions": list(sessions), "subject": metas[0].get("subject"),
+             "trained": time.strftime("%Y-%m-%d %H:%M"), "windows": int(known.sum())}
+    result = evaluate(sessions, options) if evaluate_it else None
+    model["evaluation"] = result
+    return model, result
+
+
+def save(model):
+    MODEL_DIR.mkdir(parents=True, exist_ok=True)
+    path = MODEL_DIR / f"{model['subject'] or 'model'}_{time.strftime('%Y-%m-%d_%H%M%S')}.joblib"
+    joblib.dump(model, path)
+    return path
+
+
+def load(path):
+    model = joblib.load(path)
+    if model["filter_version"] != FILTER_VERSION:
+        raise ValueError("this model was trained with an older filter, train it again")
+    return model
+
+
+class LivePredictor:
+    """Feeds the newest window of filtered EMG to a trained model and smooths the output."""
+
+    def __init__(self, model):
+        self.model = model
+        self.win = int(model["window_ms"] / 1000 * model["rate"])
+        self.recent = deque(maxlen=model["vote"])
+
+    def predict(self, filtered, accel=None):
+        """filtered: channels x at least one window of filtered EMG, accel: 3 x the same samples (only if the
+        model uses it). Returns (smoothed label, raw label, {class: probability})."""
+        x = filtered[:, -self.win:]
+        feats = window_features(x, self.model["options"]["log"])
+        if self.model["options"]["accel"]:
+            feats = np.concatenate([feats, accel[:, -self.win:].mean(axis=1)])
+        probs = self.model["lda"].predict_proba(feats[None])[0]
+        raw = self.model["classes"][int(np.argmax(probs))]
+        self.recent.append(raw)
+        counts = Counter(self.recent)
+        best = max(counts.values())
+        label = next(q for q in reversed(self.recent) if counts[q] == best)
+        return label, raw, dict(zip(self.model["classes"], probs.round(3).tolist()))
+
+
+def report(result):
+    lines = []
+    classes = result["classes"]
+    if "loso" in result:
+        lines.append("leave one session out (accuracy / rest taken for a gesture / decision delay):")
+        for v, s in result["loso"].items():
+            lines.append(f"  vote {v}: {100 * s['accuracy']:5.1f} %  {100 * (s['rest_false'] or 0):5.1f} %  "
+                         f"~{decision_delay_ms(v):.0f} ms")
+        for name, per_vote in result["sessions"].items():
+            lines.append(f"  held out {name}: " + "  ".join(f"vote {v} {100 * a:.1f} %" for v, a in per_vote.items()))
+        cm = np.array(result["loso"][VOTE]["confusion"])
+        lines.append(f"confusion, vote {VOTE} (rows true, columns predicted, % of the row):")
+        lines.append(" " * 11 + "".join(f"{c[:6]:>7s}" for c in classes))
+        for c, row in zip(classes, cm):
+            pct = 100 * row / max(row.sum(), 1)
+            lines.append(f"{c:>10s} " + "".join(f"{p:7.0f}" for p in pct))
+    else:
+        lines.append("only one session, leave one session out needs at least two")
+    if result["postures"]:
+        lines.append("leave one posture out, no vote: "
+                     + "  ".join(f"{p} {100 * a:.1f} %" for p, a in result["postures"].items()))
+    return lines
+
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("folders", nargs="+")
+    parser.add_argument("--no-log", action="store_true", help="amplitude features without the log")
+    parser.add_argument("--accel", action="store_true", help="add the mean accelerometer reading as features")
+    parser.add_argument("--vote", type=int, default=VOTE, help="majority vote length for live use")
+    parser.add_argument("--save", action="store_true", help="train on all sessions and save the model")
+    args = parser.parse_args()
+    options = {"log": not args.no_log, "accel": args.accel, "vote": args.vote}
+    model, result = train(args.folders, options)
+    print(f"{model['windows']} labelled windows from {len(model['sessions'])} sessions, classes {model['classes']}")
+    print("\n".join(report(result)))
+    if args.save:
+        print(f"saved {save(model)}")
+
+
+if __name__ == "__main__":
+    main()

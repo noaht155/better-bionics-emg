@@ -8,9 +8,11 @@ Then open http://localhost:8000. --host 0.0.0.0 makes it reachable from a tablet
 """
 import argparse
 import asyncio
+import json
 from pathlib import Path
 from typing import Literal
 
+import joblib
 import numpy as np
 import uvicorn
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
@@ -20,12 +22,14 @@ from pydantic import BaseModel, Field
 
 from armband import Armband, Replay
 from calibrate import load_calibration
+import gesture_model
 from camera import Camera
 from esp32_link import WIFI_IP
 from gestures import GESTURES, POSTURES
 from hand_angles import JOINTS, RELIABLE
 from processing import spectrum
 from recorder import Recorder
+from session import DATA_DIR
 from tools import Tools
 
 WEB_DIR = Path(__file__).with_name("web")
@@ -59,6 +63,44 @@ class CalibrationSettings(BaseModel):
 class Esp32Link(BaseModel):
     port: str | None = None
     wifi: str | None = None
+
+
+class TrainSettings(BaseModel):
+    sessions: list[str] = Field(min_length=1)
+    log: bool = True
+    accel: bool = False
+    vote: int = Field(ge=1, le=15)
+
+
+class ModelChoice(BaseModel):
+    name: str
+
+
+def session_list():
+    """Recorded sessions, newest first, from their session.json only."""
+    out = []
+    for path in sorted(DATA_DIR.glob("*/session.json"), reverse=True):
+        meta = json.loads(path.read_text())
+        settings = meta.get("settings", {})
+        gestures = sum(c["kind"] == "hold" and c["label"] != "rest" for c in meta.get("plan", []))
+        out.append({"name": path.parent.name, "subject": meta.get("subject"), "postures": settings.get("postures"),
+                    "band_arm": settings.get("band_arm"), "placement": settings.get("placement"),
+                    "gestures": gestures, "completed": meta.get("completed"),
+                    "seconds": round(meta["ended"] - meta["started"]) if meta.get("ended") else None,
+                    "camera_delay_s": meta.get("camera_delay_s")})
+    return out
+
+
+def model_list():
+    out = []
+    for path in sorted(gesture_model.MODEL_DIR.glob("*.joblib"), reverse=True):
+        model = joblib.load(path)
+        loso = (model.get("evaluation") or {}).get("loso", {}).get(model["vote"])
+        out.append({"name": path.name, "subject": model["subject"], "trained": model["trained"],
+                    "sessions": model["sessions"], "classes": model["classes"], "options": model["options"],
+                    "accuracy": loso["accuracy"] if loso else None,
+                    "rest_false": loso["rest_false"] if loso else None})
+    return out
 
 
 def refuse(e):
@@ -153,6 +195,42 @@ def make_app(recorder, band, camera, tools):
             n = len(mag) // per_hz * per_hz
             out.append(np.round(mag[:n].reshape(-1, per_hz).mean(axis=1), 4).tolist())
         return {"f": f[:n].reshape(-1, per_hz).mean(axis=1).round(1).tolist(), "mag": out}
+
+    @app.get("/api/sessions")
+    def sessions():
+        return session_list()
+
+    @app.post("/api/train")
+    def train(settings: TrainSettings):
+        folders = [DATA_DIR / name for name in settings.sessions]
+        if any(not (f / "session.json").exists() for f in folders):
+            refuse("unknown session")
+        try:
+            tools.trainer.start([str(f) for f in folders],
+                                {"log": settings.log, "accel": settings.accel, "vote": settings.vote})
+        except ValueError as e:
+            refuse(e)
+        return {"ok": True}
+
+    @app.get("/api/models")
+    def models():
+        return model_list()
+
+    @app.post("/api/model/use")
+    def use_model(choice: ModelChoice):
+        path = gesture_model.MODEL_DIR / choice.name
+        if path.parent != gesture_model.MODEL_DIR or not path.exists():
+            refuse("unknown model")
+        try:
+            tools.predictor.use(path)
+        except ValueError as e:
+            refuse(e)
+        return {"ok": True}
+
+    @app.post("/api/model/stop")
+    def stop_model():
+        tools.predictor.stop()
+        return {"ok": True}
 
     @app.post("/api/hand")
     def hand(choice: HandChoice):

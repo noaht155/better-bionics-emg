@@ -322,11 +322,12 @@ function drawView() {
   if (v === "pose") drawPose();
   if (v === "emg") drawEmg();
   if (v === "camera") drawCamera();
+  if (v === "model") drawModelView();
 }
 
 function showView() {
   const v = $("view").value;
-  for (const name of ["pose", "emg", "camera"]) $(`view-${name}`).hidden = name !== v;
+  for (const name of ["pose", "emg", "camera", "model"]) $(`view-${name}`).hidden = name !== v;
   // Only pull the video while it's shown, the server stops encoding frames when nobody asks
   $("video").src = v === "camera" && config.camera ? `/video.mjpg?${Date.now()}` : "";
   $("view-note").textContent = v === "camera" && !config.camera ? "started with --no-camera" : "";
@@ -336,6 +337,7 @@ $("view").addEventListener("change", showView);
 
 attachRotate($("pose"), view, () => state && drawView());
 attachRotate($("target"), solidView, () => state && drawSession());
+attachRotate($("model-hand"), solidView, () => state && drawView());
 
 // Live connection
 
