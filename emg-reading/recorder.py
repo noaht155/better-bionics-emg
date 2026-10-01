@@ -6,6 +6,7 @@ advances the cues. The camera has its own thread and hands each frame to the ses
 import json
 import threading
 import time
+import traceback
 
 import numpy as np
 
@@ -25,6 +26,8 @@ CAMERA_SLOW_FPS = 25
 BAD_GRACE_S = 1.5
 # EMG history kept for the signal view and the haptics
 HISTORY_S = 4
+# How long a failed armband read stays in the warning bar
+ERROR_SHOWN_S = 10
 
 
 class Recorder:
@@ -49,6 +52,7 @@ class Recorder:
         self.advanced = False
         self.paused = False
         self.last_summary = None
+        self.loop_error = None
         self._lock = threading.Lock()
         self._stop = threading.Event()
         self._thread = threading.Thread(target=self._run, daemon=True)
@@ -66,28 +70,37 @@ class Recorder:
         self._thread.join(timeout=2)
 
     def _run(self):
-        rows = self.band.rows
         while not self._stop.is_set():
-            data = self.band.read_all()
-            with self._lock:
-                if data.shape[1]:
-                    if self.session is not None:
-                        self.session.add_board(data)
-                    emg = data[self.band.emg_rows]
-                    battery = data[rows["battery"], -1] if self.band.source == "armband" else None
-                    self.quality.update(emg, data[rows["package"]], battery)
-                    self.raw = np.hstack([self.raw, emg])[:, -self.history:]
-                    self.filtered = np.hstack([self.filtered, self.stream.process(emg)])[:, -self.history:]
-                    self.received += emg.shape[1]
-                    self.env = [envelope(y) for y in self.filtered[:, -self.env_len:]]
-                    self.accel = data[rows["accel"], -1].tolist()
-                for capture in self._captures:
-                    capture["chunks"].append(data)
-                    if time.time() >= capture["until"]:
-                        capture["done"].set()
-                self._captures = [c for c in self._captures if not c["done"].is_set()]
-                self._advance()
+            # An error used to end this thread for good, which looks exactly like the armband disconnecting.
+            # Keep going instead, a WiFi drop can recover, and show what went wrong
+            try:
+                self._tick()
+            except Exception as e:
+                self.loop_error = (time.time(), f"{type(e).__name__}: {e}")
+                traceback.print_exc()
             time.sleep(TICK_S)
+
+    def _tick(self):
+        rows = self.band.rows
+        data = self.band.read_all()
+        with self._lock:
+            if data.shape[1]:
+                if self.session is not None:
+                    self.session.add_board(data)
+                emg = data[self.band.emg_rows]
+                battery = data[rows["battery"], -1] if self.band.source == "armband" else None
+                self.quality.update(emg, data[rows["package"]], battery)
+                self.raw = np.hstack([self.raw, emg])[:, -self.history:]
+                self.filtered = np.hstack([self.filtered, self.stream.process(emg)])[:, -self.history:]
+                self.received += emg.shape[1]
+                self.env = [envelope(y) for y in self.filtered[:, -self.env_len:]]
+                self.accel = data[rows["accel"], -1].tolist()
+            for capture in self._captures:
+                capture["chunks"].append(data)
+                if time.time() >= capture["until"]:
+                    capture["done"].set()
+            self._captures = [c for c in self._captures if not c["done"].is_set()]
+            self._advance()
 
     def capture(self, seconds):
         """Blocks for seconds and returns every board row that arrived meanwhile, like calibrate.py's record."""
@@ -230,6 +243,8 @@ class Recorder:
 
     def warnings(self):
         out = self.quality.warnings()
+        if self.loop_error is not None and time.time() - self.loop_error[0] < ERROR_SHOWN_S:
+            out.append(("loop_error", f"Reading the armband failed: {self.loop_error[1]}"))
         if self.camera is None:
             out.append(("camera", "No camera, joint angles aren't recorded"))
         elif not self.camera.ok:

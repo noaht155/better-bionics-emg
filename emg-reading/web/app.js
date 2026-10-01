@@ -3,7 +3,7 @@
 
 const $ = (id) => document.getElementById(id);
 const SETTINGS_KEY = "recorder-settings";
-const SERIOUS = new Set(["no_data", "contact", "hum", "camera"]);
+const SERIOUS = new Set(["no_data", "contact", "hum", "camera", "loop_error"]);
 const TARGET_COLOR = "#6b7280";
 const TRACKED_COLOR = "#4fa3ff";
 
