@@ -64,7 +64,9 @@ function updateDuration() {
   const sync = 2 * (2 + 3 * 4);
   const perPosture = s.rest_s + moves * s.reps * (s.hold_s + s.rest_s) + (s.free_s > 0 ? s.free_s + s.rest_s : 0);
   const total = sync + s.postures.length * perPosture;
-  $("duration").textContent = `About ${Math.round(total / 60)} min plus breaks between postures`;
+  $("duration").textContent = s.postures.length
+    ? `About ${Math.round(total / 60)} min plus breaks between postures`
+    : "No postures: only the sync taps, to check the camera delay";
 }
 
 async function post(path, body) {
@@ -89,10 +91,6 @@ $("setup").addEventListener("submit", async (e) => {
   e.preventDefault();
   const settings = readSettings();
   $("setup-error").textContent = "";
-  if (!settings.postures.length) {
-    $("setup-error").textContent = "Pick at least one posture";
-    return;
-  }
   try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings)); } catch { /* private window */ }
   try {
     await post("/api/session/start", settings);
@@ -204,7 +202,7 @@ function drawSummary() {
   const detected = r.hand_detected == null ? "no camera" : `${Math.round(100 * r.hand_detected)} %`;
   box.innerHTML = `<b>Last session ${r.completed ? "finished" : "stopped early"}</b><br>
     ${r.folder}<br>${fmtTime(r.seconds)}, ${r.samples} EMG samples, ${r.dropped_samples} dropped,
-    ${r.frames} camera frames, hand detected in ${detected}`;
+    ${r.frames} camera frames, hand detected in ${detected}${r.camera_delay ? `<br>${r.camera_delay}` : ""}`;
 }
 
 // Target pose of the current cue, or the next gesture during a rest so it can be prepared

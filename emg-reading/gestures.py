@@ -52,7 +52,7 @@ POSTURES = {
 }
 
 SYNC_TAPS = 3
-SYNC_TEXT = "TAP\nslap the table once with your palm, sharply"
+SYNC_TEXT = "TAP\nlift your hand and slap the table once with your palm, sharply"
 FREE_TEXT = "MOVE YOUR FINGERS\nslowly, any way: open, close, one finger at a time"
 
 

@@ -9,11 +9,12 @@ import time
 
 import numpy as np
 
+import sync
 from calibrate import CAL_FILE
 from gestures import session_plan
 from processing import ENVELOPE_MS, FILTER_VERSION, StreamFilter, envelope
 from quality import SignalQuality
-from session import SessionWriter
+from session import SessionWriter, load_session
 
 TICK_S = 0.02
 # Hand counts as out of view after this long without a detection
@@ -193,8 +194,24 @@ class Recorder:
         seconds = session.meta["ended"] - session.meta["started"]
         detected = self._detected_share(session)
         self.last_summary = dict(summary, folder=str(session.folder), seconds=seconds, samples=session.samples,
-                                 frames=session.frames, hand_detected=detected)
+                                 frames=session.frames, hand_detected=detected,
+                                 camera_delay="measuring the camera delay..." if session.frames else None)
         self.index = -1
+        if session.frames:
+            # Loading a long session takes a moment, so don't hold up the armband loop for it
+            threading.Thread(target=self._measure_delay, args=(session.folder,), daemon=True).start()
+
+    def _measure_delay(self, folder):
+        try:
+            result = sync.camera_delay(load_session(folder))
+            if result["delay_s"] is not None:
+                sync.save(folder, result)
+            text = sync.summary(result)
+        except Exception as e:
+            text = f"camera delay: failed ({e})"
+        summary = self.last_summary
+        if summary is not None and summary["folder"] == str(folder):
+            summary["camera_delay"] = text
 
     @staticmethod
     def _detected_share(session):

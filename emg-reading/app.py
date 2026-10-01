@@ -39,7 +39,8 @@ class SessionSettings(BaseModel):
     tracked_hand: Literal["right", "left"]
     placement: str = ""
     notes: str = ""
-    postures: list[Literal[tuple(POSTURES)]] = Field(min_length=1)
+    # None gives a short session of only the sync taps, to check the camera delay
+    postures: list[Literal[tuple(POSTURES)]]
     reps: int = Field(ge=1, le=20)
     hold_s: float = Field(ge=1, le=30)
     rest_s: float = Field(ge=1, le=30)
