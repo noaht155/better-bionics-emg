@@ -58,6 +58,7 @@ function readSettings() {
     notes: form.notes.value.trim(),
     postures: [...form.querySelectorAll("[name=posture]:checked")].map((c) => c.value),
     reps: num("reps"), hold_s: num("hold_s"), rest_s: num("rest_s"), free_s: num("free_s"),
+    practice: form.practice.checked,
   };
 }
 
@@ -89,13 +90,16 @@ async function post(path, body) {
 $("setup").addEventListener("input", (e) => {
   updateDuration();
   if (e.target.name === "tracked_hand") post("/api/hand", { hand: e.target.value }).catch(() => {});
+  $("start-button").textContent = $("practice").checked ? "Start practice run" : "Start recording";
 });
 
 $("setup").addEventListener("submit", async (e) => {
   e.preventDefault();
   const settings = readSettings();
   $("setup-error").textContent = "";
-  try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings)); } catch { /* private window */ }
+  // Practice isn't remembered, a forgotten tick would quietly throw away a real session
+  const { practice, ...remembered } = settings;
+  try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(remembered)); } catch { /* private window */ }
   try {
     await post("/api/session/start", settings);
   } catch (err) {
@@ -213,8 +217,9 @@ function drawSummary() {
   box.hidden = !r;
   if (!r) return;
   const detected = r.hand_detected == null ? "no camera" : `${Math.round(100 * r.hand_detected)} %`;
-  box.innerHTML = `<b>Last session ${r.completed ? "finished" : "stopped early"}</b><br>
-    ${r.folder}<br>${fmtTime(r.seconds)}, ${r.samples} EMG samples, ${r.dropped_samples} dropped,
+  const what = r.practice ? "Practice run (nothing saved)" : "Last session";
+  box.innerHTML = `<b>${what} ${r.completed ? "finished" : "stopped early"}</b><br>
+    ${r.practice ? "" : `${r.folder}<br>`}${fmtTime(r.seconds)}, ${r.samples} EMG samples, ${r.dropped_samples} dropped,
     ${r.frames} camera frames, hand detected in ${detected}${r.camera_delay ? `<br>${r.camera_delay}` : ""}`;
 }
 

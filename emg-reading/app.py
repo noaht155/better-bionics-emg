@@ -49,6 +49,8 @@ class SessionSettings(BaseModel):
     hold_s: float = Field(ge=1, le=30)
     rest_s: float = Field(ge=1, le=30)
     free_s: float = Field(ge=0, le=600)
+    # Same run, nothing saved, for trying out the setup
+    practice: bool = False
 
 
 class HandChoice(BaseModel):

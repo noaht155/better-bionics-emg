@@ -423,6 +423,8 @@ function drawConnection(t) {
 function drawTools() {
   const t = state.tools;
   $("rec-badge").hidden = !state.session;
+  $("rec-badge").textContent = state.session?.practice ? "practice, not saved" : "recording";
+  $("rec-badge").classList.toggle("practice", !!state.session?.practice);
   if (!t) return;
   drawCalibration(t.calibration);
   drawHaptics(t.haptics, t.test);

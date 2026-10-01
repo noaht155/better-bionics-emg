@@ -15,7 +15,7 @@ from calibrate import CAL_FILE
 from gestures import session_plan
 from processing import ENVELOPE_MS, FILTER_VERSION, StreamFilter, envelope
 from quality import SignalQuality
-from session import SessionWriter, load_session
+from session import PracticeWriter, SessionWriter, load_session
 
 TICK_S = 0.02
 # Hand counts as out of view after this long without a detection
@@ -30,6 +30,10 @@ HISTORY_S = 4
 ERROR_SHOWN_S = 10
 # Fraction of the picture at each edge where the wrist is too close to the border to track reliably
 EDGE_MARGIN = 0.12
+
+
+def _folder_text(session):
+    return str(session.folder) if session.folder is not None else "practice run, nothing saved"
 
 
 class Recorder:
@@ -160,12 +164,13 @@ class Recorder:
                     "rows": self.band.rows, "channels": self.band.channels, "filter_version": FILTER_VERSION,
                     "calibration": json.loads(CAL_FILE.read_text()) if CAL_FILE.exists() else None,
                     "camera": self._camera_meta(), "camera_delay_s": None}
-            self.session = SessionWriter(meta, settings["subject"])
+            writer = PracticeWriter if settings.get("practice") else SessionWriter
+            self.session = writer(meta, settings["subject"])
             self.plan = plan
             self.paused = False
             self.last_summary = None
             self._go_to(0)
-            return str(self.session.folder)
+            return _folder_text(self.session)
 
     def command(self, action):
         with self._lock:
@@ -217,12 +222,14 @@ class Recorder:
         summary = {"completed": completed, "dropped_samples": self.quality.dropped_total}
         session.close(**summary)
         seconds = session.meta["ended"] - session.meta["started"]
-        detected = self._detected_share(session)
-        self.last_summary = dict(summary, folder=str(session.folder), seconds=seconds, samples=session.samples,
-                                 frames=session.frames, hand_detected=detected,
-                                 camera_delay="measuring the camera delay..." if session.frames else None)
+        detected = session.detected / session.frames if session.frames else None
+        practice = session.folder is None
+        measure = session.frames and not practice
+        self.last_summary = dict(summary, folder=_folder_text(session), practice=practice, seconds=seconds,
+                                 samples=session.samples, frames=session.frames, hand_detected=detected,
+                                 camera_delay="measuring the camera delay..." if measure else None)
         self.index = -1
-        if session.frames:
+        if measure:
             # Loading a long session takes a moment, so don't hold up the armband loop for it
             threading.Thread(target=self._measure_delay, args=(session.folder,), daemon=True).start()
 
@@ -237,14 +244,6 @@ class Recorder:
         summary = self.last_summary
         if summary is not None and summary["folder"] == str(folder):
             summary["camera_delay"] = text
-
-    @staticmethod
-    def _detected_share(session):
-        path = session.folder / "camera.f64"
-        width = len(session.meta["camera_columns"])
-        cam = np.fromfile(path, dtype=np.float64)
-        cam = cam[:len(cam) // width * width].reshape(-1, width)
-        return float(cam[:, 2].mean()) if len(cam) else None
 
     def _camera_meta(self):
         if self.camera is None:
@@ -308,7 +307,8 @@ class Recorder:
                 if upcoming is not None and upcoming["kind"] == "break":
                     upcoming = None
                 state["session"] = {
-                    "folder": str(self.session.folder), "index": self.index, "count": len(self.plan), "cue": cue,
+                    "folder": _folder_text(self.session), "practice": self.session.folder is None,
+                    "index": self.index, "count": len(self.plan), "cue": cue,
                     "elapsed": time.time() - self.session.meta["started"], "paused": self.paused,
                     "cue_elapsed": time.time() - self.cue_start, "next": upcoming,
                     "samples": self.session.samples, "frames": self.session.frames}

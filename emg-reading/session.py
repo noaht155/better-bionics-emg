@@ -54,6 +54,7 @@ class SessionWriter:
         self._events = open(self.folder / "events.jsonl", "a")
         self.samples = 0
         self.frames = 0
+        self.detected = 0
         self._write_meta()
 
     def _write_meta(self):
@@ -72,6 +73,7 @@ class SessionWriter:
                 return
             self._camera.write(np.asarray(record, dtype=np.float64).tobytes())
             self.frames += 1
+            self.detected += int(record[2] == 1)
 
     def add_event(self, kind, **fields):
         """Logs an event with the time and the number of EMG samples recorded so far."""
@@ -87,6 +89,34 @@ class SessionWriter:
                 f.close()
             self.meta.update(summary, ended=time.time(), samples=self.samples, frames=self.frames)
             self._write_meta()
+
+
+class PracticeWriter:
+    """Stands in for SessionWriter in a practice run: same calls, only counts, nothing is written."""
+
+    folder = None
+
+    def __init__(self, meta, subject):
+        self.meta = dict(meta, subject=subject, started=time.time())
+        self._lock = threading.Lock()
+        self.samples = 0
+        self.frames = 0
+        self.detected = 0
+
+    def add_board(self, data):
+        with self._lock:
+            self.samples += data.shape[1]
+
+    def add_frame(self, record):
+        with self._lock:
+            self.frames += 1
+            self.detected += int(record[2] == 1)
+
+    def add_event(self, kind, **fields):
+        return {"t": time.time(), "sample": self.samples, "kind": kind, **fields}
+
+    def close(self, **summary):
+        self.meta.update(summary, ended=time.time(), samples=self.samples, frames=self.frames)
 
 
 def _read_records(path, width):
