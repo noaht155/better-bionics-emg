@@ -124,6 +124,20 @@ old data adds nothing and pooling it hurts. Adapting without labels follows its 
 only start to help once a model learns features that survive the band moving, which needs many placements (a
 network trained across 5+ sessions with an LDA head refitted per fitting is the idea to test then).
 
+**Aligning the input instead of retraining.** Old LDA frozen, the new session's 8 channels transformed to look like
+the old ones, fitted on one calibration repetition:
+
+| | old 1 to new 2 | old 2 to new 1 |
+|---|---|---|
+| No transform | 53 % | 54 % |
+| Best channel rotation | 53 % (no shift) | 63 % (+2) |
+| Rotation and a gain per channel | 60 % | 38 % |
+| Full 8x8 channel mix, matching each grip's channel covariance | 54 % | 70 % |
+
+Inconsistent and below plain retraining on the same repetition (75 to 85 %). The gains likely mixed up band
+movement with the effort difference (session 1 had no firm-hold cue). The covariance matching is only a stand-in;
+with a network the alignment layer could be trained on the classification itself. Retest with consistent sessions.
+
 **Smaller fixes the same day:**
 - An error in the armband loop ended its thread for good, which looked like a disconnect. The loop now keeps going
   and shows the error.
