@@ -64,6 +64,9 @@ class Camera:
         self._jpeg = None
         self._preview_until = 0.0
         self._lock = threading.Lock()
+        # Newest (time, index, frame) from the grabbing thread
+        self._frame = (0.0, -1, None)
+        self._new_frame = threading.Condition()
         self._stop = threading.Event()
         self._thread = threading.Thread(target=self._run, daemon=True)
 
@@ -93,24 +96,24 @@ class Camera:
         if not cap.isOpened():
             self.error = f"camera {self.source} not found"
             return
-        from_file = not isinstance(self.source, int)
-        file_period = 1 / (cap.get(cv2.CAP_PROP_FPS) or FPS)
         self.ok = True
-        index = 0
+        grabber = threading.Thread(target=self._grab, args=(cap,), daemon=True)
+        grabber.start()
         last_ms = -1
         rate_t = time.time()
         rate_n = 0
+        seen = -1
         try:
             while not self._stop.is_set():
-                got, frame = cap.read()
-                t = time.time()
-                if not got:
-                    if from_file:
-                        cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
-                        continue
-                    self.ok = False
-                    self.error = "camera stopped sending frames"
+                with self._new_frame:
+                    self._new_frame.wait_for(lambda: self._frame[1] != seen or self._stop.is_set() or not self.ok,
+                                             timeout=1.0)
+                    t, index, frame = self._frame
+                if not self.ok:
                     break
+                if index == seen:
+                    continue
+                seen = index
                 self.size = (frame.shape[1], frame.shape[0])
                 rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
                 # The landmarker needs strictly increasing timestamps
@@ -127,17 +130,43 @@ class Camera:
                     if ok:
                         with self._lock:
                             self._jpeg = buf.tobytes()
-                index += 1
                 rate_n += 1
                 if t - rate_t >= 1.0:
                     self.fps = rate_n / (t - rate_t)
                     rate_t, rate_n = t, 0
-                if from_file:
-                    time.sleep(max(0.0, file_period - (time.time() - t)))
         finally:
             self.ok = False
+            self._stop.set()
+            grabber.join(timeout=2)
             cap.release()
             landmarker.close()
+
+    def _grab(self, cap):
+        """Reads frames as fast as the camera sends them and keeps only the newest. Reading in the tracking
+        loop let frames queue up whenever tracking fell behind, and at 30 fps in and out the queue never
+        drained: the camera delay measured 70 to 870 ms between sessions on 2026-10-01. Now a slow frame
+        means a skipped frame, not a late one, and the timestamp is taken as the frame arrives."""
+        from_file = not isinstance(self.source, int)
+        file_period = 1 / (cap.get(cv2.CAP_PROP_FPS) or FPS)
+        index = 0
+        while not self._stop.is_set():
+            got, frame = cap.read()
+            t = time.time()
+            if not got:
+                if from_file:
+                    cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
+                    continue
+                self.error = "camera stopped sending frames"
+                self.ok = False
+                with self._new_frame:
+                    self._new_frame.notify_all()
+                return
+            with self._new_frame:
+                self._frame = (t, index, frame)
+                self._new_frame.notify_all()
+            index += 1
+            if from_file:
+                time.sleep(max(0.0, file_period - (time.time() - t)))
 
     def _pick_hand(self, result, t, index):
         """The tracked hand's landmarks and angles as one record of session.CAMERA_COLUMNS."""
