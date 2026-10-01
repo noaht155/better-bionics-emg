@@ -51,6 +51,9 @@ POSTURES = {
     "raised": "Arm raised, hand above the shoulder",
 }
 
+# Gentle gestures barely rose above rest with the arm up on 2026-10-01 and were the ones the model missed.
+# Medium rather than maximum effort, the model still has to work on everyday grips
+HOLD_TEXT = "hold it firmly and steady, medium effort"
 SYNC_TAPS = 3
 SYNC_TEXT = "TAP\nlift your hand and slap the table once with your palm, sharply"
 FREE_TEXT = "MOVE YOUR FINGERS\nslowly, any way: open, close, one finger at a time"
@@ -85,7 +88,8 @@ def session_plan(postures, reps=3, hold_s=4.0, rest_s=3.0, free_s=30.0, seed=Non
         for _ in range(reps):
             rng.shuffle(moves)
             for g in moves:
-                cues += [_cue("hold", g, GESTURES[g][0], hold_s, posture), _cue("hold", "rest", rest, rest_s, posture)]
+                cues += [_cue("hold", g, f"{GESTURES[g][0]}\n{HOLD_TEXT}", hold_s, posture),
+                         _cue("hold", "rest", rest, rest_s, posture)]
         if free_s > 0:
             cues += [_cue("free", "free", FREE_TEXT, free_s, posture), _cue("hold", "rest", rest, rest_s, posture)]
     return cues + _sync_block()
