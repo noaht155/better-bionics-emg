@@ -12,6 +12,10 @@ let state = null;
 let currentTab = "record";
 // Seen a little from the little-finger side, where curled fingers and the thumb stay readable
 const view = { yaw: -45, pitch: -25 };
+// The filled hand reads best with the palm towards the viewer, turned a little
+const solidView = { yaw: 25, pitch: -20 };
+const SOLID_COLOR = "#c8cdd6";
+const UPCOMING_COLOR = "#6f7682";
 
 function anglesByName(list) {
   return Object.fromEntries(config.joints.map((j, i) => [j, list[i]]));
@@ -190,8 +194,15 @@ function drawSession() {
 
   const ctx = $("target").getContext("2d");
   ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
-  const target = targetAngles();
-  if (target) drawHand(ctx, target, { view, mirror: mirrored(), color: TARGET_COLOR });
+  const target = targetPose();
+  const caption = $("target-label");
+  caption.textContent = target ? `${target.upcoming ? "Next" : "Now"}: ${target.title}` : "";
+  caption.classList.toggle("upcoming", !!target?.upcoming);
+  // The next gesture is drawn darker so it doesn't read as the current one. Not transparent, the overlapping
+  // parts would show through each other
+  if (target) {
+    drawSolidHand(ctx, target.angles, { view: solidView, mirror: mirrored(), color: target.upcoming ? UPCOMING_COLOR : SOLID_COLOR });
+  }
 }
 
 function drawSummary() {
@@ -206,14 +217,16 @@ function drawSummary() {
 }
 
 // Target pose of the current cue, or the next gesture during a rest so it can be prepared
-function targetAngles() {
+// Returns {angles, title, upcoming}, upcoming is true when it shows the next gesture
+function targetPose() {
   const s = state.session;
   if (!s) return null;
   let cue = s.cue;
   if (cue.kind === "free" || cue.kind === "sync") return null;
-  if (cue.label === "rest" && s.next && config.gestures[s.next.label]) cue = s.next;
+  const upcoming = cue.label === "rest" && s.next && !!config.gestures[s.next.label];
+  if (upcoming) cue = s.next;
   const g = config.gestures[cue.label];
-  return g ? anglesByName(g.angles) : null;
+  return g ? { angles: anglesByName(g.angles), title: cue.text.split("\n")[0], upcoming } : null;
 }
 
 function drawPose() {
@@ -320,7 +333,7 @@ function showView() {
 $("view").addEventListener("change", showView);
 
 attachRotate($("pose"), view, () => state && drawView());
-attachRotate($("target"), view, () => state && drawSession());
+attachRotate($("target"), solidView, () => state && drawSession());
 
 // Live connection
 

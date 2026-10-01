@@ -164,3 +164,6 @@ pre:empty { display: none; }
 #tab-calibrate .bar, #tab-connection .bar { max-width: 720px; margin: 8px 0; }
 #cal-bar, #conn-bar { height: 100%; width: 0; background: var(--accent); }
 #outputs { max-width: 900px; margin-top: 8px; }
+
+#target-label { text-align: center; font-size: 15px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; margin-top: 12px; min-height: 1.3em; }
+#target-label.upcoming { color: var(--muted); }

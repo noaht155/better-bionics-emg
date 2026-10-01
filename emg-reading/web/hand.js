@@ -91,6 +91,74 @@ function drawHand(ctx, angles, opts) {
   ctx.restore();
 }
 
+// Finger thickness in mm per segment, base to tip. The thumb's first entry is its metacarpal
+const THICKNESS = { thumb: [22, 19, 16], index: [17, 15, 13], middle: [18, 16, 14], ring: [17, 15, 13], pinky: [14, 12, 11] };
+
+function shade(hex, t) {
+  const n = parseInt(hex.slice(1), 16);
+  const k = 0.55 + 0.45 * t;
+  return `rgb(${Math.round((n >> 16) * k)}, ${Math.round(((n >> 8) & 255) * k)}, ${Math.round((n & 255) * k)})`;
+}
+
+// Draws a filled hand: palm and rounded finger segments, painted back to front and shaded by depth so the
+// fingers in front cover the ones behind. opts: {view, mirror, color (#rrggbb), alpha}
+function drawSolidHand(ctx, angles, opts) {
+  const hand = buildHand(angles);
+  const { width: w, height: h } = ctx.canvas;
+  const scale = Math.min(w, h) / 230;
+  const p = (q) => project(q, opts.view, opts.mirror);
+  const parts = [];
+  // Palm outline from the base of the thumb round the knuckles to both sides of the wrist
+  const palm = [hand.thumb[0], hand.index[0], hand.middle[0], hand.ring[0], hand.pinky[0], [-30, 8, 0], [16, 0, 0]].map(p);
+  parts.push({ kind: "palm", pts: palm, depth: palm.reduce((a, q) => a + q.depth, 0) / palm.length - 20 });
+  for (const [name, pts] of Object.entries(hand)) {
+    if (name === "palm") continue;
+    const proj = pts.map(p);
+    for (let i = 0; i < proj.length - 1; i++) {
+      parts.push({ kind: "bone", a: proj[i], b: proj[i + 1], width: THICKNESS[name][i], depth: (proj[i].depth + proj[i + 1].depth) / 2 });
+    }
+  }
+  const depths = parts.map((x) => x.depth);
+  const lo = Math.min(...depths), hi = Math.max(...depths);
+  parts.sort((x, y) => x.depth - y.depth);
+
+  ctx.save();
+  ctx.translate(w / 2, h / 2);
+  ctx.scale(scale, scale);
+  ctx.translate(0, 95);
+  ctx.globalAlpha = opts.alpha ?? 1;
+  ctx.lineCap = "round";
+  ctx.lineJoin = "round";
+  const edge = "#16181c";
+  for (const part of parts) {
+    const fill = shade(opts.color, (part.depth - lo) / (hi - lo || 1));
+    ctx.beginPath();
+    if (part.kind === "palm") {
+      part.pts.forEach((q, i) => (i ? ctx.lineTo(q.x, q.y) : ctx.moveTo(q.x, q.y)));
+      ctx.closePath();
+      // A thick stroke in the fill colour rounds off the palm's corners
+      ctx.lineWidth = 18;
+      ctx.strokeStyle = edge;
+      ctx.stroke();
+      ctx.lineWidth = 14;
+      ctx.strokeStyle = fill;
+      ctx.fillStyle = fill;
+      ctx.stroke();
+      ctx.fill();
+    } else {
+      ctx.moveTo(part.a.x, part.a.y);
+      ctx.lineTo(part.b.x, part.b.y);
+      ctx.lineWidth = part.width + 3;
+      ctx.strokeStyle = edge;
+      ctx.stroke();
+      ctx.lineWidth = part.width;
+      ctx.strokeStyle = fill;
+      ctx.stroke();
+    }
+  }
+  ctx.restore();
+}
+
 // Lets the user drag on a canvas to turn the view
 function attachRotate(canvas, view, onChange) {
   let last = null;
