@@ -68,6 +68,8 @@ Open http://localhost:8000, fill in the form and start. The first run downloads 
 - Put the camera where it sees the tracked hand in every posture. The warning bar shows when the hand is out of view.
 - Space pauses and continues. b marks the current cue as bad, or the gesture before it during the first 1.5 s of a rest. Stop needs two clicks.
 - Each session is saved to `data/<date>_<time>_<subject>/` as it records. `session.load_session()` reads it back.
+- The camera delay is measured from the sync taps when a session ends and saved as `camera_delay_s` in `session.json`. Subtract it from the camera times. For a quick check, start a session with no postures ticked: it only does the taps. `python sync.py data/<session>` shows each tap, `--save` writes the result again.
+- For the taps, keep the hand in view, lift it and slap the table hard once. The tracker must not lose the hand during the slap, a tap with missed frames is skipped.
 - `--camera 1` picks another webcam, `--no-camera` records EMG only, `--host 0.0.0.0` allows a tablet on the same network.
 - `--replay data/2026-09-30-filter` plays recorded EMG instead of the armband, `--camera clip.mp4` uses a video file, for testing the app.
 
