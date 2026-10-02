@@ -275,6 +275,30 @@ One more training session moved the uncalibrated network 8 points, LDA 4. Calibr
 angles didn't improve (13.9 degrees, r 0.56) despite the finger block. That session's camera delay is shaky: taps
 read 174, 163, 242 and 107 ms (168 ms used), which blurs the angle labels by up to about 70 ms.
 
+## 2026-10-02: first next-day session
+
+**Session `2026-10-02_142500`, scored first with models trained only on 2026-10-01** (balanced accuracy):
+no calibration LDA 75.1 %, network 79.4 % (rest taken for a grip 0.2 %, wrong grip at 0.8 2.6 %); calibrated on 2
+repetitions LDA 86.1 %, network with transform and head 85.8 %. Both pass the 85 % target on this session. The band
+position (7.75 cm from the elbow crease) was close to the last session of the day before (7.5 cm), but the pads are
+pushed under the band by hand without the casing, so the electrode positions vary between sessions more than the
+placement note shows. The note only describes the band.
+
+Leave one session out as sessions were added:
+
+| balanced | 3 sessions | 4 sessions | 5 sessions |
+|---|---|---|---|
+| LDA, no calibration | 44.1 % | 48.0 % | 56.7 % |
+| Network, no calibration | 53.0 % | 61.4 % | 68.9 % |
+| LDA on the 2 calibration repetitions | 80.4 % | 80.1 % | 81.3 % |
+| Network + transform + grip head | 81.5 % | 80.6 % | 82.7 % |
+
+Without calibration the network beats LDA on all five held-out sessions (by 4 to 20 points) and takes rest for a
+grip less often (3.3 vs 9.2 %), and it gains about 8 points per added session so far. Calibrated, it is ahead on four
+of five, two sessions reach 85 %. Finger angles stay at about 13.6 degrees and r 0.58; the label timing (shaky camera
+delay) is the likely limit. Camera delays since the frame reader moved to its own thread read 77 to 168 ms, higher
+than the 68 to 96 ms before it, worth checking with the whole-session measurement.
+
 ## Open
 
 - More sessions with the 7 grips, firm holds and a marked band position.
