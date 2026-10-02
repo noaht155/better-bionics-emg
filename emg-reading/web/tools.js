@@ -1,5 +1,5 @@
 // Tabs for the existing tools: live signals (live_plot.py), calibration (calibrate.py), the gesture model
-// (ml/gesture_model.py), haptics and the output test (haptics.py, esp32_link.py) and the connection check
+// (ml/gesture_model.py), the general network (ml/train_ringnet.py, ml/networks.py), haptics and the output test (haptics.py, esp32_link.py) and the connection check
 // (check_connection.py).
 
 const LINK_KEY = "esp32-link";
@@ -17,6 +17,7 @@ function showTab(name) {
   if (name === "signals") openSignals();
   else closeSignals();
   if (name === "train") loadTrainLists();
+  if (name === "network") loadNetworkLists();
 }
 
 document.querySelectorAll("#tabs button").forEach((b) => b.addEventListener("click", () => showTab(b.dataset.tab)));
@@ -367,8 +368,8 @@ function predictionLabel(p) {
   return `${name(p.label)}<small>${conf} % sure, this window says ${name(p.raw)}</small>`;
 }
 
-function drawProbs(p) {
-  const ctx = $("live-probs").getContext("2d");
+function drawProbs(p, canvas = "live-probs") {
+  const ctx = $(canvas).getContext("2d");
   const { width: w, height: h } = ctx.canvas;
   ctx.clearRect(0, 0, w, h);
   if (!p.running || !p.probs) return;
@@ -421,6 +422,103 @@ function drawPredictor(p) {
     option.disabled = !p.running;
     option.textContent = p.running ? "Model prediction" : "Model prediction (no model running)";
   }
+}
+
+// General network: evaluation, training and calibration run as a background job, live test through the predictor
+
+const pct = (v) => (v == null ? "-" : `${(100 * v).toFixed(1)} %`);
+
+function fillSelect(select, items, label) {
+  const current = select.value;
+  select.innerHTML = items.map((m) => `<option value="${m.name}">${label(m)}</option>`).join("")
+    || "<option value=''>none yet</option>";
+  if (items.some((m) => m.name === current)) select.value = current;
+}
+
+async function loadNetworkLists() {
+  const [sessions, networks] = await Promise.all([fetch("/api/sessions"), fetch("/api/networks")].map((r) => r.then((x) => x.json())));
+  const good = sessions.filter((s) => s.completed && s.gestures > 0);
+  $("net-count").textContent = `${good.length} now`;
+  const short = (name) => name.slice(0, 17).replace("_", " ");
+  fillSelect($("net-base"), networks.filter((n) => n.kind === "general"),
+    (n) => `${n.name}, ${n.sessions.length} sessions, ${n.epochs} epochs`);
+  fillSelect($("net-session"), sessions.filter((s) => s.gestures > 0),
+    (s) => `${s.name}${s.completed ? "" : " (stopped early)"}`);
+  fillSelect($("net-live"), networks.filter((n) => n.kind === "calibrated"), (n) => {
+    const score = n.balanced != null ? `, ${pct(n.balanced)} balanced on its other repetitions` : "";
+    const seen = n.seen_in_training ? " (session was in training, optimistic)" : "";
+    return `${n.name}, calibrated on ${short(n.calibrated_on)}${score}${seen}`;
+  });
+  // A network that was just saved is the one to use next
+  const running = state?.tools?.predictor?.running && state.tools.predictor.model;
+  if (running && networks.some((n) => n.name === running)) $("net-live").value = running;
+}
+
+async function runNetwork(job) {
+  $("net-error").textContent = "";
+  const body = { job, epochs: Number($("net-epochs").value) };
+  if (job === "calibrate") {
+    body.network = $("net-base").value;
+    body.session = $("net-session").value;
+    body.reps = $("net-reps").value.split(/[\s,]+/).filter(Boolean).map(Number);
+  }
+  try {
+    await post("/api/network/run", body);
+  } catch (err) {
+    $("net-error").textContent = err.message;
+  }
+}
+
+$("net-eval-newest").addEventListener("click", () => runNetwork("evaluate_newest"));
+$("net-eval").addEventListener("click", () => runNetwork("evaluate"));
+$("net-train").addEventListener("click", () => runNetwork("train"));
+$("net-calibrate").addEventListener("click", () => runNetwork("calibrate"));
+$("net-stop").addEventListener("click", () => post("/api/network/stop").catch(() => {}));
+$("net-use").addEventListener("click", async () => {
+  $("net-error").textContent = "";
+  try {
+    await post("/api/model/use", { name: $("net-live").value });
+  } catch (err) {
+    $("net-error").textContent = err.message;
+  }
+});
+$("net-live-stop").addEventListener("click", () => post("/api/model/stop").catch(() => {}));
+
+function networkTable(job, r) {
+  if (job.startsWith("evaluate") && r.grips) {
+    const rows = Object.entries(r.grips).map(([name, m]) => `<tr><td>${name}</td><td>${pct(m.balanced)}</td>
+      <td>${pct(m.grips)}</td><td>${pct(m.rest_false)}</td><td>${pct(m.wrong)}</td><td>${pct(m.answers)}</td></tr>`);
+    const angles = Object.entries(r.angles).map(([name, m]) => `<tr><td>finger angles, ${name}</td>
+      <td colspan="5">${m.mae.toFixed(1)} deg mean error, r ${m.r.toFixed(2)}</td></tr>`);
+    return `<tr><th>held out: ${r.held.map((n) => n.slice(0, 17)).join(", ")}</th><th>balanced</th><th>grips only</th>
+      <th>rest taken for a grip</th><th>wrong grip shown</th><th>answers given</th></tr>${rows.join("")}${angles.join("")}`;
+  }
+  if (job === "calibrate" && r.scores) {
+    const m = r.scores;
+    const note = r.seen_in_training ? " (the network trained on this session, optimistic)" : "";
+    return `<tr><th>other repetitions${note}</th><th>balanced</th><th>rest taken for a grip</th><th>wrong grip shown</th></tr>
+      <tr><td>${r.saved}</td><td>${pct(m.balanced)}</td><td>${pct(m.rest_false)}</td><td>${pct(m.wrong)}</td></tr>`;
+  }
+  return "";
+}
+
+let networkWasRunning = false;
+function drawNetwork(n, p) {
+  for (const id of ["net-eval-newest", "net-eval", "net-train", "net-calibrate"]) $(id).disabled = n.running;
+  $("net-stop").disabled = !n.running;
+  $("net-step").textContent = n.running ? `${n.job.replace("_", " ")} running...` : "";
+  if (n.error) $("net-error").textContent = n.error;
+  // Only the last lines matter while it runs, the table replaces them once there is a result
+  const html = n.result ? networkTable(n.job, n.result) : "";
+  if ($("net-table").innerHTML !== html) $("net-table").innerHTML = html;
+  $("net-table").hidden = !html;
+  $("net-lines").textContent = (n.lines || []).join("\n");
+  if (networkWasRunning && !n.running && currentTab === "network") loadNetworkLists();
+  networkWasRunning = n.running;
+  $("net-live-stop").disabled = !p.running;
+  $("net-status").textContent = p.running ? `Running ${p.model}` : "No model running";
+  $("net-label").innerHTML = predictionLabel(p);
+  drawProbs(p, "net-probs");
 }
 
 // Connection check
@@ -478,6 +576,7 @@ function drawTools() {
   drawConnection(t.check);
   drawTrain(t.trainer);
   drawPredictor(t.predictor);
+  drawNetwork(t.network, t.predictor);
 }
 
 function initTools() {

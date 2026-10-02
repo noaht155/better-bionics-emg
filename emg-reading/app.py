@@ -34,7 +34,7 @@ from tools import Tools
 
 # The ml package sits next to emg-reading/ in the repo
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-from ml import gesture_model  # noqa: E402
+from ml import NETWORK_DIR, dataset, gesture_model  # noqa: E402
 
 WEB_DIR = Path(__file__).with_name("web")
 SEND_HZ = 20
@@ -95,6 +95,14 @@ class Threshold(BaseModel):
     value: float = Field(ge=0, le=1)
 
 
+class NetworkJobSettings(BaseModel):
+    job: Literal["evaluate", "evaluate_newest", "train", "calibrate"]
+    epochs: int = Field(15, ge=1, le=200)
+    network: str | None = None
+    session: str | None = None
+    reps: list[int] = Field([1, 2], min_length=1)
+
+
 def session_list():
     """Recorded sessions, newest first, from their session.json only."""
     out = []
@@ -121,6 +129,19 @@ def model_list():
                     # Models trained before balanced accuracy was added don't have it
                     "balanced": loso.get("balanced") if loso else None,
                     "rest_false": loso["rest_false"] if loso else None})
+    return out
+
+
+def network_list():
+    """Saved networks, newest first. Empty where torch isn't installed (it's only on the training desktop)."""
+    try:
+        import torch
+    except ImportError:
+        return []
+    out = []
+    for path in sorted(NETWORK_DIR.glob("*.pt"), reverse=True):
+        info = torch.load(path, map_location="cpu", weights_only=True)["info"]
+        out.append(dict(info, name=path.name))
     return out
 
 
@@ -254,10 +275,48 @@ def make_app(recorder, band, camera, tools):
     def models():
         return model_list()
 
+    @app.get("/api/networks")
+    def networks():
+        return network_list()
+
+    @app.post("/api/network/run")
+    def run_network(settings: NetworkJobSettings):
+        good = [f.name for f in dataset.good_sessions()]
+        if settings.job in ("evaluate", "evaluate_newest") and len(good) < 2:
+            refuse("needs at least 2 completed sessions with grips")
+        if settings.job == "evaluate":
+            args = ["ml.train_ringnet", "--epochs", str(settings.epochs)]
+        elif settings.job == "evaluate_newest":
+            args = ["ml.train_ringnet", "--epochs", str(settings.epochs), "--held", good[-1]]
+        elif settings.job == "train":
+            if not good:
+                refuse("no completed sessions with grips yet")
+            args = ["ml.networks", "train", "--epochs", str(settings.epochs)]
+        else:
+            name = settings.network or ""
+            if Path(name).name != name or not (NETWORK_DIR / name).is_file():
+                refuse("unknown network")
+            session = settings.session or ""
+            if Path(session).name != session or not (DATA_DIR / session / "session.json").exists():
+                refuse("unknown session")
+            args = ["ml.networks", "calibrate", name, str(DATA_DIR / session),
+                    "--reps", *map(str, settings.reps)]
+        try:
+            tools.network.start(settings.job, args)
+        except ValueError as e:
+            refuse(e)
+        return {"ok": True}
+
+    @app.post("/api/network/stop")
+    def stop_network():
+        tools.network.stop()
+        return {"ok": True}
+
     @app.post("/api/model/use")
     def use_model(choice: ModelChoice):
-        path = gesture_model.MODEL_DIR / choice.name
-        if path.parent != gesture_model.MODEL_DIR or not path.exists():
+        folder = NETWORK_DIR if choice.name.endswith(".pt") else gesture_model.MODEL_DIR
+        path = folder / choice.name
+        if path.parent != folder or not path.exists():
             refuse("unknown model")
         try:
             tools.predictor.use(path)

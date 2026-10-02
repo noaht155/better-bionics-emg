@@ -2,12 +2,17 @@
 
 Each tool runs in its own thread and keeps a small state dict for the browser. The logic lives in the
 original scripts (check_connection.report, calibrate.compute, haptics.output_duties, esp32_link.self_test,
-ml.gesture_model's train and LivePredictor), this only feeds them the shared stream instead of opening the
-armband again.
+ml.gesture_model's train and LivePredictor, ml.ringnet's NetPredictor), this only feeds them the shared stream
+instead of opening the armband again. Network training and evaluation run as their own process (NetworkJob).
 """
+import json
+import os
+import subprocess
 import sys
+import tempfile
 import threading
 import time
+from collections import deque
 from pathlib import Path
 
 import calibrate
@@ -16,8 +21,12 @@ from esp32_link import Esp32, self_test
 from haptics import OUTPUTS, UPDATE_HZ, output_duties
 
 # The ml package sits next to emg-reading/ in the repo
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+REPO = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(REPO))
 from ml import gesture_model  # noqa: E402
+
+# Lines of a network job's output kept for the page
+JOB_LINES = 40
 
 CHECK_S = 5.0
 COUNTDOWN_S = 3
@@ -202,7 +211,14 @@ class Predictor(Tool):
         self.state["threshold"] = value
 
     def use(self, path):
-        model = gesture_model.load(path)
+        if path.suffix == ".pt":
+            # torch is only installed on the training desktop, the rest of the app runs without it
+            import torch
+            from ml import ringnet
+            torch.set_num_threads(1)
+            model = ringnet.load_live(path)
+        else:
+            model = gesture_model.load(path)
         band = self.recorder.band
         if model["channels"] != band.channels or model["rate"] != band.rate:
             raise ValueError("this model was trained on other EMG channels or another sample rate")
@@ -215,7 +231,11 @@ class Predictor(Tool):
         self._stop.set()
 
     def _run(self, model, name):
-        live = gesture_model.LivePredictor(model)
+        if model.get("kind") == "network":
+            from ml.ringnet import NetPredictor
+            live = NetPredictor(model, self.threshold, gesture_model.UNSURE)
+        else:
+            live = gesture_model.LivePredictor(model)
         live.threshold = self.threshold
         self._live = live
         self.state.update(model=name, classes=model["classes"], label=None, threshold=self.threshold)
@@ -249,6 +269,43 @@ class Trainer(Tool):
         self.predictor.use(path)
 
 
+class NetworkJob(Tool):
+    """Runs one of the network scripts (ml.train_ringnet, ml.networks) as a separate process at low priority, so
+    training can't stall the armband and camera loops even mid-recording. Its output lines and the result file it
+    writes are passed to the page."""
+
+    def __init__(self):
+        super().__init__()
+        self._proc = None
+
+    def start(self, job, args):
+        self._launch(self._run, job, args)
+
+    def stop(self):
+        if self._proc is not None and self._proc.poll() is None:
+            self._proc.terminate()
+
+    def _run(self, job, args):
+        fd, out = tempfile.mkstemp(suffix=".json")
+        os.close(fd)
+        lines = deque(maxlen=JOB_LINES)
+        self.state.update(job=job, lines=[], result=None)
+        try:
+            self._proc = subprocess.Popen([sys.executable, "-u", "-m", *args, "--json", out], cwd=REPO,
+                                          stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+            for line in self._proc.stdout:
+                # Library warnings would push the useful lines off the page
+                if line.strip() and "Warning" not in line:
+                    lines.append(line.rstrip())
+                    self.state["lines"] = list(lines)
+            if self._proc.wait() != 0:
+                raise RuntimeError(lines[-1] if lines else f"stopped (exit code {self._proc.returncode})")
+            text = Path(out).read_text()
+            self.state["result"] = json.loads(text) if text else None
+        finally:
+            Path(out).unlink(missing_ok=True)
+
+
 class Tools:
     def __init__(self, recorder):
         esp_lock = threading.Lock()
@@ -258,11 +315,12 @@ class Tools:
         self.test = OutputTest(esp_lock)
         self.predictor = Predictor(recorder)
         self.trainer = Trainer(self.predictor)
+        self.network = NetworkJob()
 
     def snapshot(self):
         now = time.time()
         out = {}
-        for name in ("check", "calibration", "haptics", "test", "predictor", "trainer"):
+        for name in ("check", "calibration", "haptics", "test", "predictor", "trainer", "network"):
             state = dict(getattr(self, name).state)
             if state.get("until"):
                 state["left"] = max(0.0, state["until"] - now)

@@ -14,7 +14,9 @@ calibration repetitions alone. Grips are scored with balanced accuracy (rest is 
 """
 import argparse
 import copy
+import json
 import time
+from pathlib import Path
 
 import numpy as np
 import torch
@@ -167,6 +169,7 @@ def main():
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--sessions", nargs="*", help="session folder names, default every good session")
     parser.add_argument("--held", nargs="*", help="only hold out these sessions, default each in turn")
+    parser.add_argument("--json", help="write the summary here, for the web app")
     args = parser.parse_args()
     low_priority()
     torch.set_num_threads(2)
@@ -233,6 +236,15 @@ def main():
     print(f"\nfinger angles ({', '.join(ANGLE_JOINTS)}), mean absolute error and correlation:")
     for key, label in (("net none", "no calibration"), ("net transform", "transform from 2 repetitions")):
         print(f"  {label:30s} {mean_of(angles[key], 'mae'):5.1f} deg   r {mean_of(angles[key], 'r'):.2f}")
+    if args.json:
+        summary = {"sessions": names, "held": [n for n in names if not args.held or n in args.held],
+                   "grips": {labels[k]: {m: mean_of(results[k], m)
+                                         for m in ("balanced", "grips", "rest_false", "wrong", "answers")}
+                             for k in labels},
+                   "angles": {label: {m: mean_of(angles[k], m) for m in ("mae", "r")}
+                              for k, label in (("net none", "no calibration"),
+                                               ("net transform", "transform from 2 repetitions"))}}
+        Path(args.json).write_text(json.dumps(summary, indent=1))
 
 
 if __name__ == "__main__":

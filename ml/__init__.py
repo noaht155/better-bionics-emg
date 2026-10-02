@@ -10,6 +10,8 @@ from pathlib import Path
 EMG_READING = Path(__file__).resolve().parent.parent / "emg-reading"
 if str(EMG_READING) not in sys.path:
     sys.path.insert(0, str(EMG_READING))
+# Saved networks, next to the saved LDA models
+NETWORK_DIR = EMG_READING / "models" / "networks"
 
 
 def low_priority():

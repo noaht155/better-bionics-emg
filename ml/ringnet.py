@@ -8,6 +8,8 @@ and pooling over the ring (mean and max) gives the same output either way. What 
 electrodes, the band moving along the arm, a different person) is for the per-person transform: an 8x8 channel
 mix and a gain per channel, starting as no change and fitted on a calibration recording with the rest frozen.
 """
+from collections import Counter, deque
+
 import torch
 from torch import nn
 import torch.nn.functional as F
@@ -92,6 +94,52 @@ def rotation_check(model, x):
     with torch.no_grad():
         base = model(x)[0]
         return max(float((model(torch.roll(x, k, dims=1))[0] - base).abs().max()) for k in range(1, 8))
+
+
+def save(model, info, path):
+    """info: plain values only (strings, numbers, lists), so loading never has to run pickled code."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    torch.save({"state": model.state_dict(), "classes": model.classes, "info": info}, path)
+
+
+def load(path, device="cpu"):
+    blob = torch.load(path, map_location=device, weights_only=True)
+    model = RingNet(blob["classes"]).to(device)
+    model.load_state_dict(blob["state"])
+    model.eval()
+    return model, blob["info"]
+
+
+def load_live(path):
+    """A saved network in the same shape the app's predictor uses for LDA models."""
+    model, info = load(path)
+    return {"kind": "network", "net": model, "info": info, "classes": model.classes, "channels": info["channels"],
+            "rate": info["rate"], "window": info["window"], "step_ms": info["step_ms"], "vote": info["vote"],
+            "options": {"accel": False}}
+
+
+class NetPredictor:
+    """Live grip prediction with a saved network: same threshold and majority vote as the LDA predictor."""
+
+    def __init__(self, model, threshold, unsure):
+        self.model = model
+        self.net = model["net"]
+        self.win = model["window"]
+        self.recent = deque(maxlen=model["vote"])
+        self.threshold = threshold
+        self.unsure = unsure
+
+    def predict(self, filtered, accel=None):
+        x = torch.tensor(filtered[None, :, -self.win:], dtype=torch.float32)
+        with torch.no_grad():
+            probs = F.softmax(self.net(x)[0], dim=1)[0].numpy()
+        classes = self.model["classes"]
+        raw = classes[int(probs.argmax())] if probs.max() >= self.threshold else self.unsure
+        self.recent.append(raw)
+        counts = Counter(self.recent)
+        best = max(counts.values())
+        label = next(q for q in reversed(self.recent) if counts[q] == best)
+        return label, raw, dict(zip(classes, probs.round(3).tolist()))
 
 
 if __name__ == "__main__":

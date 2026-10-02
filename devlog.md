@@ -299,10 +299,19 @@ of five, two sessions reach 85 %. Finger angles stay at about 13.6 degrees and r
 delay) is the likely limit. Camera delays since the frame reader moved to its own thread read 77 to 168 ms, higher
 than the 68 to 96 ms before it, worth checking with the whole-session measurement.
 
+**Deep learning tab in the app.** Evaluate (all sessions, or only the newest before it is trained on), train one
+network on all completed sessions, calibrate it on chosen repetitions of a session, and run a calibrated network
+live with the same threshold, vote and Record tab view as LDA. Jobs run `ml/train_ringnet.py` and `ml/networks.py`
+as a separate low-priority process, so training can't stall the armband or camera loops during a recording. Saved
+networks go to `emg-reading/models/networks/`; a calibration on a session the network trained on is flagged, its
+score is optimistic (95 % on `142500` against 86 % when it was held out). Live inference runs on the CPU, one
+window per 50 ms step.
+
 ## Open
 
 - More sessions with the 7 grips, firm holds and a marked band position.
-- Quick recalibration in the app: 1 repetition after putting the band on, retrain with one click.
+- Quick recalibration in the app: a short calibration-only recording (1 to 2 repetitions of the grips) after
+  putting the band on. The Deep learning tab can calibrate on any session, but there is no short recording type yet.
 - Test rotation augmentation and per-session normalisation on unseen sessions.
 - Measure false grips per minute in everyday activity, and a "hold to switch" rule.
 - Bring latency under 200 ms: shorter windows and vote, at some cost in accuracy.

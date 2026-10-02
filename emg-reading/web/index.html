@@ -14,6 +14,7 @@
   <button data-tab="signals">Signals</button>
   <button data-tab="calibrate">Calibrate</button>
   <button data-tab="train">Train</button>
+  <button data-tab="network">Deep learning</button>
   <button data-tab="haptics">Haptics</button>
   <button data-tab="connection">Connection</button>
   <span id="battery-chip" hidden></span>
@@ -157,6 +158,57 @@
     <p id="model-error" class="error"></p>
     <div id="live-label" class="big-label"></div>
     <canvas id="live-probs" width="900" height="320"></canvas>
+  </section>
+</main>
+
+<main id="tab-network" class="tab single" hidden>
+  <section>
+    <h1>General network</h1>
+    <p class="muted">The ring network on 200 ms windows of the filtered EMG, trained on every completed session with
+      grips (<span id="net-count">-</span>). Runs as a separate low-priority process, so it is safe during a
+      recording. Only on the training desktop (needs torch).</p>
+    <h2>Evaluate</h2>
+    <p class="muted">Leaves each session out in turn, trains on the others and tests on it, without and with a
+      2-repetition calibration, against LDA on the same windows. Newest only scores the newest session on a network
+      that hasn't seen it, do that before training on a new session.</p>
+    <div class="row narrow">
+      <label>Epochs <input id="net-epochs" type="number" min="1" max="200" value="15"></label>
+    </div>
+    <div class="controls">
+      <button id="net-eval-newest">Evaluate the newest session</button>
+      <button id="net-eval">Evaluate all sessions</button>
+    </div>
+    <h2>Train</h2>
+    <p class="muted">Trains one network on all the sessions above and saves it. It still needs a calibration before
+      live use.</p>
+    <div class="controls"><button id="net-train" class="primary">Train on all sessions</button></div>
+    <h2>Calibrate</h2>
+    <p class="muted">Fits the per-person transform and the grip head on the chosen repetitions of a session recorded at
+      the current band position, scores it on the other repetitions and saves the calibrated network.</p>
+    <div class="row narrow">
+      <label>Network <select id="net-base"></select></label>
+      <label>Session <select id="net-session"></select></label>
+      <label>Repetitions <input id="net-reps" value="1 2"></label>
+    </div>
+    <div class="controls"><button id="net-calibrate">Calibrate</button></div>
+    <p id="net-step" class="muted"></p>
+    <p id="net-error" class="error"></p>
+    <div class="controls"><button id="net-stop">Stop job</button></div>
+    <table id="net-table" hidden></table>
+    <pre id="net-lines"></pre>
+    <h2>Live test</h2>
+    <div class="row narrow">
+      <label>Network <select id="net-live"></select></label>
+    </div>
+    <p class="muted">Same live output as the LDA models: the threshold and the Record tab's model view apply. The
+      threshold is set on the Train tab.</p>
+    <div class="controls">
+      <button id="net-use">Use this network</button>
+      <button id="net-live-stop">Stop</button>
+    </div>
+    <p id="net-status" class="muted"></p>
+    <div id="net-label" class="big-label"></div>
+    <canvas id="net-probs" width="900" height="320"></canvas>
   </section>
 </main>
 

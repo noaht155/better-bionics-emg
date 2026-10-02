@@ -190,7 +190,7 @@ pre:empty { display: none; }
 table { border-collapse: collapse; margin: 8px 0; font-size: 14px; }
 td, th { padding: 4px 10px; text-align: left; border-bottom: 1px solid #2f333b; }
 th { color: var(--muted); font-weight: 400; }
-#live-probs { max-width: 900px; }
+#live-probs, #net-probs { max-width: 900px; }
 
 #target-label { text-align: center; font-size: 15px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; margin-top: 12px; min-height: 1.3em; }
 #target-label.upcoming { color: var(--muted); }
