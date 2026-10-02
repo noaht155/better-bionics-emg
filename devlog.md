@@ -315,6 +315,7 @@ before is marked and redone too, since the check looks back 2 s. The warning bar
 
 ## Open
 
+- Diagnose the on and off hum on ch 5, 6 and 7 (`hardware-status.md`).
 - More sessions with the 7 grips, firm holds and a marked band position.
 - Quick recalibration in the app: a short calibration-only recording (1 to 2 repetitions of the grips) after
   putting the band on. The Deep learning tab can calibrate on any session, but there is no short recording type yet.
