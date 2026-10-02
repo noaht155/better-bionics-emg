@@ -107,4 +107,7 @@ The adapter is called `WiFi` on this PC. Check the name with `Get-NetAdapter` on
 
 On the Train tab, tick the sessions to use and press Train and evaluate. Each session is tested on a model trained on the others (leave one session out), so it needs at least two sessions to say anything about new sessions. The result shows accuracy, how often rest is taken for a gesture, the confusion matrix and accuracy per left-out posture. The model is saved to `models/gestures/` and starts predicting live: the Train tab shows the probabilities, the Record tab's Model prediction view shows the predicted gesture as a hand.
 
+For the networks in `ml/` (training desktop only), also install PyTorch with CUDA:
+`emg-reading/.venv/Scripts/python -m pip install -r ml/requirements.txt`.
+
 Without the app, from the repo root: `emg-reading/.venv/Scripts/python -m ml.gesture_model emg-reading/data/<session> emg-reading/data/<session> ... [--save]`. The model code lives in `ml/` (see `ml/__init__.py`).

@@ -1,0 +1,4 @@
+# Training on the desktop (RTX 4070), on top of emg-reading/requirements.txt. The CUDA build of torch only exists
+# for Windows and Linux, so the recorder's own requirements stay installable on the Mac without it.
+--extra-index-url https://download.pytorch.org/whl/cu130
+torch==2.14.1+cu130
