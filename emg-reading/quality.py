@@ -11,6 +11,9 @@ from processing import ENVELOPE_MS, MAINS_HZ, contact_lost
 # stayed under 46 uV (strongest during grips, muscle has power at 60 Hz too), the pad losing contact read 120 to 180
 HUM_WARN_UV = 80.0
 HUM_MEDIAN_OF = 5
+# The redo check during a session needs to react within a cue, so it takes the last 2 one-second estimates and
+# needs both over the limit: one noisy second doesn't stop a session, a pad that keeps humming does
+HUM_FAST_OF = 2
 NO_DATA_S = 1.0
 DROP_WINDOW_S = 10.0
 BATTERY_LOW = 15
@@ -80,6 +83,16 @@ class SignalQuality:
 
     def hum_uv(self):
         return np.median(np.array(self.hum), axis=0) if self.hum else np.zeros(len(self.channels))
+
+    def hum_recent(self):
+        """Lowest of the last HUM_FAST_OF one-second hum estimates per channel, None until there are that many."""
+        if len(self.hum) < HUM_FAST_OF:
+            return None
+        return np.array(self.hum)[-HUM_FAST_OF:].min(axis=0)
+
+    def reset_hum(self):
+        self.hum.clear()
+        self.since_hum = 0
 
     def battery_status(self):
         """{"percent", "per_min", "minutes_left"}, the last two None until there is enough history, or None

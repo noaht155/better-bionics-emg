@@ -307,6 +307,12 @@ networks go to `emg-reading/models/networks/`; a calibration on a session the ne
 score is optimistic (95 % on `142500` against 86 % when it was held out). Live inference runs on the CPU, one
 window per 50 ms step.
 
+**Hum stops the cue.** Channels 5 and 6 hummed on and off while setting up a session (pads loose under the band).
+During any cue whose data is trained on (grip, rest, finger, free), the recorder now checks the 60 Hz line every
+second; over 80 uV on any channel in both of the last 2 seconds marks the cue bad (event reason `hum`, with the
+channels), pauses and names the pads. Continue redoes the cue. If the hum starts in the first 2 s of a cue, the cue
+before is marked and redone too, since the check looks back 2 s. The warning bar keeps its slower 5 s median.
+
 ## Open
 
 - More sessions with the 7 grips, firm holds and a marked band position.

@@ -187,7 +187,12 @@ function drawSession() {
   const cue = s.cue;
   $("posture").textContent = config.postures[cue.posture] ?? cue.posture;
   $("progress-text").textContent = `cue ${s.index + 1} of ${s.count}   ${fmtTime(s.elapsed)}`;
-  $("cue-text").innerHTML = s.paused ? "PAUSED<small>press Continue (space) to redo this cue</small>" : cueTitle(cue.text);
+  const hum = s.hum_pause;
+  const pausedText = hum
+    ? `HUM ON CH ${hum.channels.join(", ")}<small>${hum.uv.map((v) => `${v} uV`).join(", ")}, that part is marked bad.
+      Press ${hum.channels.length > 1 ? "those pads" : "that pad"} down firmly, then Continue (space) to redo it</small>`
+    : "PAUSED<small>press Continue (space) to redo this cue</small>";
+  $("cue-text").innerHTML = s.paused ? pausedText : cueTitle(cue.text);
   $("cue-text").classList.toggle("paused", s.paused);
   if (cue.seconds) {
     const left = Math.max(0, cue.seconds - s.cue_elapsed);

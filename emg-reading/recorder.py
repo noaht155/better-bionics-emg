@@ -14,7 +14,7 @@ import sync
 from calibrate import CAL_FILE
 from gestures import session_plan
 from processing import ENVELOPE_MS, FILTER_VERSION, StreamFilter, envelope
-from quality import SignalQuality
+from quality import HUM_FAST_OF, HUM_WARN_UV, SignalQuality
 from session import PracticeWriter, SessionWriter, load_session
 
 TICK_S = 0.02
@@ -24,6 +24,8 @@ HAND_LOST_S = 0.5
 CAMERA_SLOW_FPS = 25
 # Mark bad within this long of a rest cue starting still means the gesture before it
 BAD_GRACE_S = 1.5
+# Cues whose data is used for training. Hum on any channel during one marks it bad and pauses for a redo
+HUM_REDO_KINDS = ("hold", "finger", "free")
 # EMG history kept for the signal view and the haptics
 HISTORY_S = 4
 # How long a failed armband read stays in the warning bar
@@ -59,6 +61,8 @@ class Recorder:
         self.cue_start = 0.0
         self.advanced = False
         self.paused = False
+        # Set when hum paused the session: which channels, and the first cue to redo
+        self.hum_pause = None
         self.last_summary = None
         self.loop_error = None
         self._lock = threading.Lock()
@@ -98,6 +102,7 @@ class Recorder:
                 emg = data[self.band.emg_rows]
                 battery = data[rows["battery"], -1] if self.band.source == "armband" else None
                 self.quality.update(emg, data[rows["package"]], battery)
+                self._check_hum()
                 self.raw = np.hstack([self.raw, emg])[:, -self.history:]
                 self.filtered = np.hstack([self.filtered, self.stream.process(emg)])[:, -self.history:]
                 self.accel_history = np.hstack([self.accel_history, data[rows["accel"]]])[:, -self.history:]
@@ -168,6 +173,7 @@ class Recorder:
             self.session = writer(meta, settings["subject"])
             self.plan = plan
             self.paused = False
+            self.hum_pause = None
             self.last_summary = None
             # The quality check counts drops since the app started, the session only wants its own
             self.dropped_at_start = self.quality.dropped_total
@@ -183,7 +189,12 @@ class Recorder:
                 if self.paused:
                     self.paused = False
                     self.session.add_event("resume")
-                    self._go_to(self.index)
+                    redo = self.hum_pause["redo"] if self.hum_pause else self.index
+                    self.hum_pause = None
+                    # Old estimates would stop it again straight away, a pad that is still bad shows up again
+                    # within HUM_FAST_OF seconds
+                    self.quality.reset_hum()
+                    self._go_to(redo)
                 else:
                     self._go_to(self.index + 1)
             elif action == "pause" and not self.paused and cue["kind"] != "break":
@@ -199,6 +210,25 @@ class Recorder:
                 self._finish(completed=False)
             else:
                 raise ValueError(f"can't {action} now")
+
+    def _check_hum(self):
+        if self.session is None or self.paused or self.plan[self.index]["kind"] not in HUM_REDO_KINDS:
+            return
+        hum = self.quality.hum_recent()
+        if hum is None or not (hum > HUM_WARN_UV).any():
+            return
+        channels = [ch for ch, h in zip(self.quality.channels, hum) if h > HUM_WARN_UV]
+        bad = [self.index]
+        # The check looks back HUM_FAST_OF seconds, so hum found early in a cue may have started in the one before
+        if (self.advanced and time.time() - self.cue_start < HUM_FAST_OF
+                and self.plan[self.index - 1]["kind"] in HUM_REDO_KINDS):
+            bad.insert(0, self.index - 1)
+        self.paused = True
+        self.session.add_event("pause", reason="hum")
+        for index in bad:
+            self.session.add_event("bad", index=index, reason="hum", channels=channels)
+        self.hum_pause = {"channels": channels, "uv": [round(float(h)) for h in hum[hum > HUM_WARN_UV]],
+                          "redo": bad[0]}
 
     def _go_to(self, index):
         if index >= len(self.plan):
@@ -313,6 +343,7 @@ class Recorder:
                     "folder": _folder_text(self.session), "practice": self.session.folder is None,
                     "index": self.index, "count": len(self.plan), "cue": cue,
                     "elapsed": time.time() - self.session.meta["started"], "paused": self.paused,
+                    "hum_pause": self.hum_pause,
                     "cue_elapsed": time.time() - self.cue_start, "next": upcoming,
                     "samples": self.session.samples, "frames": self.session.frames}
             return state
