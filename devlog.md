@@ -234,6 +234,47 @@ session (not stopped early).
   unlabelled live use.
 - Porting to the ESP32 and the prosthetic's input format are out of scope for now.
 
+**First ring network** (`ml/ringnet.py`, `ml/dataset.py`, `ml/train_ringnet.py`). 44,376 weights: 4 ring
+convolution blocks over (electrode, time) with wrap-around, mean and max over the ring, a grip head (7) and a
+finger-angle head (9 reliable joints), and the per-person 8x8 transform with gains in front. Rotating the input by
+1 to 7 electrodes changes the output by under 1e-8, rotation independence holds by construction. Trained class
+balanced with random gain and noise, on the GPU about 30 s per fold. Windows and labels are cached per session in
+`ml/cache/`; camera angles are aligned with a straight-line fit of frame time against frame number minus the
+measured delay (fist windows read 76 degrees mean finger flexion, open 10 to 16, in every session).
+
+Leave one session out, 3 sessions, so each network learned from only 2. Balanced accuracy, grips only, rest taken
+for a grip, wrong grip shown at 0.8, answers at 0.8:
+
+| | balanced | grips | rest false | wrong | answers |
+|---|---|---|---|---|---|
+| LDA (extended), no calibration | 44.1 % | 39.4 % | 27.3 % | 25.9 % | 70 % |
+| Network, no calibration | 53.0 % | 46.0 % | 5.1 % | 10.7 % | 60 % |
+| LDA on the 2 calibration repetitions | 80.4 % | 77.7 % | 3.6 % | 7.1 % | 87 % |
+| Network + transform from 2 repetitions | 76.8 % | 74.7 % | 10.7 % | 2.2 % | 54 % |
+| Network + transform + grip head | 81.5 % | 79.8 % | 8.4 % | 4.7 % | 78 % |
+
+Without calibration the network is already better than LDA and fires at rest far less (5 vs 27 %). Calibrated it
+matches LDA and shows the fewest wrong grips so far, but takes rest for a grip more often (8 to 11 %), likely from
+the equal class weighting during calibration. Finger angles, 9 joints: 16.5 degrees error and r 0.38 without
+calibration, 13.0 degrees and r 0.60 with the transform (target under 15 degrees and r 0.8). Training ran at low
+priority during a recording, the camera stayed at 29 fps.
+
+**Fourth session (`164337`, first with the single-finger block).** Scored first with models that never saw it:
+no calibration LDA 45 %, network 61 %; calibrated LDA 79 %, network with transform and head 83 % (balanced). Then
+leave one session out over all four, so each network learned from three:
+
+| | 3 sessions | 4 sessions |
+|---|---|---|
+| LDA, no calibration | 44.1 % | 48.0 % |
+| Network, no calibration | 53.0 % | 61.4 % |
+| LDA on the 2 calibration repetitions | 80.4 % | 80.1 % |
+| Network + transform + grip head | 81.5 % | 80.6 % |
+| Network, no calibration: rest taken for a grip / wrong grip at 0.8 | 5.1 / 10.7 % | 4.3 / 4.8 % |
+
+One more training session moved the uncalibrated network 8 points, LDA 4. Calibrated, both sit near 80 %. Finger
+angles didn't improve (13.9 degrees, r 0.56) despite the finger block. That session's camera delay is shaky: taps
+read 174, 163, 242 and 107 ms (168 ms used), which blurs the angle labels by up to about 70 ms.
+
 ## Open
 
 - More sessions with the 7 grips, firm holds and a marked band position.
@@ -243,5 +284,7 @@ session (not stopped early).
 - Bring latency under 200 ms: shorter windows and vote, at some cost in accuracy.
 - `ml/` foundations: session cache, dataset builder, shared evaluation harness, model registry, continual update
   flow tested with LDA first.
-- The general network (ring convolutions, grip and finger heads), then the per-person transform, then continual
-  updates with replay and the benchmark.
+- Measure the camera delay over the whole session (accelerometer against camera wrist movement) instead of 6 taps,
+  which disagreed by up to 135 ms in session `164337`.
+- Ring network: rerun as sessions come in; fix the rest false alarms after calibration (rest weighting); then
+  continual updates with replay and the benchmark.

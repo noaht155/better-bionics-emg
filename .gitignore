@@ -27,3 +27,6 @@ emg-reading/data/
 
 # Downloaded on first run of the recorder
 emg-reading/models/
+
+# Training windows cut from the sessions, personal data like the sessions themselves
+ml/cache/
