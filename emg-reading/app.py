@@ -44,6 +44,8 @@ PREVIEW_HZ = 15
 class SessionSettings(BaseModel):
     subject: str = Field(pattern=r"^[A-Za-z0-9_-]{1,32}$")
     band_arm: Literal["right", "left"]
+    # Which way round the band is. Turned the other way the electrode order round the arm is mirrored
+    port_facing: Literal["shoulder", "hand"]
     tracked_hand: Literal["right", "left"]
     placement: str = ""
     notes: str = ""
@@ -111,7 +113,8 @@ def session_list():
         settings = meta.get("settings", {})
         gestures = sum(c["kind"] == "hold" and c["label"] != "rest" for c in meta.get("plan", []))
         out.append({"name": path.parent.name, "subject": meta.get("subject"), "postures": settings.get("postures"),
-                    "band_arm": settings.get("band_arm"), "placement": settings.get("placement"),
+                    "band_arm": settings.get("band_arm"), "port_facing": settings.get("port_facing"),
+                    "placement": settings.get("placement"),
                     "gestures": gestures, "completed": meta.get("completed"),
                     "seconds": round(meta["ended"] - meta["started"]) if meta.get("ended") else None,
                     "camera_delay_s": meta.get("camera_delay_s")})

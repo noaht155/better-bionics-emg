@@ -348,7 +348,7 @@ of frames during cues, so detection isn't the problem. During a hold the angles 
 
 **Mirrored band.** The ring network ignores whole-electrode rotations but not a mirrored electrode order, which is
 what a band turned upside down gives (and the same band orientation on the other arm, relative to the muscles; both
-together cancel out). All 8 completed sessions are left arm, module towards the wrist. Simulated by reversing the
+together cancel out). All 8 completed sessions are left arm, charging port facing the shoulder. Simulated by reversing the
 channel order of the held-out session, leave one session out over 6 sessions, balanced accuracy, normal / mirrored:
 
 | | normal | mirrored |
@@ -361,8 +361,9 @@ channel order of the held-out session, leave one session out over 6 sessions, ba
 
 Without calibration a mirrored band costs the network 32 points on every session. Transform and grip head recover
 most of it, the transform alone doesn't get to a full reversal in 300 steps. A real other arm will do somewhat worse
-than this (different arm, not just mirrored). Since the session already records the arm, reversing the channels
-before the network when the band is mirrored would cost nothing.
+than this (different arm, not just mirrored). The setup form now records which way the charging port faces
+(shoulder or hand, `port_facing` in the settings), filled in as shoulder for every earlier session. With the arm,
+that is enough to reverse the channels before the network for a mirrored band, which would cost nothing.
 
 **Why the predicted hand is poor.** The offline angle score (r 0.58) was measured on held grips of the third
 repetition only, so it mostly scores grip shape. Scored on moving windows (finger and free cues), leave one session
@@ -423,8 +424,8 @@ replacement should fit the label delay to the EMG over the whole session instead
   flow tested with LDA first.
 - Measure the camera delay over the whole session (accelerometer against camera wrist movement) instead of 6 taps,
   which disagreed by up to 135 ms in session `164337`.
-- Record which way round the band is (module towards wrist or elbow) and reverse the channel order for a mirrored
-  band before the network. Tap test round the band to confirm channels 0 to 7 run in order round the arm, the ring
+- Reverse the channel order for a mirrored band (from `band_arm` and `port_facing`) in `ml/dataset.py`, saved
+  networks and live prediction. Tap test round the band to confirm channels 0 to 7 run in order round the arm, the ring
   assumes it.
 - Ring network: rerun as sessions come in; fix the rest false alarms after calibration (rest weighting); then
   continual updates with replay and the benchmark.

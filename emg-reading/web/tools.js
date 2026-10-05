@@ -297,7 +297,7 @@ async function loadTrainLists() {
     // Keep the choice for sessions already listed, a session recorded since then starts ticked if it finished
     const on = listed.has(s.name) ? checked.has(s.name) : s.completed;
     tr.innerHTML = `<td><input type="checkbox" value="${s.name}" ${on ? "checked" : ""}></td><td>${s.name}</td>
-      <td>${s.band_arm ?? ""}</td><td>${(s.postures || []).join(", ")}</td><td>${s.placement || ""}</td>
+      <td>${s.band_arm ?? ""}${s.port_facing ? `, port to ${s.port_facing}` : ""}</td><td>${(s.postures || []).join(", ")}</td><td>${s.placement || ""}</td>
       <td>${s.seconds ? fmtTime(s.seconds) : ""}${s.completed ? "" : " (stopped early)"}</td>
       <td>${s.camera_delay_s != null ? `${Math.round(1000 * s.camera_delay_s)} ms` : "-"}</td>`;
     table.append(tr);

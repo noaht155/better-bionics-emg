@@ -63,6 +63,7 @@ function readSettings() {
   return {
     subject: form.subject.value.trim(),
     band_arm: form.band_arm.value,
+    port_facing: form.port_facing.value,
     tracked_hand: form.tracked_hand.value,
     placement: form.placement.value.trim(),
     notes: form.notes.value.trim(),
