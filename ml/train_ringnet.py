@@ -14,10 +14,13 @@ predicted hand follows the real one.
     emg-reading/.venv/Scripts/python -m ml.train_ringnet [--epochs 15] [--sessions name ...] [--held name ...]
 
 --held only tests the named sessions (each still trained on all the others), for scoring a new session first.
+Every run adds a row to emg-reading/models/evaluations.csv, so runs can be compared side by side.
 """
 import argparse
 import copy
+import csv
 import json
+import subprocess
 import time
 from pathlib import Path
 
@@ -25,7 +28,7 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 
-from ml import dataset, gesture_model, low_priority
+from ml import EMG_READING, dataset, gesture_model, low_priority
 from ml.ringnet import ANGLE_INDEX, ANGLE_JOINTS, ANGLE_SCALE_DEG, RingNet
 from gestures import GESTURE_SET
 
@@ -39,6 +42,12 @@ ANGLE_ROWS = {"none moving": "moving fingers, no calibration",
               "transform moving": "moving fingers, transform from 2 repetitions",
               "none held": "held grips, no calibration",
               "transform held": "held grips, transform from 2 repetitions"}
+
+# One row per evaluation run, next to the saved models (not in git, it names the sessions)
+LOG = EMG_READING / "models" / "evaluations.csv"
+# Column prefix per result row in the log
+LOG_NAMES = {"lda others": "lda_none", "net none": "net_none", "lda cal": "lda_cal", "net transform": "net_tr",
+             "net transform+head": "net_trhead", "net train": "net_train"}
 
 
 def grip_index(grip):
@@ -171,6 +180,36 @@ def mean_of(rows, key):
     return float(np.mean(vals)) if vals else float("nan")
 
 
+def code_version():
+    """Git commit of the code, with + if ml/ or emg-reading/ had uncommitted changes. Scores from different code
+    aren't directly comparable."""
+    try:
+        repo = Path(__file__).resolve().parent.parent
+        commit = subprocess.run(["git", "rev-parse", "--short", "HEAD"], cwd=repo, capture_output=True, text=True,
+                                check=True).stdout.strip()
+        dirty = subprocess.run(["git", "status", "--porcelain", "--", "ml", "emg-reading"], cwd=repo,
+                               capture_output=True, text=True).stdout.strip()
+        return commit + ("+" if dirty else "")
+    except (OSError, subprocess.CalledProcessError):
+        return "unknown"
+
+
+def log_run(row):
+    """Appends a row to the log. When the columns changed since the file was started, the file is rewritten with
+    all columns so old and new rows stay in one table."""
+    rows = []
+    if LOG.exists():
+        with LOG.open(newline="") as f:
+            rows = list(csv.DictReader(f))
+    columns = list(rows[0].keys()) if rows else []
+    columns += [c for c in row if c not in columns]
+    LOG.parent.mkdir(parents=True, exist_ok=True)
+    with LOG.open("w", newline="") as f:
+        writer = csv.DictWriter(f, columns, restval="")
+        writer.writeheader()
+        writer.writerows(rows + [row])
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--epochs", type=int, default=15)
@@ -190,13 +229,22 @@ def main():
     print(f"{len(names)} sessions on {DEVICE}: {', '.join(n[:17] for n in names)}")
     feats = {n: gesture_model.window_features(d["x"].astype(np.float64), True, True) for n, d in data.items()}
 
-    results = {k: [] for k in ("net none", "net transform", "net transform+head", "lda others", "lda cal")}
+    results = {k: [] for k in ("net none", "net transform", "net transform+head", "lda others", "lda cal",
+                               "net train")}
     angles = {k: [] for k in ANGLE_ROWS}
     t0 = time.time()
     for held in [n for n in names if not args.held or n in args.held]:
         before = {k: len(v) for k, v in results.items()}
         others = [data[n] for n in names if n != held]
         model = train(others, args.epochs, args.seed)
+        # The same network scored on the data it learned from. Far above the held-out score means it memorised
+        # the training sessions (too many epochs), both low means it hasn't learned enough (too few)
+        seen_p, seen_y = [], []
+        for o in others:
+            xo, yo, _ = to_tensors(o, o["grip"] != "")
+            seen_p.append(predict(model, xo)[0])
+            seen_y.append(yo.cpu().numpy())
+        results["net train"].append(grip_scores(np.concatenate(seen_y), np.vstack(seen_p)))
         d = data[held]
         labelled = d["grip"] != ""
         x, y, a = to_tensors(d, np.ones(len(d["grip"]), bool))
@@ -242,7 +290,8 @@ def main():
     labels = {"lda others": "LDA, no calibration", "net none": "network, no calibration",
               "lda cal": "LDA, trained on the 2 calibration repetitions",
               "net transform": "network + transform from 2 repetitions",
-              "net transform+head": "network + transform + grip head from 2 reps"}
+              "net transform+head": "network + transform + grip head from 2 reps",
+              "net train": "network on its training sessions (not a test)"}
     for key, label in labels.items():
         rows = results[key]
         print(f"  {label:46s} {100 * mean_of(rows, 'balanced'):5.1f} %  {100 * mean_of(rows, 'grips'):5.1f} %  "
@@ -251,6 +300,21 @@ def main():
     print(f"\nfinger angles ({', '.join(ANGLE_JOINTS)}), mean absolute error and correlation:")
     for key, label in ANGLE_ROWS.items():
         print(f"  {label:46s} {mean_of(angles[key], 'mae'):5.1f} deg   r {mean_of(angles[key], 'r'):.2f}")
+
+    held = [n for n in names if not args.held or n in args.held]
+    row = {"date": time.strftime("%Y-%m-%d %H:%M"), "code": code_version(),
+           "run": "all" if not args.held else "held", "held": " ".join(n[:17] for n in held),
+           "sessions": len(names), "epochs": args.epochs, "seed": args.seed, "minutes": round((time.time() - t0) / 60, 1)}
+    for key, prefix in LOG_NAMES.items():
+        for m in ("balanced", "grips", "rest_false", "wrong", "answers"):
+            v = mean_of(results[key], m)
+            row[f"{prefix}_{m}"] = "" if np.isnan(v) else round(100 * v, 1)
+    for key in ANGLE_ROWS:
+        for m in ("mae", "r"):
+            v = mean_of(angles[key], m)
+            row[f"angle_{key.replace(' ', '_')}_{m}"] = "" if np.isnan(v) else round(v, 2)
+    log_run(row)
+    print(f"\nadded to {LOG.name}")
     if args.json:
         summary = {"sessions": names, "held": [n for n in names if not args.held or n in args.held],
                    "grips": {labels[k]: {m: mean_of(results[k], m)

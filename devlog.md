@@ -406,6 +406,18 @@ ms from the taps. But for the labels, the alignment that best predicts the angle
 movement. A 30 ms label delay scored worse than the taps. So delay is not what limits the angles, and the
 replacement should fit the label delay to the EMG over the whole session instead of measuring the camera alone.
 
+**Evaluation log.** Every `train_ringnet.py` run (both evaluate buttons on the Deep learning tab) adds one row to
+`emg-reading/models/evaluations.csv`: date, code commit (+ for uncommitted changes), which sessions were held out,
+session count, epochs, and every score in the summary. It also scores the network on its own training sessions, so
+the gap to the held-out score shows whether the epoch count is too high or too low.
+
+**Epoch sweep** (7 sessions, leave one session out, 5 to 50 epochs in steps of 5, all rows in `evaluations.csv`).
+Balanced accuracy on the training sessions rises the whole way (83 % at 5 to 96 % at 50), the held-out session
+doesn't: no calibration 67.9 % at 5, 70.0 % at 10, then 70.0 to 71.5 % from 15 on; calibrated (transform + head) 83.5
+to 84.6 % at every count. Moving-finger r 0.22 at 5, 0.27 to 0.29 from 15 on. Past 15 to 20 epochs it only memorises
+the training sessions, without getting worse on new ones. Default stays at 15 (20 is within noise and takes 9 instead
+of 7 minutes per evaluation). Calibrated LDA is 82.2 % in every row, as it should be, the splits were the same.
+
 ## Open
 
 - Next priority (Noah, 2026-10-05): finger angles. Moving-finger r is 0.34 (see 2026-10-05). Record about 10
@@ -417,7 +429,10 @@ replacement should fit the label delay to the EMG over the whole session instead
 - More sessions with the 7 grips, firm holds and a marked band position.
 - Quick recalibration in the app: a short calibration-only recording (1 to 2 repetitions of the grips) after
   putting the band on. The Deep learning tab can calibrate on any session, but there is no short recording type yet.
-- Test rotation augmentation and per-session normalisation on unseen sessions.
+- Test per-session normalisation on unseen sessions. Rotation augmentation only for LDA, the ring network ignores
+  whole-electrode rotations by construction.
+- `ml/cache/` is about 50 MB per session (every window stored, each sample 4 times). Store the filtered signal once
+  and cut windows on load, and drop cache files of sessions that no longer exist.
 - Measure false grips per minute in everyday activity, and a "hold to switch" rule.
 - Bring latency under 200 ms: shorter windows and vote, at some cost in accuracy.
 - `ml/` foundations: session cache, dataset builder, shared evaluation harness, model registry, continual update
