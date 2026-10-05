@@ -334,11 +334,78 @@ the page took that over the saved choice, so after a restart the camera only loo
 sends the saved hand on load and saves it as soon as it changes; the Deep learning tab has its own hand selector for
 the same setting.
 
+**Camera tracking quality** (6 completed sessions, held grips from 1 s after the cue). The hand is found in about 100 %
+of frames during cues, so detection isn't the problem. During a hold the angles jitter under 1 degree frame to frame
+(about 1.5 degrees std). Problems:
+- Straight fingers read bent: open hand gives middle, ring and pinky PIP 23 to 41 degrees and index DIP 42. The offset
+  stays the same across sessions and postures, so it shifts the labels but doesn't hurt r.
+- Base knuckle flexion of the open hand depends on posture: -17 to +17 degrees, lowest with the arm held forward.
+- Thumb MCP barely moves: 7 to 31 degrees across all grips, 25 degree range during the thumb cue. It is in the
+  9 trained joints but carries almost no signal.
+- Abduction is meaningless when the finger is bent (fist ring abduction -85).
+- Single fingers come through: in each `flex_<finger>` cue the cued finger's PIP covers 40 to 57 degrees, its
+  neighbours 14 to 27 (part of that is real coupling, ring and pinky the most).
+
+**Mirrored band.** The ring network ignores whole-electrode rotations but not a mirrored electrode order, which is
+what a band turned upside down gives (and the same band orientation on the other arm, relative to the muscles; both
+together cancel out). All 8 completed sessions are left arm, module towards the wrist. Simulated by reversing the
+channel order of the held-out session, leave one session out over 6 sessions, balanced accuracy, normal / mirrored:
+
+| | normal | mirrored |
+|---|---|---|
+| Network, no calibration | 70.5 % | 38.1 % |
+| Network + transform | 81.2 % | 71.6 % |
+| Network + transform + grip head | 83.2 % | 80.1 % |
+| LDA, no calibration | 59.5 % | 38.0 % (rest taken for a grip 38.5 %) |
+| LDA on the 2 calibration repetitions | 82.0 % | 82.0 % |
+
+Without calibration a mirrored band costs the network 32 points on every session. Transform and grip head recover
+most of it, the transform alone doesn't get to a full reversal in 300 steps. A real other arm will do somewhat worse
+than this (different arm, not just mirrored). Since the session already records the arm, reversing the channels
+before the network when the band is mirrored would cost nothing.
+
+**Why the predicted hand is poor.** The offline angle score (r 0.58) was measured on held grips of the third
+repetition only, so it mostly scores grip shape. Scored on moving windows (finger and free cues), leave one session
+out over 6 sessions, the network reaches r 0.28 without and 0.34 with the usual calibration (transform + grip head on
+2 repetitions). Thumb MCP r 0.04, nothing to learn there. Variants, one change each (moving r, no cal / cal):
+
+| | no cal | cal | held r cal | grips balanced cal |
+|---|---|---|---|---|
+| current network | 0.28 | 0.34 | 0.58 | 78 % |
+| labels with a 30 ms delay instead of the taps | 0.27 | 0.32 | 0.58 | 79 % |
+| calibrated on the first posture block, tested on the others | 0.27 | 0.26 | 0.45 | 64 % |
+| moving windows weighted 3x in the angle loss | 0.33 | 0.35 | 0.57 | 78 % |
+| 1 s of EMG, ring blocks then a GRU over time, moving 3x | 0.26 | 0.31 | 0.69 | 82 % |
+
+- Within one session a plain ridge regression on the LDA features reaches r 0.45 to 0.60 (train on two posture
+  blocks, test on the third), against about 0.30 across sessions. The shift between sessions is the main loss, and
+  the calibration only sees held grips, never moving fingers.
+- The longer window helps held grips and the grip classifier (+4 points) but not moving fingers.
+- Calibration fitted in one posture doesn't carry to the others.
+- Thumb MCP stays in: the thumb cue was done with too little movement, not a tracking limit.
+
+**Scope of protocol B (Noah).** Recordings and models keep the full joint set. Amputees likely won't control all
+joints independently (the intrinsic hand muscles are gone, so thumb opposition and abduction are hardest), but fewer
+targets (hand closing, index, thumb) can be derived from the same recordings later without recording again.
+
+`train_ringnet.py` (and the Deep learning tab's evaluation) now reports angles on moving fingers and on held grips
+separately; the dataset keeps each window's cue kind (cache version 2).
+
+**Camera delay.** The taps are unreliable: stored delays include -147 and -132 ms (impossible) and up to 552 ms.
+Gyro rotation against camera hand rotation over the whole session gives 15 to 50 ms, against the camera's 96 to 168
+ms from the taps. But for the labels, the alignment that best predicts the angles from EMG is about 100 to 150 ms
+(ridge sweep, r flat within 0.03 from 50 to 200 ms), since it includes the delay from muscle activity to finger
+movement. A 30 ms label delay scored worse than the taps. So delay is not what limits the angles, and the
+replacement should fit the label delay to the EMG over the whole session instead of measuring the camera alone.
+
 ## Open
 
-- Next priority (Noah, 2026-10-05): finger angles look poor live (offline r 0.58, target 0.8). Find out first
-  whether the labels, the timing or the model is the limit: per-joint r and error, camera tracking quality per
-  joint, whole-session camera delay (below), and how much of the angle score is just the grip shape.
+- Next priority (Noah, 2026-10-05): finger angles. Moving-finger r is 0.34 (see 2026-10-05). Record about 10
+  sessions with the new cues and rerun the evaluation every 2 or 3 sessions: if the moving-finger r keeps rising it
+  is a data problem, if it flattens the model or the sensors are the limit. Then: weight moving windows, an angle
+  head with its own temporal part on the shared backbone, calibration that includes finger movement in every
+  posture, per-session open/fist normalisation of the labels, causal convolutions so the network can stream on an
+  ESP32-S3.
 - More sessions with the 7 grips, firm holds and a marked band position.
 - Quick recalibration in the app: a short calibration-only recording (1 to 2 repetitions of the grips) after
   putting the band on. The Deep learning tab can calibrate on any session, but there is no short recording type yet.
@@ -349,5 +416,8 @@ the same setting.
   flow tested with LDA first.
 - Measure the camera delay over the whole session (accelerometer against camera wrist movement) instead of 6 taps,
   which disagreed by up to 135 ms in session `164337`.
+- Record which way round the band is (module towards wrist or elbow) and reverse the channel order for a mirrored
+  band before the network. Tap test round the band to confirm channels 0 to 7 run in order round the arm, the ring
+  assumes it.
 - Ring network: rerun as sessions come in; fix the rest false alarms after calibration (rest weighting); then
   continual updates with replay and the benchmark.

@@ -7,6 +7,9 @@ For every good session in turn (leave one session out):
   the held-out session with everything else frozen, then tested on the third, for each of the three repetitions
 LDA with the extended features gets the same two tests: trained on the other sessions, and trained on the two
 calibration repetitions alone. Grips are scored with balanced accuracy (rest is about half of all windows).
+Finger angles are scored separately on held grips and on moving fingers (finger and free cues). The held grips are
+7 fixed shapes, so their score mostly says whether the grip was recognised; the moving score shows whether the
+predicted hand follows the real one.
 
     emg-reading/.venv/Scripts/python -m ml.train_ringnet [--epochs 15] [--sessions name ...] [--held name ...]
 
@@ -31,6 +34,11 @@ DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 BATCH = 512
 CALIBRATION_STEPS = 300
 THRESHOLD = gesture_model.THRESHOLD
+MOVING = ["finger", "free"]
+ANGLE_ROWS = {"none moving": "moving fingers, no calibration",
+              "transform moving": "moving fingers, transform from 2 repetitions",
+              "none held": "held grips, no calibration",
+              "transform held": "held grips, transform from 2 repetitions"}
 
 
 def grip_index(grip):
@@ -183,7 +191,7 @@ def main():
     feats = {n: gesture_model.window_features(d["x"].astype(np.float64), True, True) for n, d in data.items()}
 
     results = {k: [] for k in ("net none", "net transform", "net transform+head", "lda others", "lda cal")}
-    angles = {k: [] for k in ("net none", "net transform")}
+    angles = {k: [] for k in ANGLE_ROWS}
     t0 = time.time()
     for held in [n for n in names if not args.held or n in args.held]:
         before = {k: len(v) for k, v in results.items()}
@@ -192,9 +200,11 @@ def main():
         d = data[held]
         labelled = d["grip"] != ""
         x, y, a = to_tensors(d, np.ones(len(d["grip"]), bool))
+        moving = np.isin(d["kind"], MOVING)
         probs, ang = predict(model, x)
         results["net none"].append(grip_scores(y.cpu().numpy()[labelled], probs[labelled]))
-        angles["net none"].append(angle_scores(a.cpu().numpy(), ang))
+        angles["none moving"].append(angle_scores(a.cpu().numpy()[moving], ang[moving]))
+        angles["none held"].append(angle_scores(a.cpu().numpy()[labelled], ang[labelled]))
 
         other_f = np.vstack([feats[n][data[n]["grip"] != ""] for n in names if n != held])
         other_l = np.concatenate([data[n]["grip"][data[n]["grip"] != ""] for n in names if n != held])
@@ -209,10 +219,15 @@ def main():
             xc, yc, ac = to_tensors(d, cal)
             xt, yt, at = to_tensors(d, test)
             for name, head in (("net transform", False), ("net transform+head", True)):
-                p, ang_t = predict(calibrate(model, xc, yc, ac, head), xt)
+                calibrated = calibrate(model, xc, yc, ac, head)
+                p, ang_t = predict(calibrated, xt)
                 results[name].append(grip_scores(yt.cpu().numpy(), p))
                 if name == "net transform":
-                    angles[name].append(angle_scores(at.cpu().numpy(), ang_t))
+                    angles["transform held"].append(angle_scores(at.cpu().numpy(), ang_t))
+                    # Calibration only sees held grips, so every moving window is new to it
+                    if moving.any():
+                        angles["transform moving"].append(
+                            angle_scores(a.cpu().numpy()[moving], predict(calibrated, x[moving])[1]))
             results["lda cal"].append(lda_scores(lda(feats[held][cal], d["grip"][cal]), feats[held][test],
                                                  yt.cpu().numpy()))
         fold = {k: v[before[k]:] for k, v in results.items()}
@@ -234,16 +249,15 @@ def main():
               f"{100 * mean_of(rows, 'rest_false'):5.1f} %  {100 * mean_of(rows, 'wrong'):5.1f} %  "
               f"{100 * mean_of(rows, 'answers'):3.0f} %")
     print(f"\nfinger angles ({', '.join(ANGLE_JOINTS)}), mean absolute error and correlation:")
-    for key, label in (("net none", "no calibration"), ("net transform", "transform from 2 repetitions")):
-        print(f"  {label:30s} {mean_of(angles[key], 'mae'):5.1f} deg   r {mean_of(angles[key], 'r'):.2f}")
+    for key, label in ANGLE_ROWS.items():
+        print(f"  {label:46s} {mean_of(angles[key], 'mae'):5.1f} deg   r {mean_of(angles[key], 'r'):.2f}")
     if args.json:
         summary = {"sessions": names, "held": [n for n in names if not args.held or n in args.held],
                    "grips": {labels[k]: {m: mean_of(results[k], m)
                                          for m in ("balanced", "grips", "rest_false", "wrong", "answers")}
                              for k in labels},
                    "angles": {label: {m: mean_of(angles[k], m) for m in ("mae", "r")}
-                              for k, label in (("net none", "no calibration"),
-                                               ("net transform", "transform from 2 repetitions"))}}
+                              for k, label in ANGLE_ROWS.items()}}
         Path(args.json).write_text(json.dumps(summary, indent=1))
 
 

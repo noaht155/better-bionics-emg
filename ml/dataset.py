@@ -5,6 +5,7 @@ shared filter, 8 channels x WINDOW samples, ending every STEP samples, with what
 - grip: the cued grip if the window lies in the trimmed part of a hold cue (same rule as the LDA), else None
 - rep: which repetition of that grip in that posture (1 to 3), 0 outside held grips
 - posture: the posture of the cue the window ends in
+- kind: the kind of that cue (hold, finger, free, sync, break), finger and free are the moving fingers
 - angles: the 20 joint angles from the camera at the window's last sample, NaN when the hand wasn't tracked
 
 Each session is processed once and cached in ml/cache/ (ignored by git, it holds personal data).
@@ -31,7 +32,7 @@ DEFAULT_CAMERA_DELAY_S = 0.09
 MAX_FRAME_GAP_S = 0.1
 CACHE = Path(__file__).with_name("cache")
 # Bump when the windows or labels change, old cache files are then rebuilt
-VERSION = f"1-f{FILTER_VERSION}-w{WINDOW}-s{STEP}-{'.'.join(GESTURE_SET)}"
+VERSION = f"2-f{FILTER_VERSION}-w{WINDOW}-s{STEP}-{'.'.join(GESTURE_SET)}"
 
 
 def good_sessions(data_dir=DATA_DIR):
@@ -85,6 +86,7 @@ def build(folder):
     grip = np.full(len(ends), "", dtype=object)
     rep = np.zeros(len(ends), np.int8)
     posture = np.full(len(ends), "", dtype=object)
+    kind = np.full(len(ends), "", dtype=object)
     segs = segments(data["events"])
     rep_of = _repetitions([g for g in segs if g["kind"] == "hold" and g["sample1"]])
     trim = int(TRIM_START_S * RATE)
@@ -93,6 +95,7 @@ def build(folder):
             continue
         inside = (ends > g["sample0"]) & (ends <= g["sample1"])
         posture[inside] = g["posture"]
+        kind[inside] = g["kind"]
         if g["kind"] == "hold" and not g["bad"] and g["label"] in GESTURE_SET:
             held = inside & (ends - WINDOW >= g["sample0"] + trim)
             grip[held] = g["label"]
@@ -117,7 +120,7 @@ def build(folder):
     keep = (grip != "") | ~np.isnan(angles).any(axis=1)
     x = np.lib.stride_tricks.sliding_window_view(y, WINDOW, axis=1)[:, ends[keep] - WINDOW].transpose(1, 0, 2)
     return {"x": np.ascontiguousarray(x), "grip": grip[keep].astype(str), "rep": rep[keep],
-            "posture": posture[keep].astype(str), "angles": angles[keep], "ends": ends[keep],
+            "posture": posture[keep].astype(str), "kind": kind[keep].astype(str), "angles": angles[keep], "ends": ends[keep],
             "subject": meta.get("subject", ""), "channels": np.array(meta["channels"])}
 
 
