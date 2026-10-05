@@ -1,6 +1,6 @@
 """Train the general network on every good session, and calibrate a saved one for a band position.
 
-    emg-reading/.venv/Scripts/python -m ml.networks train [--epochs 15]
+    emg-reading/.venv/Scripts/python -m ml.networks train [--epochs 15] [--sessions name ...]
     emg-reading/.venv/Scripts/python -m ml.networks calibrate <network file> <session folder> [--reps 1 2]
 
 calibrate fits the per-person transform and the grip head on the given repetitions of the session (normally a
@@ -21,8 +21,13 @@ from ml.train_ringnet import calibrate, grip_scores, predict, to_tensors, train
 STEP_MS = dataset.STEP * 1000 // dataset.RATE
 
 
-def train_all(epochs):
+def train_all(epochs, sessions=None):
+    """sessions: folder names to train on, default every good session."""
     folders = dataset.good_sessions()
+    if sessions:
+        folders = [f for f in folders if f.name in sessions]
+    if not folders:
+        raise SystemExit("none of the given sessions is a completed session with grips")
     data = dataset.load_all(folders)
     print(f"training on {len(data)} sessions", flush=True)
     t0 = time.time()
@@ -78,6 +83,7 @@ def main():
     sub = parser.add_subparsers(dest="command", required=True)
     t = sub.add_parser("train")
     t.add_argument("--epochs", type=int, default=15)
+    t.add_argument("--sessions", nargs="*", help="session folder names, default every good session")
     c = sub.add_parser("calibrate")
     c.add_argument("network", help="file name in emg-reading/models/networks/")
     c.add_argument("session", help="session folder")
@@ -86,7 +92,7 @@ def main():
         p.add_argument("--json", help="write the result here")
     args = parser.parse_args()
     low_priority()
-    result = train_all(args.epochs) if args.command == "train" else calibrate_on(args.network, args.session, args.reps)
+    result = train_all(args.epochs, args.sessions) if args.command == "train" else calibrate_on(args.network, args.session, args.reps)
     if args.json:
         Path(args.json).write_text(json.dumps(result, indent=1))
 

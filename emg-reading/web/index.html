@@ -194,9 +194,10 @@
       <button id="net-eval">Evaluate all sessions</button>
     </div>
     <h2>Train</h2>
-    <p class="muted">Trains one network on all the sessions above and saves it. It still needs a calibration before
-      live use.</p>
-    <div class="controls"><button id="net-train" class="primary">Train on all sessions</button></div>
+    <p class="muted">Trains one network on the ticked sessions and saves it. All of them is the normal case, a single
+      session is for testing it on its own. It still needs a calibration before live use.</p>
+    <fieldset id="net-train-sessions"><legend>Sessions</legend></fieldset>
+    <div class="controls"><button id="net-train" class="primary">Train on the ticked sessions</button></div>
     <h2>Calibrate</h2>
     <p class="muted">Fits the per-person transform and the grip head on the chosen repetitions of a session recorded at
       the current band position, scores it on the other repetitions and saves the calibrated network.</p>

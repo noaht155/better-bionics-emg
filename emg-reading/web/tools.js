@@ -442,6 +442,12 @@ async function loadNetworkLists() {
   const [sessions, networks] = await Promise.all([fetch("/api/sessions"), fetch("/api/networks")].map((r) => r.then((x) => x.json())));
   const good = sessions.filter((s) => s.completed && s.gestures > 0);
   $("net-count").textContent = `${good.length} now`;
+  // Keep the ticks of sessions already listed, a session that is new since then starts ticked
+  const box = $("net-train-sessions");
+  const listed = new Set([...box.querySelectorAll("input")].map((c) => c.value));
+  const ticked = new Set([...box.querySelectorAll("input:checked")].map((c) => c.value));
+  box.innerHTML = "<legend>Sessions</legend>" + good.map((s) => `<label><input type="checkbox" value="${s.name}"
+    ${!listed.has(s.name) || ticked.has(s.name) ? "checked" : ""}> ${s.name}</label>`).join("");
   const short = (name) => name.slice(0, 17).replace("_", " ");
   fillSelect($("net-base"), networks.filter((n) => n.kind === "general"),
     (n) => `${n.name}, ${n.sessions.length} sessions, ${n.epochs} epochs`);
@@ -460,6 +466,7 @@ async function loadNetworkLists() {
 async function runNetwork(job) {
   $("net-error").textContent = "";
   const body = { job, epochs: Number($("net-epochs").value) };
+  if (job === "train") body.sessions = [...$("net-train-sessions").querySelectorAll("input:checked")].map((c) => c.value);
   if (job === "calibrate") {
     body.network = $("net-base").value;
     body.session = $("net-session").value;

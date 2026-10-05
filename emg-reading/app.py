@@ -103,6 +103,8 @@ class NetworkJobSettings(BaseModel):
     network: str | None = None
     session: str | None = None
     reps: list[int] = Field([1, 2], min_length=1)
+    # Sessions to train a network on, None for all good sessions
+    sessions: list[str] | None = None
 
 
 def session_list():
@@ -296,6 +298,10 @@ def make_app(recorder, band, camera, tools):
             if not good:
                 refuse("no completed sessions with grips yet")
             args = ["ml.networks", "train", "--epochs", str(settings.epochs)]
+            if settings.sessions is not None:
+                if not settings.sessions or any(n not in good for n in settings.sessions):
+                    refuse("pick at least one completed session with grips")
+                args += ["--sessions", *settings.sessions]
         else:
             name = settings.network or ""
             if Path(name).name != name or not (NETWORK_DIR / name).is_file():

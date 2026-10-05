@@ -426,7 +426,7 @@ in one pass. Grips and the old angle head learn from the scaled copy, the effort
 run live; the Deep learning tab draws them side by side over the camera's hand (orange angle head, green effort
 head), each with its own match score, and the evaluation scores both (`effort` rows and columns). Networks saved
 before this load without the effort head. The evaluation also scores the angles on the training sessions' moving
-windows, as the practice score for angles.
+windows, as the practice score for angles. Network training can now use any ticked subset of sessions, also one.
 
 First result, 8 sessions, 15 epochs: the effort head scores the same as the angle head on every angle row (moving
 fingers r 0.27 / 0.30 without / with calibration, held grips 0.57 / 0.61, within 0.01 everywhere). Effort within the
