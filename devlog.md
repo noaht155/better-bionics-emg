@@ -336,6 +336,9 @@ the same setting.
 
 ## Open
 
+- Next priority (Noah, 2026-10-05): finger angles look poor live (offline r 0.58, target 0.8). Find out first
+  whether the labels, the timing or the model is the limit: per-joint r and error, camera tracking quality per
+  joint, whole-session camera delay (below), and how much of the angle score is just the grip shape.
 - More sessions with the 7 grips, firm holds and a marked band position.
 - Quick recalibration in the app: a short calibration-only recording (1 to 2 repetitions of the grips) after
   putting the band on. The Deep learning tab can calibrate on any session, but there is no short recording type yet.
