@@ -339,10 +339,13 @@ $("model-use").addEventListener("click", async () => {
   }
 });
 $("model-stop").addEventListener("click", () => post("/api/model/stop").catch(() => {}));
-$("model-threshold").addEventListener("change", () => {
-  const value = Math.min(0.99, Math.max(0, Number($("model-threshold").value)));
-  post("/api/model/threshold", { value }).catch((err) => { $("model-error").textContent = err.message; });
-});
+// The Train and Deep learning tabs both set the one threshold the running model uses
+for (const [box, error] of [["model-threshold", "model-error"], ["net-threshold", "net-error"]]) {
+  $(box).addEventListener("change", () => {
+    const value = Math.min(0.99, Math.max(0, Number($(box).value)));
+    post("/api/model/threshold", { value }).catch((err) => { $(error).textContent = err.message; });
+  });
+}
 
 let trainWasRunning = false;
 function drawTrain(t) {
@@ -516,6 +519,8 @@ function drawNetwork(n, p) {
   if (networkWasRunning && !n.running && currentTab === "network") loadNetworkLists();
   networkWasRunning = n.running;
   $("net-live-stop").disabled = !p.running;
+  const box = $("net-threshold");
+  if (p.threshold != null && document.activeElement !== box) box.value = p.threshold;
   $("net-status").textContent = p.running ? `Running ${p.model}` : "No model running";
   $("net-label").innerHTML = predictionLabel(p);
   drawProbs(p, "net-probs");

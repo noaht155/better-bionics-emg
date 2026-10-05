@@ -199,9 +199,12 @@
     <h2>Live test</h2>
     <div class="row narrow">
       <label>Network <select id="net-live"></select></label>
+      <label>Confidence threshold
+        <input id="net-threshold" type="number" min="0" max="0.99" step="0.05" value="0.8">
+      </label>
     </div>
-    <p class="muted">Same live output as the LDA models: the threshold and the Record tab's model view apply. The
-      threshold is set on the Train tab.</p>
+    <p class="muted">Below the threshold the output says unsure instead of guessing, it changes the running model
+      straight away. Same setting as on the Train tab, and the Record tab's model view shows the same output.</p>
     <div class="controls">
       <button id="net-use">Use this network</button>
       <button id="net-live-stop">Stop</button>
