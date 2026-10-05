@@ -21,8 +21,10 @@ function anglesByName(list) {
   return Object.fromEntries(config.joints.map((j, i) => [j, list[i]]));
 }
 
+// Hands are drawn like a mirror, the same as the camera preview: a left hand's reflection has the shape of a right
+// hand, so the left hand is drawn unmirrored and the right hand mirrored
 function mirrored() {
-  return $("setup").tracked_hand.value === "left";
+  return $("setup").tracked_hand.value === "right";
 }
 
 // Setup form
