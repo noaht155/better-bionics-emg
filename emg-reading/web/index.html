@@ -47,9 +47,21 @@
       <p id="duration" class="muted"></p>
       <label class="check"><input type="checkbox" name="practice" id="practice"> Practice run, nothing is saved</label>
       <button type="submit" id="start-button">Start recording</button>
+      <button type="button" id="preview-button">Preview cues</button>
       <p id="setup-error" class="error"></p>
       <div id="summary" hidden></div>
     </form>
+
+    <div id="preview" hidden>
+      <div class="cue-top"><span id="preview-info"></span><span id="preview-count"></span></div>
+      <div id="preview-text"></div>
+      <canvas id="preview-hand" width="360" height="300"></canvas>
+      <div class="controls">
+        <button type="button" id="preview-prev">Previous (&larr;)</button>
+        <button type="button" id="preview-next">Next (&rarr;)</button>
+        <button type="button" id="preview-close">Back to setup</button>
+      </div>
+    </div>
 
     <div id="cue-panel" hidden>
       <div class="cue-top"><span id="posture"></span><span id="progress-text"></span></div>

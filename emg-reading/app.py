@@ -181,9 +181,10 @@ def make_app(recorder, band, camera, tools):
 
     @app.post("/api/plan")
     def plan_length(settings: PlanSettings):
-        """Length of the session these settings give, from the real plan so the page needn't copy its logic."""
+        """Length of the session these settings give, from the real plan so the page needn't copy its logic. The
+        plan itself is for the cue preview; grip order is shuffled again when the session starts."""
         plan = session_plan(settings.postures, settings.reps, settings.hold_s, settings.rest_s, settings.free_s)
-        return {"seconds": sum(c["seconds"] or 0 for c in plan), "cues": len(plan)}
+        return {"seconds": sum(c["seconds"] or 0 for c in plan), "cues": len(plan), "plan": plan}
 
     @app.post("/api/session/start")
     def start(settings: SessionSettings):

@@ -392,7 +392,8 @@ targets (hand closing, index, thumb) can be derived from the same recordings lat
 halfway for a second before bending fully, since the grips are all end positions and half-bent fingers were barely
 recorded. The thumb cue asks for the full range (across the palm and out as far as it goes). Free movement default 30
 to 60 s per posture. A 3-posture session is now about 15.4 min instead of 12.9. Sessions up to `2026-10-05_112731`
-have the old cues.
+have the old cues. The setup form has a Preview cues button that steps through every distinct cue of the planned
+session with its hand picture, to go through with the person before recording.
 
 `train_ringnet.py` (and the Deep learning tab's evaluation) now reports angles on moving fingers and on held grips
 separately; the dataset keeps each window's cue kind (cache version 2).

@@ -86,7 +86,7 @@ button.armed { background: var(--bad); color: #fff; }
 
 .cue-top { display: flex; justify-content: space-between; color: var(--muted); }
 
-#cue-text {
+#cue-text, #preview-text {
   font-size: 44px;
   font-weight: 700;
   line-height: 1.1;
@@ -95,7 +95,7 @@ button.armed { background: var(--bad); color: #fff; }
   min-height: 2.2em;
 }
 
-#cue-text small { display: block; font-size: 18px; font-weight: 400; color: var(--muted); margin-top: 6px; }
+#cue-text small, #preview-text small { display: block; font-size: 18px; font-weight: 400; color: var(--muted); margin-top: 6px; }
 #cue-text.paused { color: var(--warn); }
 
 .bar { height: 10px; background: #2a2e36; border-radius: 5px; overflow: hidden; }
@@ -107,7 +107,7 @@ button.armed { background: var(--bad); color: #fff; }
 #next small { display: block; font-size: 17px; font-weight: 400; color: var(--muted); margin-top: 4px; }
 
 canvas { display: block; width: 100%; height: auto; }
-#target { max-width: 360px; margin: 8px auto; }
+#target, #preview-hand { max-width: 360px; margin: 8px auto; }
 
 .controls { display: flex; gap: 8px; flex-wrap: wrap; }
 

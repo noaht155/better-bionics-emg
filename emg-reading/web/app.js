@@ -129,6 +129,65 @@ $("setup").addEventListener("submit", async (e) => {
   }
 });
 
+// Cue preview: every distinct cue of the planned session once, to go through with the person before recording
+
+let preview = null;
+
+async function openPreview() {
+  const { postures, reps, hold_s, rest_s, free_s } = readSettings();
+  $("setup-error").textContent = "";
+  try {
+    const { plan } = await post("/api/plan", { postures, reps, hold_s, rest_s, free_s });
+    const seen = new Set();
+    const cues = plan.filter((c) => !seen.has(c.text) && seen.add(c.text));
+    preview = { cues, at: 0 };
+  } catch (err) {
+    $("setup-error").textContent = err.message;
+    return;
+  }
+  $("setup").hidden = true;
+  $("preview").hidden = false;
+  drawPreview();
+}
+
+function closePreview() {
+  preview = null;
+  $("preview").hidden = true;
+  $("setup").hidden = !!state?.session;
+}
+
+function stepPreview(by) {
+  if (!preview) return;
+  preview.at = Math.min(Math.max(preview.at + by, 0), preview.cues.length - 1);
+  drawPreview();
+}
+
+function drawPreview() {
+  const cue = preview.cues[preview.at];
+  const posture = config.postures[cue.posture] ?? cue.posture;
+  $("preview-info").textContent = cue.kind === "break" ? "waits for Continue" : `${cue.seconds} s, ${posture}`;
+  $("preview-count").textContent = `${preview.at + 1} / ${preview.cues.length}`;
+  $("preview-text").innerHTML = cueTitle(cue.text);
+  const ctx = $("preview-hand").getContext("2d");
+  ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+  const g = config.gestures[cue.label];
+  if (g && cue.kind !== "break") {
+    drawSolidHand(ctx, anglesByName(g.angles), { view: solidView, mirror: mirrored(), color: SOLID_COLOR });
+  }
+}
+
+attachRotate($("preview-hand"), solidView, () => preview && drawPreview());
+$("preview-button").addEventListener("click", openPreview);
+$("preview-close").addEventListener("click", closePreview);
+$("preview-prev").addEventListener("click", () => stepPreview(-1));
+$("preview-next").addEventListener("click", () => stepPreview(1));
+document.addEventListener("keydown", (e) => {
+  if (!preview || currentTab !== "record") return;
+  if (e.key === "ArrowLeft") stepPreview(-1);
+  if (e.key === "ArrowRight") stepPreview(1);
+  if (e.key === "Escape") closePreview();
+});
+
 // Session controls
 
 function command(action) {
@@ -195,7 +254,9 @@ function drawWarnings() {
 
 function drawSession() {
   const s = state.session;
-  $("setup").hidden = !!s;
+  if (s) preview = null;
+  $("setup").hidden = !!s || !!preview;
+  $("preview").hidden = !preview;
   $("cue-panel").hidden = !s;
   if (!s) {
     drawSummary();
