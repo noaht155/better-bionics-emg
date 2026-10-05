@@ -41,7 +41,10 @@ MOVING = ["finger", "free"]
 ANGLE_ROWS = {"none moving": "moving fingers, no calibration",
               "transform moving": "moving fingers, transform from 2 repetitions",
               "none held": "held grips, no calibration",
-              "transform held": "held grips, transform from 2 repetitions"}
+              "transform held": "held grips, transform from 2 repetitions",
+              "train moving": "moving fingers, its training sessions (not a test)"}
+# The effort head is scored on the same rows, the network's angle head stays under the old names
+ANGLE_ROWS.update({f"effort {k}": f"{v}, effort head" for k, v in list(ANGLE_ROWS.items())})
 
 # One row per evaluation run, next to the saved models (not in git, it names the sessions)
 LOG = EMG_READING / "models" / "evaluations.csv"
@@ -56,23 +59,34 @@ def grip_index(grip):
 
 
 def augment(x):
-    """Per window: an overall gain, a gain per channel and a little noise, so contact and effort differences don't
-    look new to the network."""
+    """Per window: a gain per channel and a little noise, so contact differences don't look new to the network.
+    Returns the window with and without an extra overall gain, the same window otherwise. The overall gain stands for
+    effort: the grips learn to ignore it, the effort head learns from the copy without it."""
     b = x.shape[0]
     overall = torch.exp(torch.randn(b, 1, 1, device=x.device) * 0.3)
     per_channel = torch.exp(torch.randn(b, x.shape[1], 1, device=x.device) * 0.2)
-    return x * overall * per_channel + torch.randn_like(x) * 2.0
+    noise = torch.randn_like(x) * 2.0
+    return x * overall * per_channel + noise, x * per_channel + noise
 
 
-def losses(model, x, y, a, weights):
-    logits, angles = model(x)
+def angle_loss(pred, a):
+    known = ~torch.isnan(a).any(dim=1)
+    if pred is None or not known.any():
+        return 0
+    return F.smooth_l1_loss(pred[known] / ANGLE_SCALE_DEG, a[known] / ANGLE_SCALE_DEG)
+
+
+def losses(model, x, y, a, weights, x_effort=None):
+    """Grip and angle loss on x. The effort head learns from x_effort (the same windows without the overall gain) if
+    given, else from x as well (calibration, where nothing is scaled). Both copies go through in one pass."""
+    n = len(x)
+    logits, angles, effort = model(x if x_effort is None else torch.cat([x, x_effort]))
+    if x_effort is not None:
+        logits, angles = logits[:n], (angles[:n] if angles is not None else None)
+        effort = effort[n:] if effort is not None else None
     labelled = y >= 0
     loss = F.cross_entropy(logits[labelled], y[labelled], weight=weights) if labelled.any() else logits.sum() * 0
-    if angles is not None:
-        known = ~torch.isnan(a).any(dim=1)
-        if known.any():
-            loss = loss + F.smooth_l1_loss(angles[known] / ANGLE_SCALE_DEG, a[known] / ANGLE_SCALE_DEG)
-    return loss
+    return loss + angle_loss(angles, a) + angle_loss(effort, a)
 
 
 def class_weights(y):
@@ -106,7 +120,8 @@ def train(sessions, epochs, seed):
         order = torch.randperm(len(x), device=DEVICE)
         for i in range(0, len(x), BATCH):
             idx = order[i:i + BATCH]
-            loss = losses(model, augment(x[idx]), y[idx], a[idx], weights)
+            scaled, unscaled = augment(x[idx])
+            loss = losses(model, scaled, y[idx], a[idx], weights, unscaled)
             opt.zero_grad()
             loss.backward()
             opt.step()
@@ -136,14 +151,17 @@ def calibrate(model, x, y, a, head=False):
 
 
 def predict(model, x):
+    """Grip probabilities, angles and effort-head angles (None without that head) for every window."""
     model.eval()
-    out_p, out_a = [], []
+    out_p, out_a, out_e = [], [], []
     with torch.no_grad():
         for i in range(0, len(x), 4096):
-            logits, angles = model(x[i:i + 4096])
+            logits, angles, effort = model(x[i:i + 4096])
             out_p.append(F.softmax(logits, dim=1).cpu())
             out_a.append(angles.cpu())
-    return torch.cat(out_p).numpy(), torch.cat(out_a).numpy()
+            if effort is not None:
+                out_e.append(effort.cpu())
+    return torch.cat(out_p).numpy(), torch.cat(out_a).numpy(), torch.cat(out_e).numpy() if out_e else None
 
 
 def grip_scores(true, probs):
@@ -239,20 +257,30 @@ def main():
         model = train(others, args.epochs, args.seed)
         # The same network scored on the data it learned from. Far above the held-out score means it memorised
         # the training sessions (too many epochs), both low means it hasn't learned enough (too few)
+        def add_angles(key, true, pred):
+            angles[key].append(angle_scores(true, pred[1]))
+            if pred[2] is not None:
+                angles[f"effort {key}"].append(angle_scores(true, pred[2]))
+
         seen_p, seen_y = [], []
         for o in others:
             xo, yo, _ = to_tensors(o, o["grip"] != "")
             seen_p.append(predict(model, xo)[0])
             seen_y.append(yo.cpu().numpy())
+            om = np.isin(o["kind"], MOVING)
+            if om.any():
+                xo, _, ao = to_tensors(o, om)
+                add_angles("train moving", ao.cpu().numpy(), predict(model, xo))
         results["net train"].append(grip_scores(np.concatenate(seen_y), np.vstack(seen_p)))
         d = data[held]
         labelled = d["grip"] != ""
         x, y, a = to_tensors(d, np.ones(len(d["grip"]), bool))
         moving = np.isin(d["kind"], MOVING)
-        probs, ang = predict(model, x)
-        results["net none"].append(grip_scores(y.cpu().numpy()[labelled], probs[labelled]))
-        angles["none moving"].append(angle_scores(a.cpu().numpy()[moving], ang[moving]))
-        angles["none held"].append(angle_scores(a.cpu().numpy()[labelled], ang[labelled]))
+        out = predict(model, x)
+        a_np = a.cpu().numpy()
+        results["net none"].append(grip_scores(y.cpu().numpy()[labelled], out[0][labelled]))
+        add_angles("none moving", a_np[moving], [o[moving] if o is not None else None for o in out])
+        add_angles("none held", a_np[labelled], [o[labelled] if o is not None else None for o in out])
 
         other_f = np.vstack([feats[n][data[n]["grip"] != ""] for n in names if n != held])
         other_l = np.concatenate([data[n]["grip"][data[n]["grip"] != ""] for n in names if n != held])
@@ -268,14 +296,13 @@ def main():
             xt, yt, at = to_tensors(d, test)
             for name, head in (("net transform", False), ("net transform+head", True)):
                 calibrated = calibrate(model, xc, yc, ac, head)
-                p, ang_t = predict(calibrated, xt)
-                results[name].append(grip_scores(yt.cpu().numpy(), p))
+                out_t = predict(calibrated, xt)
+                results[name].append(grip_scores(yt.cpu().numpy(), out_t[0]))
                 if name == "net transform":
-                    angles["transform held"].append(angle_scores(at.cpu().numpy(), ang_t))
+                    add_angles("transform held", at.cpu().numpy(), out_t)
                     # Calibration only sees held grips, so every moving window is new to it
                     if moving.any():
-                        angles["transform moving"].append(
-                            angle_scores(a.cpu().numpy()[moving], predict(calibrated, x[moving])[1]))
+                        add_angles("transform moving", a_np[moving], predict(calibrated, x[moving]))
             results["lda cal"].append(lda_scores(lda(feats[held][cal], d["grip"][cal]), feats[held][test],
                                                  yt.cpu().numpy()))
         fold = {k: v[before[k]:] for k, v in results.items()}

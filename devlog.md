@@ -418,6 +418,25 @@ to 84.6 % at every count. Moving-finger r 0.22 at 5, 0.27 to 0.29 from 15 on. Pa
 the training sessions, without getting worse on new ones. Default stays at 15 (20 is within noise and takes 9 instead
 of 7 minutes per evaluation). Calibrated LDA is 82.2 % in every row, as it should be, the splits were the same.
 
+**Effort head.** The random overall gain in training (about +-35 %) teaches the grips to ignore effort, but it also
+taught the angle head to ignore it, while a finger bent halfway and fully may differ mostly in how hard the same
+muscles fire. The network now has a second angle head on the same features (45,537 weights instead of 44,376):
+each training batch holds every window twice, with and without the overall gain (same per-channel gain and noise),
+in one pass. Grips and the old angle head learn from the scaled copy, the effort head from the unscaled one. Both
+run live; the Deep learning tab draws them side by side over the camera's hand (orange angle head, green effort
+head), each with its own match score, and the evaluation scores both (`effort` rows and columns). Networks saved
+before this load without the effort head. The evaluation also scores the angles on the training sessions' moving
+windows, as the practice score for angles.
+
+First result, 8 sessions, 15 epochs: the effort head scores the same as the angle head on every angle row (moving
+fingers r 0.27 / 0.30 without / with calibration, held grips 0.57 / 0.61, within 0.01 everywhere). Effort within the
++-35 % the augmentation covers isn't what the angles are missing. Only 3 sessions have the halfway holds yet, so
+recheck with more. Grips with 8 sessions: no calibration network 74.2 % (LDA 62.2 %), calibrated 84.1 % (LDA 82.1 %).
+More telling: moving-finger r on the network's own training sessions is only 0.33, against 90 % balanced for grips
+there. The network can't follow moving fingers even on data it learned from, so for angles it underfits, the session
+gap isn't the only problem. Likely cause: held grips are most of the angle windows, so the angle loss is mostly a
+grip-shape loss. Next for angles: weight the moving windows, a time-aware angle head.
+
 ## Open
 
 - Next priority (Noah, 2026-10-05): finger angles. Moving-finger r is 0.34 (see 2026-10-05). Record about 10

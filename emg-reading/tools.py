@@ -246,8 +246,9 @@ class Predictor(Tool):
             if filtered.shape[1] == live.win:
                 accel = self.recorder.accel_window(live.win) if model["options"]["accel"] else None
                 label, raw, probs = live.predict(filtered, accel)
-                # Only networks predict finger angles, LDA models leave this None
-                self.state.update(label=label, raw=raw, probs=probs, angles=getattr(live, "angles", None))
+                # Only networks predict finger angles, LDA models leave these None
+                self.state.update(label=label, raw=raw, probs=probs, angles=getattr(live, "angles", None),
+                                  effort_angles=getattr(live, "effort_angles", None))
             next_tick = max(next_tick + period, time.perf_counter())
             time.sleep(max(0.0, next_tick - time.perf_counter()))
 

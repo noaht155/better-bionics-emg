@@ -191,8 +191,10 @@ table { border-collapse: collapse; margin: 8px 0; font-size: 14px; }
 td, th { padding: 4px 10px; text-align: left; border-bottom: 1px solid #2f333b; }
 th { color: var(--muted); font-weight: 400; }
 #live-probs, #net-probs { max-width: 900px; }
-#net-hand { max-width: 520px; width: 100%; background: #16181c; border-radius: 6px; cursor: grab; touch-action: none; }
-#net-match { max-width: 520px; }
+.hand-pair { display: flex; flex-wrap: wrap; gap: 16px; }
+.hand-pair > div { flex: 1 1 320px; max-width: 520px; }
+#net-hand, #net-hand-effort { max-width: 520px; width: 100%; background: #16181c; border-radius: 6px; cursor: grab; touch-action: none; }
+#net-match, #net-match-effort { max-width: 520px; }
 
 #target-label { text-align: center; font-size: 15px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; margin-top: 12px; min-height: 1.3em; }
 #target-label.upcoming { color: var(--muted); }

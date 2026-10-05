@@ -7,6 +7,11 @@ weights at every position. Rotating the band by whole electrodes then only shift
 and pooling over the ring (mean and max) gives the same output either way. What is left after that (half
 electrodes, the band moving along the arm, a different person) is for the per-person transform: an 8x8 channel
 mix and a gain per channel, starting as no change and fitted on a calibration recording with the rest frozen.
+
+There are two angle heads on the same features. Training scales each window by a random overall gain so the grips
+don't depend on effort. The angle head learns from those scaled windows too, the effort head from the same windows
+without the overall gain, so it can use how hard the muscles fire (a finger bent halfway against fully). Both run on
+every window and can be compared live.
 """
 from collections import Counter, deque
 
@@ -60,7 +65,7 @@ class RingConv(nn.Module):
 
 
 class RingNet(nn.Module):
-    def __init__(self, classes, width=32, angles=True):
+    def __init__(self, classes, width=32, angles=True, effort=True):
         super().__init__()
         self.classes = list(classes)
         self.transform = ChannelTransform()
@@ -74,6 +79,7 @@ class RingNet(nn.Module):
         self.dropout = nn.Dropout(0.3)
         self.grip_head = nn.Linear(features, len(self.classes))
         self.angle_head = nn.Linear(features, len(ANGLE_JOINTS)) if angles else None
+        self.effort_head = nn.Linear(features, len(ANGLE_JOINTS)) if angles and effort else None
 
     def embed(self, x):
         """x: (batch, 8, samples) of filtered EMG in uV. Returns the pooled features."""
@@ -83,9 +89,11 @@ class RingNet(nn.Module):
         return torch.cat([h.mean(dim=2), h.amax(dim=2)], dim=1)   # mean and max over the ring
 
     def forward(self, x):
+        """Returns grip logits, angles and effort-head angles (degrees). A head the network doesn't have gives None."""
         z = self.dropout(self.embed(x))
         angles = self.angle_head(z) * ANGLE_SCALE_DEG if self.angle_head is not None else None
-        return self.grip_head(z), angles
+        effort = self.effort_head(z) * ANGLE_SCALE_DEG if self.effort_head is not None else None
+        return self.grip_head(z), angles, effort
 
     def parameter_count(self):
         return sum(p.numel() for p in self.parameters())
@@ -107,7 +115,8 @@ def save(model, info, path):
 
 def load(path, device="cpu"):
     blob = torch.load(path, map_location=device, weights_only=True)
-    model = RingNet(blob["classes"]).to(device)
+    # Networks saved before the effort head existed load without it
+    model = RingNet(blob["classes"], effort="effort_head.weight" in blob["state"]).to(device)
     model.load_state_dict(blob["state"])
     model.eval()
     return model, blob["info"]
@@ -123,7 +132,8 @@ def load_live(path):
 
 class NetPredictor:
     """Live grip prediction with a saved network: same threshold and majority vote as the LDA predictor. The finger
-    angles from the same pass are kept in .angles ({joint: degrees}, smoothed)."""
+    angles from the same pass are kept in .angles and .effort_angles ({joint: degrees}, smoothed, None without that
+    head)."""
 
     def __init__(self, model, threshold, unsure):
         self.model = model
@@ -133,18 +143,24 @@ class NetPredictor:
         self.threshold = threshold
         self.unsure = unsure
         self.angles = None
-        self._smoothed = None
+        self.effort_angles = None
+        self._smoothed = {}
+
+    def _smooth(self, name, out):
+        if out is None:
+            return None
+        a = out[0].numpy()
+        old = self._smoothed.get(name)
+        self._smoothed[name] = a if old is None else ANGLE_SMOOTHING * a + (1 - ANGLE_SMOOTHING) * old
+        return {j: round(float(v), 1) for j, v in zip(ANGLE_JOINTS, self._smoothed[name])}
 
     def predict(self, filtered, accel=None):
         x = torch.tensor(filtered[None, :, -self.win:], dtype=torch.float32)
         with torch.no_grad():
-            grips, angles = self.net(x)
+            grips, angles, effort = self.net(x)
             probs = F.softmax(grips, dim=1)[0].numpy()
-        if angles is not None:
-            a = angles[0].numpy()
-            old = self._smoothed
-            self._smoothed = a if old is None else ANGLE_SMOOTHING * a + (1 - ANGLE_SMOOTHING) * old
-            self.angles = {j: round(float(v), 1) for j, v in zip(ANGLE_JOINTS, self._smoothed)}
+        self.angles = self._smooth("angles", angles)
+        self.effort_angles = self._smooth("effort", effort)
         classes = self.model["classes"]
         raw = classes[int(probs.argmax())] if probs.max() >= self.threshold else self.unsure
         self.recent.append(raw)
@@ -157,7 +173,7 @@ class NetPredictor:
 if __name__ == "__main__":
     net = RingNet(["fist", "key", "open", "pinch", "point", "rest", "tripod"])
     x = torch.randn(16, 8, 100) * 30
-    grips, angles = net(x)
+    grips, angles, _ = net(x)
     print(f"parameters: {net.parameter_count()}, grip output {tuple(grips.shape)}, angle output {tuple(angles.shape)}")
     print(f"largest grip output change for a band rotated by 1 to 7 electrodes: {rotation_check(net, x):.2e}")
     print(f"(compare: output range {float(grips.detach().abs().max()):.2f})")

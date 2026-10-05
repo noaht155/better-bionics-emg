@@ -229,11 +229,14 @@
     <div id="net-label" class="big-label"></div>
     <canvas id="net-probs" width="900" height="320"></canvas>
     <h2>Finger angles</h2>
-    <p class="muted">Orange: the hand the network predicts from the EMG. Blue: the hand the camera tracks. Drag to turn
-      it. The match compares the two on the base and middle joints; the joints the network doesn't predict yet
-      (spread, finger tips) are drawn relaxed.</p>
-    <canvas id="net-hand" width="520" height="420"></canvas>
-    <div id="net-match" class="big-label"></div>
+    <p class="muted">Blue: the hand the camera tracks. Orange: the angle head, trained to ignore how hard the muscles
+      fire. Green: the effort head, trained to use it (a finger bent halfway against fully). Both come from the same
+      pass of the network. Drag either to turn both. The match compares each with the camera on the base and middle
+      joints; the joints the network doesn't predict yet (spread, finger tips) are drawn relaxed.</p>
+    <div class="hand-pair">
+      <div><canvas id="net-hand" width="520" height="420"></canvas><div id="net-match" class="big-label"></div></div>
+      <div><canvas id="net-hand-effort" width="520" height="420"></canvas><div id="net-match-effort" class="big-label"></div></div>
+    </div>
   </section>
 </main>
 
