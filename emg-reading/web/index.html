@@ -212,6 +212,12 @@
     <p id="net-status" class="muted"></p>
     <div id="net-label" class="big-label"></div>
     <canvas id="net-probs" width="900" height="320"></canvas>
+    <h2>Finger angles</h2>
+    <p class="muted">Orange: the hand the network predicts from the EMG. Blue: the hand the camera tracks. Drag to turn
+      it. The match compares the two on the base and middle joints; the joints the network doesn't predict yet
+      (spread, finger tips) are drawn relaxed.</p>
+    <canvas id="net-hand" width="520" height="420"></canvas>
+    <div id="net-match" class="big-label"></div>
   </section>
 </main>
 

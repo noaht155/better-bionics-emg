@@ -505,6 +505,39 @@ function networkTable(job, r) {
   return "";
 }
 
+const PREDICTED_COLOR = "#e0a02a";
+const netView = { yaw: -45, pitch: -25 };
+
+// The network predicts the base and middle joints only, the others come from the relaxed pose
+function predictedHand(angles) {
+  return { ...anglesByName(config.gestures.rest.angles), ...angles };
+}
+
+function drawNetHand(p) {
+  const ctx = $("net-hand").getContext("2d");
+  ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+  const predicted = p.running && p.angles ? p.angles : null;
+  const tracked = state.hand ? anglesByName(state.hand.angles) : null;
+  if (tracked) drawHand(ctx, tracked, { view: netView, mirror: mirrored(), color: TRACKED_COLOR, width: 5 });
+  if (predicted) {
+    drawHand(ctx, predictedHand(predicted), { view: netView, mirror: mirrored(), color: PREDICTED_COLOR, width: 7, alpha: 0.85 });
+  }
+  let html = "";
+  if (!p.running) html = "<small>no network running</small>";
+  else if (!predicted) html = "<small>this model doesn't predict finger angles (LDA)</small>";
+  else if (!tracked) html = "<small>no hand in view, nothing to compare against</small>";
+  else {
+    // Same score as the Record tab's pose match
+    const joints = Object.keys(predicted);
+    const mean = joints.reduce((sum, j) => sum + Math.abs(predicted[j] - tracked[j]), 0) / joints.length;
+    const score = Math.max(0, Math.round(100 - 2 * mean));
+    html = `${score} % match<small>mean error ${mean.toFixed(0)}° on ${joints.length} joints</small>`;
+  }
+  $("net-match").innerHTML = html;
+}
+
+attachRotate($("net-hand"), netView, () => state?.tools && drawNetHand(state.tools.predictor));
+
 let networkWasRunning = false;
 function drawNetwork(n, p) {
   for (const id of ["net-eval-newest", "net-eval", "net-train", "net-calibrate"]) $(id).disabled = n.running;
@@ -524,6 +557,7 @@ function drawNetwork(n, p) {
   $("net-status").textContent = p.running ? `Running ${p.model}` : "No model running";
   $("net-label").innerHTML = predictionLabel(p);
   drawProbs(p, "net-probs");
+  drawNetHand(p);
 }
 
 // Connection check

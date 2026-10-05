@@ -22,6 +22,9 @@ ANGLE_JOINTS = RELIABLE
 ANGLE_INDEX = [JOINTS.index(j) for j in ANGLE_JOINTS]
 # Angles are trained in this unit so their loss is on a similar scale to the grip loss
 ANGLE_SCALE_DEG = 60.0
+# Live angles are smoothed with this weight on the newest window, one window every 50 ms. The grips get a majority
+# vote instead, angles need something continuous
+ANGLE_SMOOTHING = 0.5
 
 
 class ChannelTransform(nn.Module):
@@ -119,7 +122,8 @@ def load_live(path):
 
 
 class NetPredictor:
-    """Live grip prediction with a saved network: same threshold and majority vote as the LDA predictor."""
+    """Live grip prediction with a saved network: same threshold and majority vote as the LDA predictor. The finger
+    angles from the same pass are kept in .angles ({joint: degrees}, smoothed)."""
 
     def __init__(self, model, threshold, unsure):
         self.model = model
@@ -128,11 +132,19 @@ class NetPredictor:
         self.recent = deque(maxlen=model["vote"])
         self.threshold = threshold
         self.unsure = unsure
+        self.angles = None
+        self._smoothed = None
 
     def predict(self, filtered, accel=None):
         x = torch.tensor(filtered[None, :, -self.win:], dtype=torch.float32)
         with torch.no_grad():
-            probs = F.softmax(self.net(x)[0], dim=1)[0].numpy()
+            grips, angles = self.net(x)
+            probs = F.softmax(grips, dim=1)[0].numpy()
+        if angles is not None:
+            a = angles[0].numpy()
+            old = self._smoothed
+            self._smoothed = a if old is None else ANGLE_SMOOTHING * a + (1 - ANGLE_SMOOTHING) * old
+            self.angles = {j: round(float(v), 1) for j, v in zip(ANGLE_JOINTS, self._smoothed)}
         classes = self.model["classes"]
         raw = classes[int(probs.argmax())] if probs.max() >= self.threshold else self.unsure
         self.recent.append(raw)

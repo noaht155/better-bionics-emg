@@ -6,7 +6,7 @@
 - Battery: Akyga AKY0081 980 mAh, soldered. Recovered from deep discharge 2026-09-28
 - Case opened 2026-09-28
 - Since then the electrode pads are pushed under the band by hand, without the casing. Their positions vary from session to session beyond what the placement note (band position) records
-- 2026-10-02: hum comes and goes on ch 5, 6 and 7 (over the 80 uV warning), 6 and 7 on the main module. Not diagnosed. Several channels at once points to the reference or bias pad contact, grounding (charger plugged in) or the band loose on that side, before a single joint. Ch 5 is a reflowed pad, check it last
+- 2026-10-02: hum comes and goes on ch 5, 6 and 7 (over the 80 uV warning), 6 and 7 on the main module. Not diagnosed. Several channels at once points to the reference or bias pad contact, grounding (charger plugged in) or the band loose on that side, before a single joint. Ch 5 is a reflowed pad, check it last. Fixed before the 2026-10-05 session, cause not recorded
 - WiFi access point `Mindrove_ARB_66bb04` at 192.168.4.1. Accepts a second device (the ESP32) and keeps streaming
 
 ## ESP32

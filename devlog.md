@@ -313,9 +313,21 @@ second; over 80 uV on any channel in both of the last 2 seconds marks the cue ba
 channels), pauses and names the pads. Continue redoes the cue. If the hum starts in the first 2 s of a cue, the cue
 before is marked and redone too, since the check looks back 2 s. The warning bar keeps its slower 5 s median.
 
+## 2026-10-05: live finger angles
+
+Hum on ch 5 to 7 fixed before session `112731` (14.7 min, completed, no hum redos). The two sessions from the evening
+of 10-02 were stopped early, so 6 good sessions now. Live, the calibrated network felt good apart from key pinch,
+pinch and point getting mixed up: key and point share the three curled fingers and differ only in the index, the thumb
+position comes mostly from hand muscles the band can't see. Key pinch stays in the set (common in daily use).
+
+**Live finger angles in the Deep learning tab.** The network's angle head (9 base and middle joints) now runs live
+with the grips, smoothed (half weight on the newest 50 ms window), drawn as a wireframe hand you can turn, over the
+camera-tracked hand, with the same match score as the Record tab's pose match. Unpredicted joints are drawn relaxed.
+Expect it to follow the hand loosely: offline r 0.58, target 0.8. The confidence threshold can now also be set on
+that tab.
+
 ## Open
 
-- Diagnose the on and off hum on ch 5, 6 and 7 (`hardware-status.md`).
 - More sessions with the 7 grips, firm holds and a marked band position.
 - Quick recalibration in the app: a short calibration-only recording (1 to 2 repetitions of the grips) after
   putting the band on. The Deep learning tab can calibrate on any session, but there is no short recording type yet.
