@@ -388,6 +388,12 @@ out over 6 sessions, the network reaches r 0.28 without and 0.34 with the usual 
 joints independently (the intrinsic hand muscles are gone, so thumb opposition and abduction are hardest), but fewer
 targets (hand closing, index, thumb) can be derived from the same recordings later without recording again.
 
+**Protocol changes for the angle data** (from the next session on). Finger cues 8 to 12 s and now ask to stop
+halfway for a second before bending fully, since the grips are all end positions and half-bent fingers were barely
+recorded. The thumb cue asks for the full range (across the palm and out as far as it goes). Free movement default 30
+to 60 s per posture. A 3-posture session is now about 15.4 min instead of 12.9. Sessions up to `2026-10-05_112731`
+have the old cues.
+
 `train_ringnet.py` (and the Deep learning tab's evaluation) now reports angles on moving fingers and on held grips
 separately; the dataset keeps each window's cue kind (cache version 2).
 

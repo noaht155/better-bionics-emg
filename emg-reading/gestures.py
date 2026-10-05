@@ -65,9 +65,14 @@ FREE_TEXT = "MOVE YOUR FINGERS\nslowly, any way: open, close, one finger at a ti
 
 # Protocol B has to learn each finger on its own. The held grips are 7 fixed shapes, and in free movement the fingers
 # mostly moved together (middle and ring correlated 0.87, ring and pinky 0.93 on 2026-10-01). In every posture
-FINGER_S = 8.0
+# The pause halfway is there because the grips are all end positions, so a half-bent finger was hardly ever recorded
+FINGER_S = 12.0
 WAVE_S = 10.0
-FINGER_TEXT = "FLEX YOUR {}\nslowly bend and straighten it 3 times, keep the others still"
+FINGER_TEXT = ("FLEX YOUR {}\nbend it slowly, stop halfway for a second, bend it fully, then back. 3 times, keep the "
+               "others still")
+# The thumb cue was done with small movements up to 2026-10-05, thumb MCP then covered only about 25 degrees
+THUMB_TEXT = ("FLEX YOUR THUMB\nbend it fully across the palm, stop halfway on the way, then out as far as it goes. "
+              "3 times, keep the others still")
 WAVE_TEXT = "WAVE YOUR FINGERS\none after another, like drumming, slowly"
 
 
@@ -82,7 +87,7 @@ def _bent(finger):
 
 
 for _f in FINGERS:
-    GESTURES[f"flex_{_f}"] = (FINGER_TEXT.format(_f.upper()), _bent(_f))
+    GESTURES[f"flex_{_f}"] = (THUMB_TEXT if _f == "thumb" else FINGER_TEXT.format(_f.upper()), _bent(_f))
 
 
 def _cue(kind, label, text, seconds, posture):
@@ -98,7 +103,7 @@ def _sync_block():
     return cues
 
 
-def session_plan(postures, reps=3, hold_s=4.0, rest_s=3.0, free_s=30.0, seed=None):
+def session_plan(postures, reps=3, hold_s=4.0, rest_s=3.0, free_s=60.0, seed=None):
     """Cue list: sync taps, then per posture every gesture of GESTURE_SET reps times in shuffled order with rest in
     between, then free movement, and sync taps again at the end.
 
