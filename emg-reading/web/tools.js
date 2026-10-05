@@ -538,6 +538,13 @@ function drawNetHand(p) {
 
 attachRotate($("net-hand"), netView, () => state?.tools && drawNetHand(state.tools.predictor));
 
+// Same setting as the hand on the Record tab: which hand the camera tracks and how the hands are drawn
+$("net-side").addEventListener("change", () => {
+  const field = $("setup").tracked_hand;
+  field.value = $("net-side").value;
+  field.dispatchEvent(new Event("input", { bubbles: true }));
+});
+
 let networkWasRunning = false;
 function drawNetwork(n, p) {
   for (const id of ["net-eval-newest", "net-eval", "net-train", "net-calibrate"]) $(id).disabled = n.running;
@@ -557,6 +564,8 @@ function drawNetwork(n, p) {
   $("net-status").textContent = p.running ? `Running ${p.model}` : "No model running";
   $("net-label").innerHTML = predictionLabel(p);
   drawProbs(p, "net-probs");
+  const side = $("setup").tracked_hand.value;
+  if (document.activeElement !== $("net-side") && $("net-side").value !== side) $("net-side").value = side;
   drawNetHand(p);
 }
 

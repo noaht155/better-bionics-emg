@@ -326,6 +326,14 @@ camera-tracked hand, with the same match score as the Record tab's pose match. U
 Expect it to follow the hand loosely: offline r 0.58, target 0.8. The confidence threshold can now also be set on
 that tab.
 
+**Hand pictures drawn as a mirror.** The hand pictures (cue, pose view, model view, angle view) are drawn like a
+mirror, the same as the camera preview: palm towards you, and a left hand's reflection has the shape of a right hand,
+so the left hand is drawn unmirrored and the right hand mirrored (`mirrored()` in `web/app.js`). Drawing the true left
+hand was correct but less intuitive to copy. Also fixed: the server starts with the right hand after every restart and
+the page took that over the saved choice, so after a restart the camera only looked for a right hand. The page now
+sends the saved hand on load and saves it as soon as it changes; the Deep learning tab has its own hand selector for
+the same setting.
+
 ## Open
 
 - More sessions with the 7 grips, firm holds and a marked band position.

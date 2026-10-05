@@ -45,7 +45,15 @@ function loadSettings() {
       form[k].value = v;
     }
   }
-  if (config.tracked_hand) form.tracked_hand.value = config.tracked_hand;
+  // The server starts with its default hand after every restart, so the saved choice is sent to it. During a
+  // session it keeps its own and the form follows
+  const hand = saved.tracked_hand || config.tracked_hand;
+  if (hand) {
+    form.tracked_hand.value = hand;
+    if (hand !== config.tracked_hand) {
+      post("/api/hand", { hand }).then((r) => { if (r.hand) form.tracked_hand.value = r.hand; }).catch(() => {});
+    }
+  }
   updateDuration();
 }
 
@@ -96,7 +104,14 @@ async function post(path, body) {
 
 $("setup").addEventListener("input", (e) => {
   updateDuration();
-  if (e.target.name === "tracked_hand") post("/api/hand", { hand: e.target.value }).catch(() => {});
+  if (e.target.name === "tracked_hand") {
+    post("/api/hand", { hand: e.target.value }).catch(() => {});
+    // Saved straight away, not only when a session starts, so it survives a restart
+    try {
+      const saved = JSON.parse(localStorage.getItem(SETTINGS_KEY)) || {};
+      localStorage.setItem(SETTINGS_KEY, JSON.stringify({ ...saved, tracked_hand: e.target.value }));
+    } catch { /* private window */ }
+  }
   $("start-button").textContent = $("practice").checked ? "Start practice run" : "Start recording";
 });
 
