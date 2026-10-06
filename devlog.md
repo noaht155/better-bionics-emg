@@ -380,7 +380,9 @@ out over 6 sessions, the network reaches r 0.28 without and 0.34 with the usual 
 
 - Within one session a plain ridge regression on the LDA features reaches r 0.45 to 0.60 (train on two posture
   blocks, test on the third), against about 0.30 across sessions. The shift between sessions is the main loss, and
-  the calibration only sees held grips, never moving fingers.
+  the calibration only sees held grips, never moving fingers. Corrected 2026-10-06: the 0.45 to 0.60 is the score on
+  held grips (it mostly measures which grip is held). On moving fingers the same split gives 0.05 to 0.32 (6
+  sessions with the finger block), so the session shift is not the main loss for moving fingers.
 - The longer window helps held grips and the grip classifier (+4 points) but not moving fingers.
 - Calibration fitted in one posture doesn't carry to the others.
 - Thumb MCP stays in: the thumb cue was done with too little movement, not a tracking limit.
@@ -563,6 +565,25 @@ and the LDA's `session_windows`), so all training data is in the reference orien
 of any rotation left over. Live, a calibrated network reverses the window when its calibration session was mirrored,
 an LDA model when its newest training session was. Haptics are unaffected, their levels belong to the physical
 channels. Not tried on a real mirrored session yet, all sessions so far are the reference orientation.
+
+**Angle ceiling at one placement.** Each of the 6 sessions with the finger block cut into 5 blocks in time, each block
+tested with a model trained on the other 4 (no session shift, the band didn't move). Moving-finger r, mean over the
+blocks:
+
+| | 164337 | 142500 | 112731 | 152106 | 164417 | 084252 | mean |
+|---|---|---|---|---|---|---|---|
+| network on that session alone | 0.17 | 0.30 | 0.24 | 0.13 | 0.09 | 0.10 | 0.17 |
+| network on all other sessions + that session | 0.24 | 0.32 | 0.28 | 0.08 | 0.15 | 0.14 | 0.20 |
+| ridge on the LDA features | 0.18 | 0.29 | 0.20 | 0.16 | 0.12 | 0.08 | 0.17 |
+
+Per joint (network with all data): ring knuckle 0.31, middle PIP 0.28, ring PIP 0.27, pinky PIP 0.24, middle knuckle
+0.24, pinky knuckle 0.18, index PIP 0.14, index knuckle 0.11, thumb 0.05. Even without any session shift and with all
+the data, three different models land at the same 0.2 to 0.3, far from the 0.8 target. So for moving single fingers
+the limit is the signal (8 surface electrodes over deep, overlapping finger flexors, the thumb mostly moved by hand
+muscles the band can't see) or the camera labels, not the model or the session shift. Which of the two would take a
+second label source (a flex sensor glove) to separate. The three sessions with the new cues (halfway holds, full thumb
+range) score lower (0.08 to 0.16) than the three before them (0.24 to 0.32), not yet explained. The same holds for
+the within-session ridge split by posture (moving 0.05 to 0.32, see the correction on 2026-10-05).
 
 **Every session is scored by itself.** When a completed session is saved (after its camera delay), the app starts
 the Deep learning tab's "evaluate the newest session" on it in the background, at low priority: a network trained on
