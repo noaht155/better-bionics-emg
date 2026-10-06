@@ -524,6 +524,15 @@ frames. The raw recordings are unchanged. The test now checks that no such angle
 sessions, 15 epochs: moving fingers r 0.32 / 0.35, held grips 0.59 calibrated, grips 84.1 % calibrated, all within
 the run-to-run noise of before. Too rare to matter for the scores, kept for clean labels.
 
+**Camera delay from the whole session, tried and not adopted.** The taps fail when too few agree (`084252`: not
+measured) and rely on a few seconds at each end of a 15 minute session. Tried instead: armband gyro rotation speed
+against the camera's palm rotation speed (orientation from wrist, index and pinky knuckle world landmarks), cross
+correlated over the whole session. Per session 0 to 70 ms, but the two halves of one session disagree by up to 85 ms
+and the correlation is weak (r 0.12 to 0.50), so it isn't reliable yet. It also sits about 90 ms below the taps in
+every session (taps 96 to 168 ms), so one of the two methods has a timing bias. Not resolved; the angle score barely
+depends on the delay (r within 0.03 from 50 to 200 ms), so the taps stay for now and a missing value uses the
+default. Script kept out of the repo.
+
 ## Open
 
 - Next priority (Noah, 2026-10-05): finger angles. Moving-finger r is 0.34 (see 2026-10-05). Record about 10
@@ -548,5 +557,7 @@ the run-to-run noise of before. Too rare to matter for the scores, kept for clea
 - Reverse the channel order for a mirrored band (from `band_arm` and `port_facing`) in `ml/dataset.py`, saved
   networks and live prediction. Tap test round the band to confirm channels 0 to 7 run in order round the arm, the ring
   assumes it.
+- Camera delay: find out whether the taps or the gyro comparison is biased (they differ by about 90 ms in every
+  session), for example with a video of an LED the ESP32 switches at a logged time. Then replace the taps.
 - Ring network: rerun as sessions come in; fix the rest false alarms after calibration (rest weighting); then
   continual updates with replay and the benchmark.
