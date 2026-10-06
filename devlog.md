@@ -533,6 +533,12 @@ every session (taps 96 to 168 ms), so one of the two methods has a timing bias. 
 depends on the delay (r within 0.03 from 50 to 200 ms), so the taps stay for now and a missing value uses the
 default. Script kept out of the repo.
 
+**Every session is scored by itself.** When a completed session is saved (after its camera delay), the app starts
+the Deep learning tab's "evaluate the newest session" on it in the background, at low priority: a network trained on
+all the other sessions is tested on it, and the row goes to `evaluations.csv`. So every session gets its honest score
+before anything trains on it, and the CSV builds the learning curve while recording. Skipped without torch (the Mac),
+for sessions without grips, or while another network job runs.
+
 ## Open
 
 - Next priority (Noah, 2026-10-05): finger angles. Moving-finger r is 0.34 (see 2026-10-05). Record about 10

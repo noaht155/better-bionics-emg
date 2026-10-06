@@ -42,6 +42,8 @@ class Recorder:
     def __init__(self, band, camera=None):
         self.band = band
         self.camera = camera
+        # Called with the folder of every completed session once it is fully written (camera delay included)
+        self.on_saved = None
         self.quality = SignalQuality(band.channels, band.rate)
         self.stream = StreamFilter(len(band.channels), band.rate)
         self.env_len = int(ENVELOPE_MS / 1000 * band.rate)
@@ -263,9 +265,11 @@ class Recorder:
         self.index = -1
         if measure:
             # Loading a long session takes a moment, so don't hold up the armband loop for it
-            threading.Thread(target=self._measure_delay, args=(session.folder,), daemon=True).start()
+            threading.Thread(target=self._measure_delay, args=(session.folder, completed), daemon=True).start()
+        elif completed and not practice:
+            self._saved(session.folder)
 
-    def _measure_delay(self, folder):
+    def _measure_delay(self, folder, completed):
         try:
             result = sync.camera_delay(load_session(folder))
             if result["delay_s"] is not None:
@@ -276,6 +280,16 @@ class Recorder:
         summary = self.last_summary
         if summary is not None and summary["folder"] == str(folder):
             summary["camera_delay"] = text
+        if completed:
+            self._saved(folder)
+
+    def _saved(self, folder):
+        if self.on_saved is None:
+            return
+        try:
+            self.on_saved(folder)
+        except Exception as e:
+            print(f"after saving {folder.name}: {e}")
 
     def _camera_meta(self):
         if self.camera is None:

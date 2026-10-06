@@ -11,7 +11,7 @@ From the repo root, with the emg-reading venv:
 emg-reading/.venv/Scripts/python -m pytest tests
 ```
 
-43 tests, about 9 s. Run them before committing changes to `ml/`, the filter or the quality checks. Tests that need
+45 tests, about 10 s. Run them before committing changes to `ml/`, the filter or the quality checks. Tests that need
 recorded sessions (`emg-reading/data/`) or torch skip themselves where those are missing, so on the Mac or a fresh
 clone only the synthetic tests run.
 
@@ -100,6 +100,13 @@ These decide when the recorder marks a cue bad and redoes it.
 | Test | Checks |
 |---|---|
 | `test_session_levels_keep_rest_quiet` | Haptic levels taken from the newest session (`calibrate.from_session`) are sane (rest above 0, max above rest) and, played back over that session's rest cues, leave every output off in at least 95 % of rest windows |
+
+### Automatic evaluation (`tests/test_auto_evaluate.py`)
+
+| Test | Checks |
+|---|---|
+| `test_completed_session_is_evaluated_before_training` | When a completed session is saved, the app starts "evaluate the newest session" on it (15 epochs), so every session gets an honest score before anything trains on it |
+| `test_session_without_grips_is_skipped` | A session without grips (a sync check, for example) starts nothing |
 
 ## Found by the tests
 

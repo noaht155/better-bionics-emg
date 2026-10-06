@@ -8,6 +8,7 @@ Then open http://localhost:8000. --host 0.0.0.0 makes it reachable from a tablet
 """
 import argparse
 import asyncio
+import importlib.util
 import json
 import sys
 from pathlib import Path
@@ -157,8 +158,29 @@ def refuse(e):
     raise HTTPException(409, str(e))
 
 
+# Epochs for the evaluation that runs by itself after every session, the default from the epoch sweep (devlog 2026-10-06)
+AUTO_EVALUATE_EPOCHS = 15
+
+
 def make_app(recorder, band, camera, tools):
     app = FastAPI()
+
+    def auto_evaluate(folder):
+        """Every completed session gets an honest score before anything trains on it: a network trained on all the
+        other sessions is tested on it, in the background at low priority, and the row goes to evaluations.csv.
+        Skipped without torch, without grips in the session, or while another network job runs."""
+        if importlib.util.find_spec("torch") is None:
+            return
+        good = [f.name for f in dataset.good_sessions()]
+        if folder.name not in good or len(good) < 2:
+            return
+        try:
+            tools.network.start("evaluate_newest", ["ml.train_ringnet", "--epochs", str(AUTO_EVALUATE_EPOCHS),
+                                                     "--held", folder.name])
+        except ValueError:
+            pass
+
+    recorder.on_saved = auto_evaluate
 
     @app.middleware("http")
     async def revalidate(request, call_next):
