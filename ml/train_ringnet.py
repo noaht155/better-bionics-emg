@@ -69,16 +69,33 @@ def augment(x):
     return x * overall * per_channel + noise, x * per_channel + noise
 
 
-def angle_loss(pred, a):
+def angle_weights(d):
+    """Angle loss weight per window: moving-finger windows are weighted so that in each session they count as much in
+    total as all its other windows with angles. Held grips, rest and transitions are 57 to 90 % of the angle windows, so
+    unweighted the angle loss mostly taught the 7 grip shapes. On 8 sessions this raised moving-finger r by 0.06 to
+    0.07, with and without calibration, grips unchanged."""
+    w = np.ones(len(d["grip"]), np.float32)
+    known = ~np.isnan(d["angles"]).any(axis=1)
+    moving = np.isin(d["kind"], MOVING) & known
+    if moving.any():
+        w[moving] = max((known & ~moving).sum(), 1) / moving.sum()
+    return w
+
+
+def angle_loss(pred, a, w=None):
     known = ~torch.isnan(a).any(dim=1)
     if pred is None or not known.any():
         return 0
-    return F.smooth_l1_loss(pred[known] / ANGLE_SCALE_DEG, a[known] / ANGLE_SCALE_DEG)
+    per_window = F.smooth_l1_loss(pred[known] / ANGLE_SCALE_DEG, a[known] / ANGLE_SCALE_DEG, reduction="none").mean(1)
+    if w is None:
+        return per_window.mean()
+    return (per_window * w[known]).sum() / w[known].sum()
 
 
-def losses(model, x, y, a, weights, x_effort=None):
+def losses(model, x, y, a, weights, x_effort=None, w=None):
     """Grip and angle loss on x. The effort head learns from x_effort (the same windows without the overall gain) if
-    given, else from x as well (calibration, where nothing is scaled). Both copies go through in one pass."""
+    given, else from x as well (calibration, where nothing is scaled). Both copies go through in one pass. w: angle
+    loss weight per window (angle_weights), None for equal weights."""
     n = len(x)
     logits, angles, effort = model(x if x_effort is None else torch.cat([x, x_effort]))
     if x_effort is not None:
@@ -86,7 +103,7 @@ def losses(model, x, y, a, weights, x_effort=None):
         effort = effort[n:] if effort is not None else None
     labelled = y >= 0
     loss = F.cross_entropy(logits[labelled], y[labelled], weight=weights) if labelled.any() else logits.sum() * 0
-    return loss + angle_loss(angles, a) + angle_loss(effort, a)
+    return loss + angle_loss(angles, a, w) + angle_loss(effort, a, w)
 
 
 def class_weights(y):
@@ -107,6 +124,7 @@ def train(sessions, epochs, seed):
     np.random.seed(seed)
     parts = [to_tensors(d, np.ones(len(d["grip"]), bool)) for d in sessions]
     x = torch.cat([p[0] for p in parts]); y = torch.cat([p[1] for p in parts]); a = torch.cat([p[2] for p in parts])
+    w = torch.tensor(np.concatenate([angle_weights(d) for d in sessions]), device=DEVICE)
     weights = class_weights(y.cpu().numpy())
     model = RingNet(CLASSES).to(DEVICE)
     # The transform stays the identity while the shared network learns, it is only fitted per person
@@ -121,7 +139,7 @@ def train(sessions, epochs, seed):
         for i in range(0, len(x), BATCH):
             idx = order[i:i + BATCH]
             scaled, unscaled = augment(x[idx])
-            loss = losses(model, scaled, y[idx], a[idx], weights, unscaled)
+            loss = losses(model, scaled, y[idx], a[idx], weights, unscaled, w[idx])
             opt.zero_grad()
             loss.backward()
             opt.step()

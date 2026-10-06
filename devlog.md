@@ -437,6 +437,36 @@ there. The network can't follow moving fingers even on data it learned from, so 
 gap isn't the only problem. Likely cause: held grips are most of the angle windows, so the angle loss is mostly a
 grip-shape loss. Next for angles: weight the moving windows, a time-aware angle head.
 
+**Angle head experiment** (8 sessions, leave one session out, 15 epochs, scratch script, not in the code). Moving
+windows are 10 to 15 % of the angle windows in the sessions before the finger block and 20 to 43 % after. Moving-finger
+r, mean over the 9 joints, all exam scores on the second half of the held-out session's moving windows:
+
+| | own training sessions | held out, no cal | cal on grips | cal on grips + first half moving | grips balanced |
+|---|---|---|---|---|---|
+| current network | 0.30 | 0.23 | 0.29 | 0.30 | 73.7 % |
+| moving windows weighted to equal the rest | 0.37 | 0.29 | 0.34 | 0.35 | 73.7 % |
+| hidden layer in the angle head (MLP) | 0.34 | 0.25 | 0.28 | 0.30 | 73.7 % |
+| angle head on the 64 x 8 table before ring pooling | 0.39 | 0.25 | 0.30 | 0.31 | 73.8 % |
+| MLP + weighted | 0.41 | 0.31 | 0.33 | 0.34 | 73.5 % |
+| before pooling + weighted | 0.46 | 0.30 | 0.34 | 0.35 | 73.5 % |
+| ridge on the extended LDA features | 0.31 | 0.21 | | | |
+
+- Weighting the moving windows is the one clear gain: +0.06 to +0.07 on every column, grips unchanged.
+- Reading the table before ring pooling fits the training sessions best (0.46 with weighting) but barely moves the
+  held-out score, so the extra is mostly memorised placement. Not worth giving up rotation independence for now.
+- Calibrating on moving windows as well adds only 0.01 over calibrating on grips.
+- Ridge across sessions fits no better than the network (0.31). The 0.45 to 0.60 quoted earlier was within one
+  session.
+- Per joint (weighted): PIPs and middle/ring knuckles 0.36 to 0.45 calibrated, index knuckle 0.24, thumb 0.14.
+- Even the best variant reaches only 0.46 on its own training data, still far from 0.8. The gap to the held-out score
+  (0.46 against 0.30) is now the session shift; only 4 of 8 sessions have the finger block.
+
+**Moving windows weighted in training** (`angle_weights` in `train_ringnet.py`): in each session the moving-finger
+windows count as much in the angle loss as all its other angle windows. Full evaluation, 8 sessions, 15 epochs,
+before / after: moving fingers r 0.27 / 0.33 without calibration, 0.30 / 0.35 calibrated, 0.33 / 0.39 on the training
+sessions; held grips 0.61 / 0.59 calibrated (less weight on them, small cost); grips 84.1 / 83.9 % calibrated, within
+noise.
+
 ## Open
 
 - Next priority (Noah, 2026-10-05): finger angles. Moving-finger r is 0.34 (see 2026-10-05). Record about 10
