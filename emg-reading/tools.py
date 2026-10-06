@@ -115,14 +115,22 @@ class Haptics(Tool):
         self.esp_lock = esp_lock
         self._stop = threading.Event()
 
-    def start(self, port, wifi):
-        try:
-            loaded = calibrate.load_calibration()
-        except SystemExit as e:
-            raise ValueError(str(e))
-        if loaded is None:
-            raise ValueError("no calibration yet, run the calibration first")
-        ranges, car = loaded
+    def start(self, port, wifi, session=None):
+        """With session, the levels come from that recorded session (calibrate.from_session), else from
+        calibration.json."""
+        if session is not None:
+            levels, _ = calibrate.from_session(session)
+            ranges, car = {ch: (v["rest"], v["max"]) for ch, v in levels.items()}, True
+            source = f"levels from session {Path(session).name}"
+        else:
+            try:
+                loaded = calibrate.load_calibration()
+            except SystemExit as e:
+                raise ValueError(str(e))
+            if loaded is None:
+                raise ValueError("no calibration yet, run the calibration first")
+            ranges, car = loaded
+            source = "levels from calibration.json"
         missing = [ch for ch in self.recorder.band.channels if ch not in ranges]
         if missing:
             raise ValueError(f"calibration has no entry for channels {missing}, calibrate again")
@@ -130,7 +138,7 @@ class Haptics(Tool):
             raise ValueError("the ESP32 is busy with the output test")
         self._stop.clear()
         try:
-            self._launch(self._run, port, wifi, ranges, car)
+            self._launch(self._run, port, wifi, ranges, car, source)
         except ValueError:
             self.esp_lock.release()
             raise
@@ -138,10 +146,10 @@ class Haptics(Tool):
     def stop(self):
         self._stop.set()
 
-    def _run(self, port, wifi, ranges, car):
+    def _run(self, port, wifi, ranges, car, source):
         band = self.recorder.band
         self.state.update(duties=[0] * len(OUTPUTS), lost=[False] * len(band.channels), car=car, watchdog=0,
-                          outputs=[list(chs) for chs in OUTPUTS])
+                          outputs=[list(chs) for chs in OUTPUTS], source=source)
         try:
             with Esp32(port, wifi) as esp:
                 self.state["link"] = esp.link.name
@@ -226,6 +234,7 @@ class Predictor(Tool):
         self.join(2)
         self._stop.clear()
         self._launch(self._run, model, path.name)
+        return model
 
     def stop(self):
         self._stop.set()

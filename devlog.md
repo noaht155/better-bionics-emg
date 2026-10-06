@@ -499,6 +499,25 @@ dropped-sample and contact checks. Tests on recorded sessions and torch skip whe
 0.02 to 0.8 % of the angle windows per session, 2.2 % in `2026-10-01_164337`. They are still in the training labels.
 Abduction angles also wrap round +-180 degrees on bent fingers, but abduction isn't trained.
 
+**Haptics buzzed at rest.** The rest level was the 95th percentile of a 5 s relaxed recording on the table, so 5 % of
+the calibration itself already sat above it. Played back over the recorded sessions (levels from each session's first
+rest cues and first fist, like the Calibrate tab), an output was on in 69 % of later rest windows: 47 % on the table,
+73 % arm forward, 85 % raised (median rest envelope 4.6, 5.0, 6.1 uV, so tiny rises cross a line sitting in the
+noise). Higher margins on the 10 s recording still left 4 to 15 %, mostly from the other postures.
+
+Now the levels come from a recorded session (`calibrate.from_session`): rest from every rest cue in every posture,
+max from every held grip, first second of each cue left out. Rest level = 99th percentile x 1.5. Tested on 9 sessions
+with levels from repetitions 1 and 2 and playback over repetition 3: output on in 1.7 % of rest windows (worst session
+4.2 %), grips switch an output on in 89 % of their windows, strongest output in a grip 56 % on average. Every other
+rule tried (95th x 2, 90th x 2.5, median x 4, ...) sits on the same trade-off between quiet rest and weaker grips.
+Rest levels from a session are 15 to 50 uV, far above the 5 uV of a quiet table rest, because rest cues include
+relaxing after a grip and holding the arm up.
+
+The app now starts the haptics with every prediction model (Use this model / Use this network), with levels from the
+session the model was calibrated on (calibrated network) or its newest training session (LDA), on the ESP32 link set
+on the Haptics tab; stopping the model stops them. If the ESP32 can't be reached the model keeps running and the
+Haptics tab says why. The Calibrate tab is kept for troubleshooting, with the same 99th x 1.5 rule.
+
 ## Open
 
 - Next priority (Noah, 2026-10-05): finger angles. Moving-finger r is 0.34 (see 2026-10-05). Record about 10

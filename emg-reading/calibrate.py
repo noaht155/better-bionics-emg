@@ -2,6 +2,10 @@
 
 Wear the armband, run this and follow the prompts:
     python calibrate.py [--synthetic] [--seconds 5] [--no-car]
+
+The 10 s recording is for troubleshooting. Normally the levels come from a recorded session (from_session): every
+rest cue in every posture and every held grip, minutes of data instead of seconds. The app does that by itself when
+a prediction model starts, from the session the model was calibrated on.
 """
 import argparse
 import json
@@ -13,13 +17,19 @@ import numpy as np
 from armband import Armband
 from processing import (ENVELOPE_MS, FILTER_VERSION, common_average, contact_lost, envelope_series,
                         filter_block)
+from session import load_session, segments
 
 CAL_FILE = Path(__file__).with_name("calibration.json")
 
 # Skip the start of each phase, since people react late to the prompt
 REACTION_S = 1.0
-# Rest level sits above almost all resting noise, max level below the peaks so 100% is reachable
-REST_PERCENTILE = 95
+# At rest the outputs should stay off. The rest level is the 99th percentile of the resting envelope times a margin.
+# Simulated on 9 sessions (levels from repetitions 1 and 2, tested on repetition 3): with the old 95th percentile and
+# no margin an output was on in 69 % of rest windows; 99th x 1.5 from a session brings that to 1.7 % (worst session
+# 4.2 %) while grips still switch an output on in 89 % of their windows. x 1.25 gives 3.4 % and 96 %
+REST_PERCENTILE = 99
+REST_MARGIN = 1.5
+# Max level below the peaks so 100% is reachable
 MAX_PERCENTILE = 80
 MIN_RATIO = 2.0
 
@@ -72,14 +82,47 @@ def compute(relaxed, squeezed, rate, channels, car):
     result = {}
     lines.append("ch    rest     max   ratio")
     for i, ch in enumerate(channels):
-        rest = float(np.percentile(envelope_series(relaxed_y[i], rate), REST_PERCENTILE))
-        max_ = float(np.percentile(envelope_series(squeezed_y[i], rate), MAX_PERCENTILE))
-        note = ""
-        if max_ < MIN_RATIO * rest:
-            note = "  barely changed, check the pad"
-            max_ = MIN_RATIO * rest
-        result[ch] = {"rest": round(rest, 2), "max": round(max_, 2)}
-        lines.append(f"{ch}  {rest:6.1f}  {max_:6.1f}  {max_ / rest:5.1f}x{note}")
+        result[ch], line = levels(ch, envelope_series(relaxed_y[i], rate), envelope_series(squeezed_y[i], rate))
+        lines.append(line)
+    return result, lines
+
+
+def levels(ch, rest_env, active_env, low_note="barely changed, check the pad"):
+    """Rest and max level of one channel from its envelope at rest and while active. Returns (levels, report line)."""
+    rest = float(np.percentile(rest_env, REST_PERCENTILE)) * REST_MARGIN
+    max_ = float(np.percentile(active_env, MAX_PERCENTILE))
+    note = ""
+    if max_ < MIN_RATIO * rest:
+        note = f"  {low_note}"
+        max_ = MIN_RATIO * rest
+    return {"rest": round(rest, 2), "max": round(max_, 2)}, f"{ch}  {rest:6.1f}  {max_:6.1f}  {max_ / rest:5.1f}x{note}"
+
+
+def from_session(folder, car=True):
+    """Levels from a recorded session: rest from every rest cue, max from every held grip, each without its first
+    REACTION_S and without cues marked bad. Returns ({channel: {"rest", "max"}}, report lines)."""
+    data = load_session(folder)
+    channels = data["meta"]["channels"]
+    rate = data["meta"]["rate"]
+    raw = data["emg"][channels]
+    lost = lost_channels(raw, rate)
+    y = filter_block(raw, rate)
+    if car:
+        y = common_average(y, ~lost)
+    trim = int(REACTION_S * rate)
+    holds = [s for s in segments(data["events"]) if s["kind"] == "hold" and s["sample1"] and not s["bad"]
+             and s["sample1"] - s["sample0"] > trim]
+    rest = [s for s in holds if s["label"] == "rest"]
+    grips = [s for s in holds if s["label"] != "rest"]
+    if not rest or not grips:
+        raise ValueError(f"{Path(folder).name} has no rest or grip cues to take haptic levels from")
+    lines = [f"from {Path(folder).name}: {len(rest)} rest cues, {len(grips)} grips", "ch    rest     max   ratio"]
+    result = {}
+    for i, ch in enumerate(channels):
+        env = lambda group: np.concatenate([envelope_series(y[i, s["sample0"] + trim:s["sample1"]], rate) for s in group])
+        # Some channels sit over muscles the grips hardly use, a low ratio there isn't a pad problem
+        result[ch], line = levels(ch, env(rest), env(grips), "grips barely above rest")
+        lines.append(line)
     return result, lines
 
 

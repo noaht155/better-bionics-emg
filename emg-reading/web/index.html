@@ -124,8 +124,11 @@
 <main id="tab-calibrate" class="tab single" hidden>
   <section>
     <h1>Calibration</h1>
-    <p class="muted">Measures each channel's rest and squeeze level for the haptics and saves calibration.json.
-      Redo it whenever the armband is taken off or moved.</p>
+    <p class="muted">For troubleshooting. Normally the haptics take their levels from the session the running model was
+      calibrated on (every rest cue in every posture and every grip), and start by themselves with the model. This
+      measures each channel's rest and squeeze level from a short recording instead and saves calibration.json, which
+      Start haptics on the Haptics tab uses. The rest level is set high (99th percentile of the rest times 1.5) so the
+      outputs stay off at rest.</p>
     <div class="row narrow">
       <label>Seconds per phase <input id="cal-seconds" type="number" min="2" max="30" value="5"></label>
       <label class="check"><input type="checkbox" id="cal-car" checked> Common average reference</label>
@@ -170,6 +173,7 @@
       <button id="model-stop">Stop</button>
     </div>
     <p id="model-status" class="muted"></p>
+    <p id="model-haptics" class="muted"></p>
     <p id="model-error" class="error"></p>
     <div id="live-label" class="big-label"></div>
     <canvas id="live-probs" width="900" height="320"></canvas>
@@ -208,6 +212,7 @@
     </div>
     <div class="controls"><button id="net-calibrate">Calibrate</button></div>
     <p id="net-step" class="muted"></p>
+    <p id="net-haptics" class="muted"></p>
     <p id="net-error" class="error"></p>
     <div class="controls"><button id="net-stop">Stop job</button></div>
     <table id="net-table" hidden></table>

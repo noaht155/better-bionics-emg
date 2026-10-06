@@ -91,6 +91,9 @@ class TrainSettings(BaseModel):
 
 class ModelChoice(BaseModel):
     name: str
+    # ESP32 link for the haptics that start with the model
+    port: str | None = None
+    wifi: str | None = None
 
 
 class Threshold(BaseModel):
@@ -329,10 +332,10 @@ def make_app(recorder, band, camera, tools):
         if path.parent != folder or not path.exists():
             refuse("unknown model")
         try:
-            tools.predictor.use(path)
+            model = tools.predictor.use(path)
         except ValueError as e:
             refuse(e)
-        return {"ok": True}
+        return {"ok": True, "haptics": start_model_haptics(model, choice)}
 
     @app.post("/api/model/threshold")
     def set_threshold(threshold: Threshold):
@@ -342,7 +345,28 @@ def make_app(recorder, band, camera, tools):
     @app.post("/api/model/stop")
     def stop_model():
         tools.predictor.stop()
+        if tools.haptics.state.get("with_model"):
+            tools.haptics.stop()
         return {"ok": True}
+
+    def start_model_haptics(model, link):
+        """Haptics run with every prediction model, with levels from the session the model was calibrated on (a
+        calibrated network) or its newest training session (LDA). Returns what happened, for the page. The model
+        keeps running when the haptics can't start."""
+        if model.get("kind") == "network":
+            session = model["info"].get("calibrated_on")
+        else:
+            session = (model.get("sessions") or [None])[-1]
+        if not session or not (DATA_DIR / session / "session.json").exists():
+            return "haptics not started: the model's calibration session isn't on this computer"
+        tools.haptics.stop()
+        tools.haptics.join(timeout=3)
+        try:
+            tools.haptics.start(link.port, link.wifi, DATA_DIR / session)
+        except ValueError as e:
+            return f"haptics not started: {e}"
+        tools.haptics.state["with_model"] = True
+        return f"haptics starting with levels from {session}, see the Haptics tab"
 
     @app.post("/api/hand")
     def hand(choice: HandChoice):

@@ -272,8 +272,9 @@ function drawHaptics(h, test) {
   $("hap-stop").disabled = !h.running;
   $("esp-test").disabled = h.running || test.running;
   if (h.running) {
+    const source = h.with_model ? `${h.source}, started with the model` : h.source;
     $("hap-status").textContent = h.link
-      ? `Running on ${h.link}, common average ${h.car ? "on" : "off"}, watchdog fired ${h.watchdog} times`
+      ? `Running on ${h.link}, ${source}, common average ${h.car ? "on" : "off"}, watchdog fired ${h.watchdog} times`
       : "Connecting to the ESP32...";
   } else {
     $("hap-status").textContent = test.running ? "Output test running..." : "Stopped";
@@ -330,14 +331,19 @@ $("train-start").addEventListener("click", async () => {
   }
 });
 
-$("model-use").addEventListener("click", async () => {
-  $("model-error").textContent = "";
+// Haptics start with the model, on the ESP32 link set on the Haptics tab
+async function useModel(name, error, note) {
+  $(error).textContent = "";
+  $(note).textContent = "";
   try {
-    await post("/api/model/use", { name: $("model-select").value });
+    const r = await post("/api/model/use", { name, ...linkBody() });
+    $(note).textContent = r.haptics || "";
   } catch (err) {
-    $("model-error").textContent = err.message;
+    $(error).textContent = err.message;
   }
-});
+}
+
+$("model-use").addEventListener("click", () => useModel($("model-select").value, "model-error", "model-haptics"));
 $("model-stop").addEventListener("click", () => post("/api/model/stop").catch(() => {}));
 // The Train and Deep learning tabs both set the one threshold the running model uses
 for (const [box, error] of [["model-threshold", "model-error"], ["net-threshold", "net-error"]]) {
@@ -484,14 +490,7 @@ $("net-eval").addEventListener("click", () => runNetwork("evaluate"));
 $("net-train").addEventListener("click", () => runNetwork("train"));
 $("net-calibrate").addEventListener("click", () => runNetwork("calibrate"));
 $("net-stop").addEventListener("click", () => post("/api/network/stop").catch(() => {}));
-$("net-use").addEventListener("click", async () => {
-  $("net-error").textContent = "";
-  try {
-    await post("/api/model/use", { name: $("net-live").value });
-  } catch (err) {
-    $("net-error").textContent = err.message;
-  }
-});
+$("net-use").addEventListener("click", () => useModel($("net-live").value, "net-error", "net-haptics"));
 $("net-live-stop").addEventListener("click", () => post("/api/model/stop").catch(() => {}));
 
 function networkTable(job, r) {

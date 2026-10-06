@@ -11,7 +11,7 @@ From the repo root, with the emg-reading venv:
 emg-reading/.venv/Scripts/python -m pytest tests
 ```
 
-41 tests, about 7 s. Run them before committing changes to `ml/`, the filter or the quality checks. Tests that need
+43 tests, about 9 s. Run them before committing changes to `ml/`, the filter or the quality checks. Tests that need
 recorded sessions (`emg-reading/data/`) or torch skip themselves where those are missing, so on the Mac or a fresh
 clone only the synthetic tests run.
 
@@ -94,6 +94,12 @@ These decide when the recorder marks a cue bad and redoes it.
 | `test_clean_signal_flags_nothing` | Clean data gives no warnings |
 | `test_dropped_samples_counted_from_package_numbers` | Gaps in the package numbers count as dropped samples, a counter reset doesn't |
 | `test_floating_pad_is_lost_contact` | A pad swinging over the input range is flagged as lost contact, on that channel only |
+
+### Haptics (`tests/test_haptics.py`)
+
+| Test | Checks |
+|---|---|
+| `test_session_levels_keep_rest_quiet` | Haptic levels taken from the newest session (`calibrate.from_session`) are sane (rest above 0, max above rest) and, played back over that session's rest cues, leave every output off in at least 95 % of rest windows |
 
 ## Found by the tests
 
