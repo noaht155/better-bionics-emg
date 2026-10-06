@@ -533,6 +533,27 @@ every session (taps 96 to 168 ms), so one of the two methods has a timing bias. 
 depends on the delay (r within 0.03 from 50 to 200 ms), so the taps stay for now and a missing value uses the
 default. Script kept out of the repo.
 
+**First score of `2026-10-06_084252`** (9th session, nothing trained on it; network on the other 8): grips balanced
+70.5 % without calibration (LDA 66.5 %), 85.4 % calibrated (LDA 82.7 %), rest taken for a grip 2.1 % calibrated.
+Moving fingers r only 0.15 with or without calibration.
+
+**Learning curve.** Networks trained on the first 1 to 6 sessions in recording order, each tested on the same three
+newest sessions (`152106`, `164417`, `084252`), means over the three. Calibrated LDA doesn't depend on the other
+sessions (82.4 % in every row).
+
+| sessions trained on | 1 | 2 | 3 | 4 | 5 | 6 |
+|---|---|---|---|---|---|---|
+| network, no calibration | 42.6 % | 43.2 % | 48.1 % | 64.7 % | 64.9 % | 70.6 % |
+| LDA, no calibration | 22.6 % | 41.5 % | 49.7 % | 60.5 % | 61.0 % | 64.8 % |
+| network, calibrated | 80.3 % | 82.5 % | 82.4 % | 83.3 % | 84.6 % | 85.6 % |
+| moving fingers r, calibrated | 0.00 | 0.07 | 0.05 | 0.09 | 0.13 | 0.12 |
+
+Without calibration both still climb steeply at 6 sessions, no plateau yet, so more sessions are still the biggest
+lever for grips. Calibrated, the network passes calibrated LDA from 4 sessions and reaches the 85 % target at 6.
+Angles stay very low on these three sessions (0.12 at 6), lower than the 0.32 of the 8-session leave one session out;
+the three test sessions hold most of the finger-cue data and the newest two have the new halfway and thumb cues, so
+the training sets here have little finger movement in them. Not conclusive for angles yet.
+
 **Every session is scored by itself.** When a completed session is saved (after its camera delay), the app starts
 the Deep learning tab's "evaluate the newest session" on it in the background, at low priority: a network trained on
 all the other sessions is tested on it, and the row goes to `evaluations.csv`. So every session gets its honest score
