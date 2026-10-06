@@ -585,6 +585,13 @@ second label source (a flex sensor glove) to separate. The three sessions with t
 range) score lower (0.08 to 0.16) than the three before them (0.24 to 0.32), not yet explained. The same holds for
 the within-session ridge split by posture (moving 0.05 to 0.32, see the correction on 2026-10-05).
 
+**Hand closure instead of single joints.** Mean flexion of the 8 finger joints as one value, from the same network's
+angle outputs, each of the 6 finger-block sessions tested with a network trained on all other sessions, no
+calibration: r 0.61 over all windows (0.56 to 0.67) against 0.46 for single joints, 0.34 on moving windows (0.16 to
+0.53) against 0.23. Index alone 0.60 / 0.19. Better than single fingers but not near 0.8; the moving windows are
+mostly single-finger cues where the overall closure hardly changes. A model trained on closure directly, with
+calibration, is the next thing to try for protocol B: grip from the classifier plus a continuous closure value.
+
 **Every session is scored by itself.** When a completed session is saved (after its camera delay), the app starts
 the Deep learning tab's "evaluate the newest session" on it in the background, at low priority: a network trained on
 all the other sessions is tested on it, and the row goes to `evaluations.csv`. So every session gets its honest score
