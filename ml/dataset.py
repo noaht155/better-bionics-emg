@@ -17,7 +17,7 @@ from pathlib import Path
 import numpy as np
 
 from gestures import GESTURE_SET
-from hand_angles import JOINTS
+from hand_angles import JOINTS, RELIABLE
 from ml import low_priority
 from processing import FILTER_SETTLE_S, FILTER_VERSION, filter_block
 from session import DATA_DIR, load_session, segments
@@ -30,9 +30,13 @@ TRIM_START_S = 1.0
 DEFAULT_CAMERA_DELAY_S = 0.09
 # A camera frame further than this from a window's end doesn't label it
 MAX_FRAME_GAP_S = 0.1
+# A frame with a trained joint bent backwards past this is a tracking glitch (MediaPipe lost or flipped the hand,
+# index PIP read down to -175), not a hand position. It is treated like a frame where no hand was found. 0.02 to 2.2 %
+# of the angle windows per session had one before this (2026-10-06)
+IMPOSSIBLE_DEG = -60
 CACHE = Path(__file__).with_name("cache")
 # Bump when the windows or labels change, old cache files are then rebuilt
-VERSION = f"2-f{FILTER_VERSION}-w{WINDOW}-s{STEP}-{'.'.join(GESTURE_SET)}"
+VERSION = f"3-f{FILTER_VERSION}-w{WINDOW}-s{STEP}-{'.'.join(GESTURE_SET)}"
 
 
 def good_sessions(data_dir=DATA_DIR):
@@ -106,6 +110,7 @@ def build(folder):
     if len(cam["t"]):
         t_cam = camera_times(cam, meta)
         tracked = cam["detected"] == 1
+        tracked &= ~np.any(np.stack([cam[j] for j in RELIABLE]) <= IMPOSSIBLE_DEG, axis=0)
         t_det = t_cam[tracked]
         a_det = np.stack([cam[j][tracked] for j in JOINTS], axis=1)
         t_end = data["emg_t"][ends - 1]

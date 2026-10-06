@@ -50,14 +50,15 @@ def test_labels_are_in_range(newest):
 
 @needs_sessions
 @pytest.mark.parametrize("folder", SESSIONS, ids=lambda f: f.name[:17])
-def test_few_impossible_angles(folder):
-    """Only the joints the network learns (abduction wraps round +-180 degrees on a bent finger and isn't trained).
-    Joints bent backwards past -60 degrees are camera tracking glitches: 0.02 to 0.8 % of windows per session, 2.2 %
-    in 2026-10-01_164337. They still go into the labels. This catches a session that is much worse."""
+def test_no_impossible_angles(folder):
+    """Camera frames with a trained joint bent backwards past IMPOSSIBLE_DEG are tracking glitches and are dropped from
+    the labels (0.02 to 2.2 % of angle windows per session had one). A window between a good and a dropped frame can't
+    get one either, since labels are interpolated only between good frames. Abduction isn't trained and isn't checked:
+    it wraps round +-180 degrees on a bent finger."""
     from hand_angles import JOINTS, RELIABLE
     a = dataset.load(folder)["angles"][:, [JOINTS.index(j) for j in RELIABLE]]
     a = a[~np.isnan(a).any(axis=1)]
-    assert np.mean((a <= -60).any(axis=1)) < 0.05
+    assert not (a <= dataset.IMPOSSIBLE_DEG).any()
 
 
 def test_moving_windows_count_as_much_as_the_rest():

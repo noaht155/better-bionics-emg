@@ -518,6 +518,12 @@ session the model was calibrated on (calibrated network) or its newest training 
 on the Haptics tab; stopping the model stops them. If the ESP32 can't be reached the model keeps running and the
 Haptics tab says why. The Calibrate tab is kept for troubleshooting, with the same 99th x 1.5 rule.
 
+**Camera glitch frames dropped** (`IMPOSSIBLE_DEG` in `ml/dataset.py`, cache version 3): a camera frame with a
+trained joint bent backwards past -60 degrees counts as not tracked, so windows only get angle labels from good
+frames. The raw recordings are unchanged. The test now checks that no such angle is left in any session. Same 8
+sessions, 15 epochs: moving fingers r 0.32 / 0.35, held grips 0.59 calibrated, grips 84.1 % calibrated, all within
+the run-to-run noise of before. Too rare to matter for the scores, kept for clean labels.
+
 ## Open
 
 - Next priority (Noah, 2026-10-05): finger angles. Moving-finger r is 0.34 (see 2026-10-05). Record about 10
@@ -542,7 +548,5 @@ Haptics tab says why. The Calibrate tab is kept for troubleshooting, with the sa
 - Reverse the channel order for a mirrored band (from `band_arm` and `port_facing`) in `ml/dataset.py`, saved
   networks and live prediction. Tap test round the band to confirm channels 0 to 7 run in order round the arm, the ring
   assumes it.
-- Drop camera frames with impossible joint angles (bent backwards past about -60 degrees) from the labels in
-  `ml/dataset.py`, then re-evaluate.
 - Ring network: rerun as sessions come in; fix the rest false alarms after calibration (rest weighting); then
   continual updates with replay and the benchmark.
