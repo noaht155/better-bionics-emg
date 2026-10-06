@@ -511,7 +511,9 @@ with levels from repetitions 1 and 2 and playback over repetition 3: output on i
 4.2 %), grips switch an output on in 89 % of their windows, strongest output in a grip 56 % on average. Every other
 rule tried (95th x 2, 90th x 2.5, median x 4, ...) sits on the same trade-off between quiet rest and weaker grips.
 Rest levels from a session are 15 to 50 uV, far above the 5 uV of a quiet table rest, because rest cues include
-relaxing after a grip and holding the arm up.
+relaxing after a grip and holding the arm up. Rest cues per session, filtered RMS, median over channels and cues:
+table 5.9 to 10.4 uV, arm forward 7.6 to 18.1, raised 9.7 to 18.6, about double off the table. The 5 uV quiet rest
+from the filter session is a fully relaxed arm on the table, not what a rest cue between grips measures.
 
 The app now starts the haptics with every prediction model (Use this model / Use this network), with levels from the
 session the model was calibrated on (calibrated network) or its newest training session (LDA), on the ESP32 link set
