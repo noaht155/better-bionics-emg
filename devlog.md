@@ -467,6 +467,38 @@ before / after: moving fingers r 0.27 / 0.33 without calibration, 0.30 / 0.35 ca
 sessions; held grips 0.61 / 0.59 calibrated (less weight on them, small cost); grips 84.1 / 83.9 % calibrated, within
 noise.
 
+## 2026-10-06: tests
+
+**Run-to-run noise.** The same evaluation (8 sessions, 15 epochs, moving windows weighted) with 5 random seeds, all
+rows in `evaluations.csv`. Mean, standard deviation, full range:
+
+| | mean | sd | range |
+|---|---|---|---|
+| Network, no calibration, balanced | 73.8 % | 0.55 | 73.0 to 74.3 |
+| Network + transform + grip head, balanced | 84.8 % | 0.54 | 83.9 to 85.2 |
+| Network + transform, balanced | 82.6 % | 0.23 | 82.4 to 83.0 |
+| Rest taken for a grip, calibrated | 3.5 % | 0.30 | 3.1 to 3.7 |
+| Moving fingers r, no calibration / calibrated | 0.32 / 0.35 | 0.01 | 0.30 to 0.33 / 0.33 to 0.36 |
+| Held grips r, calibrated | 0.59 | 0.01 | 0.58 to 0.60 |
+| LDA, both | 62.2 / 82.1 % | 0 | (no randomness, as it should be) |
+
+So within one set of sessions, a single run is good to about +-1.5 points on grips and +-0.03 in r: a change has to
+beat that to count. The moving-window weighting (+0.06 r) is real. The calibrated network sits at 84.8 % on average,
+the 85 % target is inside the noise. This is only the training randomness; which sessions there are moves the numbers
+far more (single held-out sessions range from 77 to 88 %).
+
+**Unit tests** in `tests/`, run with `emg-reading/.venv/Scripts/python -m pytest tests` (pytest added to the
+requirements), every test and what it protects against in `testing.md`. 41 tests, 7 s: live filter against whole
+sessions, live network prediction against the evaluation, rotation independence (and that a mirrored band is still
+not covered), calibration only touching the transform and grip head, the accuracy scores on examples worked out by
+hand, the evaluation log, the grip labels checked against each session's event log, camera frame timing, the hum,
+dropped-sample and contact checks. Tests on recorded sessions and torch skip where those are missing.
+
+**Camera glitches in the angle labels**, found by the tests: the trained joints sometimes read bent backwards past
+-60 degrees (index PIP down to -175), which a finger can't do; MediaPipe lost or flipped the hand for those frames.
+0.02 to 0.8 % of the angle windows per session, 2.2 % in `2026-10-01_164337`. They are still in the training labels.
+Abduction angles also wrap round +-180 degrees on bent fingers, but abduction isn't trained.
+
 ## Open
 
 - Next priority (Noah, 2026-10-05): finger angles. Moving-finger r is 0.34 (see 2026-10-05). Record about 10
@@ -491,5 +523,7 @@ noise.
 - Reverse the channel order for a mirrored band (from `band_arm` and `port_facing`) in `ml/dataset.py`, saved
   networks and live prediction. Tap test round the band to confirm channels 0 to 7 run in order round the arm, the ring
   assumes it.
+- Drop camera frames with impossible joint angles (bent backwards past about -60 degrees) from the labels in
+  `ml/dataset.py`, then re-evaluate.
 - Ring network: rerun as sessions come in; fix the rest false alarms after calibration (rest weighting); then
   continual updates with replay and the benchmark.
