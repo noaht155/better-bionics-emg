@@ -11,7 +11,7 @@ From the repo root, with the emg-reading venv:
 emg-reading/.venv/Scripts/python -m pytest tests
 ```
 
-45 tests, about 10 s. Run them before committing changes to `ml/`, the filter or the quality checks. Tests that need
+52 tests, about 10 s. Run them before committing changes to `ml/`, the filter or the quality checks. Tests that need
 recorded sessions (`emg-reading/data/`) or torch skip themselves where those are missing, so on the Mac or a fresh
 clone only the synthetic tests run.
 
@@ -107,6 +107,15 @@ These decide when the recorder marks a cue bad and redoes it.
 |---|---|
 | `test_completed_session_is_evaluated_before_training` | When a completed session is saved, the app starts "evaluate the newest session" on it (15 epochs), so every session gets an honest score before anything trains on it |
 | `test_session_without_grips_is_skipped` | A session without grips (a sync check, for example) starts nothing |
+
+### Mirrored band (`tests/test_mirror.py`)
+
+| Test | Checks |
+|---|---|
+| `test_mirrored` | Which band orientations count as mirrored: left arm with the port towards the hand, right arm with the port towards the shoulder. Right arm with the port towards the hand is mirrored twice and counts as normal |
+| `test_old_sessions_without_port_count_as_reference` | Sessions from before the port field count as the reference orientation |
+| `test_live_network_reverses_mirrored_windows` | A network calibrated on a mirrored session reverses the channel order of live windows |
+| `test_live_lda_reverses_mirrored_windows` | The same for an LDA model whose newest training session was mirrored |
 
 ## Found by the tests
 

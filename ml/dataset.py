@@ -17,6 +17,7 @@ from pathlib import Path
 import numpy as np
 
 from gestures import GESTURE_SET
+from channels import mirrored
 from hand_angles import JOINTS, RELIABLE
 from ml import low_priority
 from processing import FILTER_SETTLE_S, FILTER_VERSION, filter_block
@@ -85,6 +86,8 @@ def build(folder):
     data = load_session(folder)
     meta = data["meta"]
     y = filter_block(data["emg"][meta["channels"]], RATE).astype(np.float32)
+    if mirrored(meta.get("settings", {})):
+        y = np.ascontiguousarray(y[::-1])
     ends = np.arange(max(WINDOW, int(FILTER_SETTLE_S * RATE)), y.shape[1] + 1, STEP)
 
     grip = np.full(len(ends), "", dtype=object)

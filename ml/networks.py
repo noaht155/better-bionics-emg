@@ -14,6 +14,7 @@ from pathlib import Path
 
 import numpy as np
 
+from channels import mirrored
 from ml import NETWORK_DIR, dataset, gesture_model, low_priority
 from ml.ringnet import load, save
 from ml.train_ringnet import calibrate, grip_scores, predict, to_tensors, train
@@ -67,7 +68,10 @@ def calibrate_on(network, session, reps):
         print(f"on the other repetitions: balanced {100 * scores['balanced']:.1f} %, rest taken for a grip "
               f"{100 * scores['rest_false']:.1f} %, wrong grip at {gesture_model.THRESHOLD} "
               f"{100 * scores['wrong']:.1f} %", flush=True)
+    # The band sits as in this session while the calibrated network runs, so live windows are turned the same way
+    settings = json.loads((Path(session) / "session.json").read_text()).get("settings", {})
     info = dict(info, kind="calibrated", base=network, calibrated_on=result["calibrated_on"], reps=reps,
+                mirrored=mirrored(settings),
                 created=time.strftime("%Y-%m-%d %H:%M"),
                 balanced=result.get("scores", {}).get("balanced"), seen_in_training=result["seen_in_training"])
     stem = Path(network).stem

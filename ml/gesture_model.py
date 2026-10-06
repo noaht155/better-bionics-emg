@@ -22,6 +22,7 @@ import numpy as np
 from numpy.lib.stride_tricks import sliding_window_view
 from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
 
+from channels import mirrored
 from gestures import GESTURE_SET
 from ml import EMG_READING
 from processing import FILTER_SETTLE_S, FILTER_VERSION, filter_block
@@ -98,6 +99,8 @@ def session_windows(data, rate, options):
     None, posture or None). Labels only for windows fully inside the trimmed part of a hold cue."""
     channels = data["meta"]["channels"]
     y = filter_block(data["emg"][channels], rate)
+    if mirrored(data["meta"].get("settings", {})):
+        y = y[::-1]
     win = int(WINDOW_MS / 1000 * rate)
     step = int(STEP_MS / 1000 * rate)
     ends = np.arange(max(win, int(FILTER_SETTLE_S * rate)), y.shape[1] + 1, step)
@@ -253,7 +256,10 @@ def train(folders, options, evaluate_it=True):
              "channels": list(channels.pop()), "rate": metas[0]["rate"], "filter_version": FILTER_VERSION,
              "window_ms": WINDOW_MS, "step_ms": STEP_MS,
              "vote": options["vote"], "sessions": list(sessions), "subject": metas[0].get("subject"),
-             "trained": time.strftime("%Y-%m-%d %H:%M"), "windows": int(known.sum())}
+             "trained": time.strftime("%Y-%m-%d %H:%M"), "windows": int(known.sum()),
+             # Training sessions are all turned to the reference orientation, live windows are turned the same way
+             # when the band sits as in the newest of them
+             "mirrored": mirrored(max(metas, key=lambda m: m["started"]).get("settings", {}))}
     result = evaluate(sessions, options) if evaluate_it else None
     model["evaluation"] = result
     return model, result
@@ -287,6 +293,8 @@ class LivePredictor:
         model uses it). Returns (smoothed label, raw label, {class: probability}). A label is UNSURE when no
         class reaches the threshold."""
         x = filtered[:, -self.win:]
+        if self.model.get("mirrored"):
+            x = x[::-1]
         # Models saved before the extended set existed have no "extended" option and keep the base features
         feats = window_features(x, self.model["options"]["log"], self.model["options"].get("extended", False))
         if self.model["options"]["accel"]:

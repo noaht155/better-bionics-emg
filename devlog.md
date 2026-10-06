@@ -556,6 +556,14 @@ Angles stay very low on these three sessions (0.12 at 6), lower than the 0.32 of
 the three test sessions hold most of the finger-cue data and the newest two have the new halfway and thumb cues, so
 the training sets here have little finger movement in them. Not conclusive for angles yet.
 
+**Mirrored band handled** (`channels.mirrored`): left arm with the charging port towards the hand, or right arm
+with it towards the shoulder, counts as mirrored (right arm with the port towards the hand mirrors twice and counts
+as normal). Mirrored sessions get their channel order reversed when the training windows are built (`ml/dataset.py`
+and the LDA's `session_windows`), so all training data is in the reference orientation; the ring network takes care
+of any rotation left over. Live, a calibrated network reverses the window when its calibration session was mirrored,
+an LDA model when its newest training session was. Haptics are unaffected, their levels belong to the physical
+channels. Not tried on a real mirrored session yet, all sessions so far are the reference orientation.
+
 **Every session is scored by itself.** When a completed session is saved (after its camera delay), the app starts
 the Deep learning tab's "evaluate the newest session" on it in the background, at low priority: a network trained on
 all the other sessions is tested on it, and the row goes to `evaluations.csv`. So every session gets its honest score
@@ -583,9 +591,8 @@ for sessions without grips, or while another network job runs.
   flow tested with LDA first.
 - Measure the camera delay over the whole session (accelerometer against camera wrist movement) instead of 6 taps,
   which disagreed by up to 135 ms in session `164337`.
-- Reverse the channel order for a mirrored band (from `band_arm` and `port_facing`) in `ml/dataset.py`, saved
-  networks and live prediction. Tap test round the band to confirm channels 0 to 7 run in order round the arm, the ring
-  assumes it.
+- Tap test round the band to confirm channels 0 to 7 run in order round the arm, the ring assumes it. Then record
+  one mirrored session to check the channel flip on real data.
 - Camera delay: find out whether the taps or the gyro comparison is biased (they differ by about 90 ms in every
   session), for example with a video of an LED the ESP32 switches at a logged time. Then replace the taps.
 - Ring network: rerun as sessions come in; fix the rest false alarms after calibration (rest weighting); then

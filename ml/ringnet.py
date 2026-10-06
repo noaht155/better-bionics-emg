@@ -15,6 +15,7 @@ every window and can be compared live.
 """
 from collections import Counter, deque
 
+import numpy as np
 import torch
 from torch import nn
 import torch.nn.functional as F
@@ -127,7 +128,7 @@ def load_live(path):
     model, info = load(path)
     return {"kind": "network", "net": model, "info": info, "classes": model.classes, "channels": info["channels"],
             "rate": info["rate"], "window": info["window"], "step_ms": info["step_ms"], "vote": info["vote"],
-            "options": {"accel": False}}
+            "options": {"accel": False}, "mirrored": info.get("mirrored", False)}
 
 
 class NetPredictor:
@@ -155,7 +156,10 @@ class NetPredictor:
         return {j: round(float(v), 1) for j, v in zip(ANGLE_JOINTS, self._smoothed[name])}
 
     def predict(self, filtered, accel=None):
-        x = torch.tensor(filtered[None, :, -self.win:], dtype=torch.float32)
+        window = filtered[:, -self.win:]
+        if self.model.get("mirrored"):
+            window = window[::-1]
+        x = torch.tensor(np.ascontiguousarray(window)[None], dtype=torch.float32)
         with torch.no_grad():
             grips, angles, effort = self.net(x)
             probs = F.softmax(grips, dim=1)[0].numpy()
