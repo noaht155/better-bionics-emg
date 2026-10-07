@@ -598,7 +598,115 @@ all the other sessions is tested on it, and the row goes to `evaluations.csv`. S
 before anything trains on it, and the CSV builds the learning curve while recording. Skipped without torch (the Mac),
 for sessions without grips, or while another network job runs.
 
+**Angle diagnostics.** Full write-up in `diagnostics/REPORT.md` (local, git-ignored with the plots and the 25 GB of
+Ninapro DB8). 9 sessions, leave one session out, scored per joint with r and R2:
+- The pipeline is fine. The same lagged ridge (MAV, RMS, WL, 200 ms, 6 lags of 50 ms) on DB8 (12 subjects, A1 + A2
+  train, A3 test) gives multivariate R2 0.58 at 2 kHz with 16 channels against the published 0.63, 0.55 after
+  resampling to 500 Hz through our filter (so 500 Hz costs nothing), 0.46 with one row of 8.
+- Same decoder, same 8 channels, rate and filter, one placement: DB8 joint r 0.66 (moving 0.51), ours 0.35 (moving
+  0.16). Channels correlate much more on our band (mean |r| 0.60 between channels in finger cues, DB8 0.14), and
+  single-finger cues only lift the EMG 3 to 6 dB over rest (grips 8 to 11 dB), with almost the same pattern on every
+  channel. Common average or neighbour differences don't help (0.16 vs 0.17). Part of the gap is features, see
+  covariance features below.
+- Camera labels: about 1 degree frame-to-frame jitter and 2 degrees inside a held grip, against 17 to 22 degrees of
+  spread, so random label noise allows r 0.97+. Thumb MCP only moves with SD 6 degrees over all moving cues and
+  scores at chance in every model (corrected 2026-10-07: the thumb moves a lot, thumb MCP is the wrong label). Joints that aren't cued still move 10 to 23 degrees in single-finger cues (anatomy or MediaPipe, can't tell).
+- R2 on moving windows is about 0 for every model even where r is 0.3 to 0.4: r overstates the angle output.
+  Chance (labels shifted by 30 s or more) reaches r 0.14, so ridge on moving windows (0.16) is barely above it.
+- Network vs ridge across sessions: moving 0.29 vs 0.16, held grips 0.58 vs 0.29. Within one session ridge gets 0.50
+  on held grips, so most of the network's gain is handling band movement. Moving fingers have no session effect.
+- Inside its own cue the network follows the index at r -0.11 and the thumb at 0.00 (ring 0.29). Free movement 0.30,
+  single-finger cues 0.21.
+- Targets: hand closure (mean of the 8 finger joints, or the first PCA synergy) and middle+ring+pinky reach r 0.42 on
+  moving windows and 0.61 overall, the only ones with clearly positive R2 while moving (about 0.2). Velocity, synergies
+  2 and 3 and the thumb are not decodable. Smoothing labels adds 0.03.
+- Phases: static holds carry their share of the error (51 % of it, 50 % of windows), but a relaxed finger held still
+  inside a finger cue scores like movement (0.30) against 0.59 for firm grips; mean EMG level barely follows hand
+  closure (r 0.12). A relaxed bent finger looks like an open hand to the EMG.
+- Raw data: no clipping or dead channels; all 8 channels repeat their last value together in 0.01 to 0.15 % of samples
+  (WiFi stalls). 60 Hz on ch 5 15 uV median.
+- Amount of data ruled out: DB8 trained on only the first 1 to 10 repetitions of each movement (8 channels, 500 Hz,
+  our filter, same ridge) gives moving r 0.40 to 0.53 (median over 12 subjects) already at 1 repetition (2.5 min);
+  at our amount (about 7 bends per finger, 13 min) 0.44 to 0.52 against our 0.16. More data mostly raises R2.
+  DB8 is one posture, ours three, but posture turned out not to matter (next point).
+- Arm posture doesn't matter for the angles. Ridge (amplitude + covariance features), scored inside each posture:
+  across sessions trained on the same posture r 0.26, other postures 0.24, all postures 0.26; within a session, each
+  moving cue predicted from the same posture 0.33, other postures 0.37 (`diagnostics/posture_fair.py`). An earlier
+  version pooled the three postures' predictions before computing r and showed a large posture effect (0.36 to 0.46
+  against 0.11 to 0.23). That was the scoring: a per-posture model learns that posture's average hand shape, and
+  pooling turns the posture differences into a fake gain. Score r inside one posture (or one model) only. The
+  camera-free finger test that seemed to back it (LDA on the 4 finger cues, 52 % within a posture against 44 % across)
+  compared halves of the same cue, so it measures time closeness, not posture.
+- Learning curve in one posture (forearm on the table, `diagnostics/table_curve.py`): ridge trained on the table
+  windows of 1 to 8 other sessions, tested on each held-out session's table moving cues: r 0.10, 0.14, 0.17, 0.20,
+  0.21, 0.21, 0.22, 0.23 (5.5 to 44 min of table data). Still rising but flattening: +0.10 over the first 4 sessions,
+  +0.03 over the next 4. R2 negative throughout (-1.7 to -0.2), so the scale and offset are off between sessions.
+- DB8 recipe copied onto our sessions (`diagnostics/krasoulis_recipe.py`): their 8 features per channel on 128 ms
+  windows, 6 lags, ridge, tuned smoothing, 5 targets like their DOAs, the three posture blocks as A1/A2/A3 (train,
+  tune, test). With covariance features and the other sessions added to training, medians over 9 sessions on the
+  test block: index r 0.61 (R2 0.33), middle 0.66 (0.39), ring+pinky 0.68 (0.35); DB8 with 8 channels at 500 Hz
+  on the same targets 0.69 (0.43), 0.72 (0.48), 0.78 (0.59). On moving windows only 0.15, 0.32, 0.38. Thumb fails
+  (r 0.23, R2 negative; DB8 0.61 to 0.64), which pulls multivariate R2 down to 0.19 (DB8 0.46). Their features alone
+  0.07, + covariance 0.15. So on the fingers, scored their way (every window of the test block), we are within about
+  0.1 r of DB8; the thumb and moving fingers are where we fall short.
+- Channel covariance features (log of the 8x8 covariance per window, 36 values) help: same-session ridge moving r
+  0.21 with log amplitude features, 0.30 covariance, 0.34 both (scored per block, one model per block). Not yet
+  tried on DB8 or in the network.
+- Decided with Noah: the MindRove dry pads stay (kit hardware), and the band stays just below the elbow. Moving it
+  further down the forearm might separate the finger muscles better, but a short residual limb doesn't reach there,
+  so it wouldn't carry over to most transradial amputees. Better electrodes are for the socket front end (stage 6).
+
+## 2026-10-07: thumb label
+
+**The thumb moves, thumb MCP just doesn't show it** (`diagnostics/thumb_check.py`, `thumb_targets.py`). In the thumb
+cues the thumb tip travels about 104 mm across the palm in MediaPipe's world landmarks, spread over all 4 thumb
+joints (5th to 95th percentile range: CMC flexion 34, CMC abduction 19, MCP 31, IP 49 degrees). Only thumb MCP is in
+`RELIABLE`, so the networks learn the thumb from the joint that carries the least of the movement. The "SD 6 degrees"
+of 2026-10-06 was over all moving cues, mostly other fingers' cues with the thumb still.
+
+Same-day DB8 recipe (features + covariance, block 1 train, 2 tune, 3 test), median r over 9 sessions on all test
+windows (R2, r moving): thumb MCP 0.32 (0.01, 0.07), CMC flexion 0.39, CMC abduction 0.40, IP 0.41, mean of the 4 0.47
+(0.12, 0.11), thumb tip position across the palm from the raw landmarks 0.49 (0.14, 0.13), tip to pinky knuckle 0.46
+(0.14, 0.16). Index for reference 0.66 (0.31, 0.27). DB8's thumb DOAs 0.61 to 0.64. A landmark-based thumb target
+closes about half of the gap; moving-window r stays low.
+
+**Fingertip positions against joint angles** (`diagnostics/fingertip_targets.py`, same-day recipe, one ridge per
+target, median over 9 sessions). All test windows r: about equal (index angle 0.66 vs tip-wrist 0.64, middle 0.67 vs
+0.61 to 0.62, ring 0.62 vs 0.54 to 0.62, pinky 0.63 vs 0.60 to 0.62). Moving windows r, angle against the best tip
+measure: index 0.27 vs 0.36 (tip-wrist / palm length), middle 0.42 vs 0.48 (tip along the palm), ring 0.39 vs 0.54
+(tip along), pinky 0.40 vs 0.46 (tip-wrist), thumb 0.11 vs 0.16 (tip-wrist / palm; tip along 0.32 but R2 negative).
+Tip out of the palm plane (the camera's depth direction) is the worst target for every finger. Tip measures are
+better on moving fingers by 0.05 to 0.15, the ring the clearest; within noise for some. Tip-wrist / palm length is
+the most even and cancels hand size, so it's the candidate target.
+
+**Full validation** (`diagnostics/VALIDATION.md`, plan written before running; `validate.py`, `validate_net.py`). One
+harness over every factor tried, on 9 sessions and DB8 as the control, 95 % bootstrap intervals over sessions, r
+always inside one test block and one model. Best on our data: the ring network trained on the other sessions and
+fine-tuned (all weights) on the day's first two posture blocks: r moving 0.42 fingers, 0.43 fingertips, 0.52 closure,
+0.37 single joints (R2 moving 0.05, 0.09, 0.19, -0.17; all windows r 0.58 to 0.73, R2 0.04 to 0.45). Holds with
+intervals: network beats ridge everywhere (+0.05 to +0.12 r moving); other sessions + same-day fine-tune beats either
+alone; covariance features +0.05; closure easiest; fingertips equal to per-finger angles (the fingertip gain above was
+against single joints); paper features no better than amplitude. DB8 under the identical ridge harness and capped to
+our amount of data: r moving 0.58 single joints, 0.60 fingers, 0.66 closure, against our 0.29, 0.34, 0.42. The cap
+costs DB8 only 0.03, so amount of data is ruled out (same as the repetition test). The gap left is sensors/contact,
+camera labels or the movement protocol; the recordings so far can't separate them. Two harness bugs were caught and
+fixed before reading results (NaN spreading through smoothing, a cap that kept only DB8's first movements).
+
+**Grip-conditioned continuous output** (`diagnostics/validate_heads.py`, validation harness, pretrained on the other
+sessions + same-day fine-tune, one seed). Parallel heads (as now) against a cascade (continuous head reads the
+features plus the grip probabilities, one hidden layer of 64) and a mixture (one continuous head per grip, blended by
+the grip probabilities). Against parallel, paired over 9 sessions: R2 all windows +0.04 to +0.06 for both (fingers,
+fingertips, closure; intervals exclude zero), r moving +0.00 to +0.01 (no change), grip balanced accuracy unchanged
+(80.7, 80.9, 81.1 %). Knowing the grip puts the continuous output at the right level for the held grip, it doesn't
+help follow movement. Cascade and mixture are equal; the cascade also has an extra layer, so part of its gain may be
+capacity. Single seed: run-to-run noise was about 0.01 to 0.03 r (2026-10-06).
+
 ## Open
+
+- Angles (validation 2026-10-07): best is the network pretrained on all sessions plus a same-day fine-tune on
+  moving fingers, per-finger or closure targets, covariance features for ridge. Next: one session with the DB8
+  protocol (9 movements x 10 + 10 + 2, one posture) and a protractor check of the camera, to split the remaining
+  gap into protocol, sensors and labels; then a live control test, since offline r doesn't predict live control.
 
 - Next priority (Noah, 2026-10-05): finger angles. Moving-finger r is 0.34 (see 2026-10-05). Record about 10
   sessions with the new cues and rerun the evaluation every 2 or 3 sessions: if the moving-finger r keeps rising it
