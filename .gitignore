@@ -30,3 +30,6 @@ emg-reading/models/
 
 # Training windows cut from the sessions, personal data like the sessions themselves
 ml/cache/
+
+# Diagnostics: plots from personal recordings and the downloaded Ninapro DB8 data
+diagnostics/
