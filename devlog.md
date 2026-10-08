@@ -792,6 +792,21 @@ block 0.459 / 0.105 (weights 0.73 to 0.88 towards per-finger). Per-finger also w
 No separate grip + closure head; a grip mode that snaps to the template could still feel steadier live, which only
 a live test can show.
 
+**Protocol B session type** (`gestures.protocol_b_plan`). Ninapro DB8's 9 movements (thumb
+flex, thumb out and in, index, middle, ring and little, point, cylinder grip, key pinch, tripod), forearm on
+the table by default (other postures can be ticked), each a slow close
+and open over 5 s following an animated target hand, 3 s rest. Every cue's target hand animates now (`cueFrame` in
+`web/app.js`): finger cues do their halfway, pause, full bend three times, the wave bends the fingers in turn, grips
+close in half a second and hold; the cue preview plays them on a loop. In rounds (each
+movement once per round, shuffled, 6 rounds) instead of DB8's repetitions in a row, so any few minutes hold every
+movement. Each posture starts with a calibration block (every grip twice, each finger once), so every session can
+calibrate a model and still counts as a good session. One posture: 9.9 min. New cue kind `move`, added to
+`MOVING` in `ml/train_ringnet.py` and to the hum redo. Protocol A drops free movement by default (the screen showed
+it helps only about 0.03, protocol B replaces it): 3.6 min per posture. Sync taps removed from both protocols
+and the delay measurement at session end with them, since the camera delay is now fixed; `sync.py` stays for
+older sessions. The Train tab's session table shows the protocol instead of the tap delay. The Record form has a protocol switch
+that shows only that protocol's fields.
+
 ## Open
 
 - Camera delay: re-measure with `diagnostics/camera_led/led_delay.py` only if the camera, its capture settings, the
@@ -799,9 +814,9 @@ a live test can show.
   firmware or the WiFi setup change; then update `CAMERA_DELAY_S`.
 - Angles (screen 2026-10-08): no change to the network beats the current baseline on the existing recordings, keep
   it (at least 5 min of same-day fine-tune). If the guard bug is ever fixed in a rerun, guard around each test window.
-  Next: one session with the DB8
-  protocol (9 movements x 10 + 10 + 2, one posture) and a protractor check of the camera, to split the remaining
-  gap into protocol, sensors and labels; then a live control test, since offline r doesn't predict live control.
+  Next: record protocol B sessions (DB8 movements, forearm on the table) and a protractor check of the camera, to
+  split the remaining gap into protocol, sensors and labels; then a live control test, since offline r doesn't
+  predict live control.
 
 - Next priority (Noah, 2026-10-05): finger angles. Moving-finger r is 0.34 (see 2026-10-05). Record about 10
   sessions with the new cues and rerun the evaluation every 2 or 3 sessions: if the moving-finger r keeps rising it

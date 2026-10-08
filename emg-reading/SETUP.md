@@ -69,8 +69,7 @@ Open http://localhost:8000, fill in the form and start. The first run downloads 
 - Space pauses and continues. b marks the current cue as bad, or the gesture before it during the first 1.5 s of a rest. Stop needs two clicks.
 - Each session is saved to `data/<date>_<time>_<subject>/` as it records. `session.load_session()` reads it back.
 - Tick **Practice run** to go through the same cues, camera tracking and warnings without saving anything, for checking the camera position or the setup. The tick is not remembered between page loads, so a real session is never skipped by accident.
-- The camera delay is measured from the sync taps when a session ends and saved as `camera_delay_s` in `session.json`. Subtract it from the camera times. For a quick check, start a session with no postures ticked: it only does the taps. `python sync.py data/<session>` shows each tap, `--save` writes the result again.
-- For the taps, keep the hand in view, lift it and slap the table hard once. The tracker must not lose the hand during the slap, a tap with missed frames is skipped.
+- The camera delay is fixed at 28 ms in `ml/dataset.py` (`CAMERA_DELAY_S`), from an LED test of the camera (37 ms) and the armband round trip (17 ms). Sessions no longer have sync taps. Older sessions still have `camera_delay_s` from their taps in `session.json`; it is not used (the taps read 96 to 168 ms). `python sync.py data/<session>` still shows an old session's taps.
 - `--camera 1` picks another webcam, `--no-camera` records EMG only, `--host 0.0.0.0` allows a tablet on the same network.
 - `--replay data/2026-09-30-filter` plays recorded EMG instead of the armband, `--camera clip.mp4` uses a video file, for testing the app.
 

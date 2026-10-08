@@ -10,12 +10,11 @@ import traceback
 
 import numpy as np
 
-import sync
 from calibrate import CAL_FILE
-from gestures import session_plan
+from gestures import plan_for
 from processing import ENVELOPE_MS, FILTER_VERSION, StreamFilter, envelope
 from quality import HUM_FAST_OF, HUM_WARN_UV, SignalQuality
-from session import PracticeWriter, SessionWriter, load_session
+from session import PracticeWriter, SessionWriter
 
 TICK_S = 0.02
 # Hand counts as out of view after this long without a detection
@@ -25,7 +24,7 @@ CAMERA_SLOW_FPS = 25
 # Mark bad within this long of a rest cue starting still means the gesture before it
 BAD_GRACE_S = 1.5
 # Cues whose data is used for training. Hum on any channel during one marks it bad and pauses for a redo
-HUM_REDO_KINDS = ("hold", "finger", "free")
+HUM_REDO_KINDS = ("hold", "finger", "free", "move")
 # EMG history kept for the signal view and the haptics
 HISTORY_S = 4
 # How long a failed armband read stays in the warning bar
@@ -163,14 +162,13 @@ class Recorder:
         with self._lock:
             if self.session is not None:
                 raise ValueError("a session is already running")
-            plan = session_plan(settings["postures"], settings["reps"], settings["hold_s"], settings["rest_s"],
-                                settings["free_s"])
+            plan = plan_for(settings)
             if self.camera is not None:
                 self.camera.hand = settings["tracked_hand"]
             meta = {"settings": settings, "plan": plan, "rate": self.band.rate, "source": self.band.source,
                     "rows": self.band.rows, "channels": self.band.channels, "filter_version": FILTER_VERSION,
                     "calibration": json.loads(CAL_FILE.read_text()) if CAL_FILE.exists() else None,
-                    "camera": self._camera_meta(), "camera_delay_s": None}
+                    "camera": self._camera_meta()}
             writer = PracticeWriter if settings.get("practice") else SessionWriter
             self.session = writer(meta, settings["subject"])
             self.plan = plan
@@ -258,30 +256,11 @@ class Recorder:
         seconds = session.meta["ended"] - session.meta["started"]
         detected = session.detected / session.frames if session.frames else None
         practice = session.folder is None
-        measure = session.frames and not practice
         self.last_summary = dict(summary, folder=_folder_text(session), practice=practice, seconds=seconds,
-                                 samples=session.samples, frames=session.frames, hand_detected=detected,
-                                 camera_delay="measuring the camera delay..." if measure else None)
+                                 samples=session.samples, frames=session.frames, hand_detected=detected)
         self.index = -1
-        if measure:
-            # Loading a long session takes a moment, so don't hold up the armband loop for it
-            threading.Thread(target=self._measure_delay, args=(session.folder, completed), daemon=True).start()
-        elif completed and not practice:
+        if completed and not practice:
             self._saved(session.folder)
-
-    def _measure_delay(self, folder, completed):
-        try:
-            result = sync.camera_delay(load_session(folder))
-            if result["delay_s"] is not None:
-                sync.save(folder, result)
-            text = sync.summary(result)
-        except Exception as e:
-            text = f"camera delay: failed ({e})"
-        summary = self.last_summary
-        if summary is not None and summary["folder"] == str(folder):
-            summary["camera_delay"] = text
-        if completed:
-            self._saved(folder)
 
     def _saved(self, folder):
         if self.on_saved is None:

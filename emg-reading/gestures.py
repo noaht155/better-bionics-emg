@@ -59,8 +59,6 @@ POSTURES = {
 # Gentle gestures barely rose above rest with the arm up on 2026-10-01 and were the ones the model missed.
 # Medium rather than maximum effort, the model still has to work on everyday grips
 HOLD_TEXT = "hold it firmly and steady, medium effort"
-SYNC_TAPS = 3
-SYNC_TEXT = "TAP\nlift your hand and slap the table once with your palm, sharply"
 FREE_TEXT = "MOVE YOUR FINGERS\nslowly, any way: open, close, one finger at a time"
 
 # Protocol B has to learn each finger on its own. The held grips are 7 fixed shapes, and in free movement the fingers
@@ -90,31 +88,55 @@ for _f in FINGERS:
     GESTURES[f"flex_{_f}"] = (THUMB_TEXT if _f == "thumb" else FINGER_TEXT.format(_f.upper()), _bent(_f))
 
 
+# Protocol B, after Ninapro DB8 (Krasoulis 2019): its 9 movements, each a slow close and open following the animated
+# target hand. Thumb rotation is replaced by abduction, the camera follows it better
+MOVE_S = 5.0
+MOVE_ROUNDS = 6
+MOVE_FOLLOW = "follow the hand: close slowly, then open"
+CYLINDER = (60, 70, 40)
+
+
+def _shape(**joints):
+    pose = dict(zip(JOINTS, GESTURES["open"][1]))
+    pose.update(joints)
+    return [float(pose[j]) for j in JOINTS]
+
+
+MOVEMENTS = {
+    "move_thumb_flex": ("THUMB FLEX\nbend it across the palm and back", _bent("thumb")),
+    "move_thumb_abd": ("THUMB OUT AND IN\nmove it away from the index and back",
+                       _shape(thumb_cmc_flex=-20, thumb_cmc_abd=60, thumb_mcp=5, thumb_ip=5)),
+    "move_index": ("INDEX\nbend it fully and back", _bent("index")),
+    "move_middle": ("MIDDLE\nbend it fully and back", _bent("middle")),
+    "move_ring_little": ("RING AND LITTLE\nbend both together and back",
+                         _shape(ring_mcp_flex=60, ring_pip=80, ring_dip=40, pinky_mcp_flex=60, pinky_pip=80,
+                                pinky_dip=40)),
+    "move_point": ("POINT\ncurl all but the index and back", GESTURES["point"][1]),
+    "move_cylinder": ("CYLINDER GRIP\nclose round a bottle and back", _pose(THUMB_OVER, CYLINDER, CYLINDER, CYLINDER,
+                                                                           CYLINDER)),
+    "move_key": ("KEY PINCH\nthumb pad to the side of the index and back", GESTURES["key"][1]),
+    "move_tripod": ("TRIPOD\nthumb, index and middle tips together and back", GESTURES["tripod"][1]),
+}
+GESTURES.update(MOVEMENTS)
+
+
 def _cue(kind, label, text, seconds, posture):
     return {"kind": kind, "label": label, "text": text, "seconds": seconds, "posture": posture}
 
 
-def _sync_block():
-    # Sharp taps show up in the accelerometer and on camera, so the camera delay can be measured afterwards
-    cues = [_cue("break", "setup", "Forearm on the table for the sync taps.\nPress Continue when ready.", None, "table"),
-            _cue("hold", "rest", GESTURES["rest"][0], 2, "table")]
-    for _ in range(SYNC_TAPS):
-        cues += [_cue("sync", "sync_tap", SYNC_TEXT, 2, "table"), _cue("hold", "rest", GESTURES["rest"][0], 2, "table")]
-    return cues
-
-
-def session_plan(postures, reps=3, hold_s=4.0, rest_s=3.0, free_s=60.0, seed=None):
-    """Cue list: sync taps, then per posture every gesture of GESTURE_SET reps times in shuffled order with rest in
-    between, then free movement, and sync taps again at the end.
+def session_plan(postures, reps=3, hold_s=4.0, rest_s=3.0, free_s=0.0, seed=None):
+    """Cue list: per posture every gesture of GESTURE_SET reps times in shuffled order with rest in between, then
+    free movement if free_s is set. No sync taps since 2026-10-08: the camera delay is fixed (ml/dataset.py).
 
     In every posture each finger is also bent on its own, then all of them one after another.
 
     kind is "hold" (a held gesture or rest, protocol A), "finger" (one finger moving, protocol B), "free"
-    (continuous movement), "sync" (a tap) or "break" (waits for Continue). seconds is None for breaks."""
+    (continuous movement), "move" (protocol_b_plan), "sync" (a tap, older sessions) or "break" (waits for Continue). seconds is None
+    for breaks. Free movement is off by default since 2026-10-08, protocol_b_plan records movement instead."""
     rng = random.Random(seed)
     moves = [g for g in GESTURE_SET if g != "rest"]
     rest = GESTURES["rest"][0]
-    cues = _sync_block()
+    cues = []
     for posture in postures:
         cues.append(_cue("break", "setup", f"{POSTURES[posture]}.\nPress Continue when ready.", None, posture))
         cues.append(_cue("hold", "rest", rest, rest_s, posture))
@@ -129,4 +151,47 @@ def session_plan(postures, reps=3, hold_s=4.0, rest_s=3.0, free_s=60.0, seed=Non
         cues += [_cue("finger", "wave", WAVE_TEXT, WAVE_S, posture), _cue("hold", "rest", rest, rest_s, posture)]
         if free_s > 0:
             cues += [_cue("free", "free", FREE_TEXT, free_s, posture), _cue("hold", "rest", rest, rest_s, posture)]
-    return cues + _sync_block()
+    return cues
+
+
+def protocol_b_plan(postures=("table",), rounds=MOVE_ROUNDS, move_s=MOVE_S, rest_s=3.0, hold_s=4.0, seed=None):
+    """Per posture a calibration block (every grip twice, each finger once) and the 9 movements of MOVEMENTS in
+    rounds, each movement once per round in shuffled order. Normally one posture, the forearm on the table like
+    Ninapro; posture made no difference to the angles (2026-10-06).
+
+    The calibration block keeps every session usable for calibrating a model (it has grips, so it is also a good
+    session for training). Ninapro records all repetitions of a movement in a row; rounds spread each movement over
+    the whole posture instead, so any few minutes hold all of them. kind "move" is a movement following the animated
+    target, it opens and closes once in move_s."""
+    rng = random.Random(seed)
+    grips = [g for g in GESTURE_SET if g != "rest"]
+    moves = list(MOVEMENTS)
+    rest = GESTURES["rest"][0]
+    cues = []
+    for posture in postures:
+        cues.append(_cue("break", "setup", f"{POSTURES[posture]}.\nPress Continue when ready.", None, posture))
+        cues.append(_cue("hold", "rest", rest, rest_s, posture))
+        for _ in range(2):
+            rng.shuffle(grips)
+            for g in grips:
+                cues += [_cue("hold", g, f"{GESTURES[g][0]}\n{HOLD_TEXT}", hold_s, posture),
+                         _cue("hold", "rest", rest, rest_s, posture)]
+        for f in FINGERS:
+            cues += [_cue("finger", f"flex_{f}", GESTURES[f"flex_{f}"][0], FINGER_S, posture),
+                     _cue("hold", "rest", rest, rest_s, posture)]
+        for _ in range(rounds):
+            rng.shuffle(moves)
+            for m in moves:
+                title, how = MOVEMENTS[m][0].split("\n")
+                cues += [_cue("move", m, f"{title}\n{how}, {MOVE_FOLLOW}", move_s, posture),
+                         _cue("hold", "rest", rest, rest_s, posture)]
+    return cues
+
+
+def plan_for(settings, seed=None):
+    """The cue list for a session's settings, either protocol."""
+    if settings.get("protocol", "A") == "B":
+        return protocol_b_plan(settings["postures"], settings.get("rounds", MOVE_ROUNDS), settings.get("move_s", MOVE_S),
+                               settings["rest_s"], settings["hold_s"], seed)
+    return session_plan(settings["postures"], settings["reps"], settings["hold_s"], settings["rest_s"],
+                        settings.get("free_s", 0), seed)

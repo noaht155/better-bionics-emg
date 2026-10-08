@@ -292,7 +292,7 @@ async function loadTrainLists() {
   const checked = new Set([...table.querySelectorAll("input:checked")].map((c) => c.value));
   const listed = new Set([...table.querySelectorAll("input")].map((c) => c.value));
   const usable = sessions.filter((s) => s.gestures > 0);
-  table.innerHTML = "<tr><th></th><th>Session</th><th>Arm</th><th>Postures</th><th>Placement</th><th>Length</th><th>Camera delay</th></tr>";
+  table.innerHTML = "<tr><th></th><th>Session</th><th>Arm</th><th>Postures</th><th>Placement</th><th>Length</th><th>Protocol</th></tr>";
   for (const s of usable) {
     const tr = document.createElement("tr");
     // Keep the choice for sessions already listed, a session recorded since then starts ticked if it finished
@@ -300,7 +300,7 @@ async function loadTrainLists() {
     tr.innerHTML = `<td><input type="checkbox" value="${s.name}" ${on ? "checked" : ""}></td><td>${s.name}</td>
       <td>${s.band_arm ?? ""}${s.port_facing ? `, port to ${s.port_facing}` : ""}</td><td>${(s.postures || []).join(", ")}</td><td>${s.placement || ""}</td>
       <td>${s.seconds ? fmtTime(s.seconds) : ""}${s.completed ? "" : " (stopped early)"}</td>
-      <td>${s.camera_delay_s != null ? `${Math.round(1000 * s.camera_delay_s)} ms` : "-"}</td>`;
+      <td>${s.protocol}</td>`;
     table.append(tr);
   }
   if (!usable.length) table.innerHTML = "<tr><td>No sessions with gestures yet, record one on the Record tab.</td></tr>";

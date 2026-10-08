@@ -26,7 +26,7 @@ from armband import Armband, Replay
 from calibrate import load_calibration
 from camera import Camera
 from esp32_link import WIFI_IP
-from gestures import GESTURE_SET, GESTURES, POSTURES, session_plan
+from gestures import GESTURE_SET, GESTURES, POSTURES, plan_for
 from hand_angles import JOINTS, RELIABLE
 from processing import spectrum
 from recorder import Recorder
@@ -50,12 +50,15 @@ class SessionSettings(BaseModel):
     tracked_hand: Literal["right", "left"]
     placement: str = ""
     notes: str = ""
-    # None gives a short session of only the sync taps, to check the camera delay
-    postures: list[Literal[tuple(POSTURES)]]
+    postures: list[Literal[tuple(POSTURES)]] = Field(min_length=1)
+    # A: held grips and single fingers. B: the Ninapro-style movements (gestures.protocol_b_plan)
+    protocol: Literal["A", "B"] = "A"
     reps: int = Field(ge=1, le=20)
     hold_s: float = Field(ge=1, le=30)
     rest_s: float = Field(ge=1, le=30)
-    free_s: float = Field(ge=0, le=600)
+    free_s: float = Field(0, ge=0, le=600)
+    rounds: int = Field(6, ge=1, le=20)
+    move_s: float = Field(5, ge=2, le=15)
     # Same run, nothing saved, for trying out the setup
     practice: bool = False
 
@@ -76,10 +79,14 @@ class Esp32Link(BaseModel):
 
 class PlanSettings(BaseModel):
     postures: list[Literal[tuple(POSTURES)]]
+    # A: held grips and single fingers. B: the Ninapro-style movements (gestures.protocol_b_plan)
+    protocol: Literal["A", "B"] = "A"
     reps: int = Field(ge=1, le=20)
     hold_s: float = Field(ge=1, le=30)
     rest_s: float = Field(ge=1, le=30)
-    free_s: float = Field(ge=0, le=600)
+    free_s: float = Field(0, ge=0, le=600)
+    rounds: int = Field(6, ge=1, le=20)
+    move_s: float = Field(5, ge=2, le=15)
 
 
 class TrainSettings(BaseModel):
@@ -123,7 +130,7 @@ def session_list():
                     "placement": settings.get("placement"),
                     "gestures": gestures, "completed": meta.get("completed"),
                     "seconds": round(meta["ended"] - meta["started"]) if meta.get("ended") else None,
-                    "camera_delay_s": meta.get("camera_delay_s")})
+                    "protocol": settings.get("protocol", "A")})
     return out
 
 
@@ -213,7 +220,7 @@ def make_app(recorder, band, camera, tools):
     def plan_length(settings: PlanSettings):
         """Length of the session these settings give, from the real plan so the page needn't copy its logic. The
         plan itself is for the cue preview; grip order is shuffled again when the session starts."""
-        plan = session_plan(settings.postures, settings.reps, settings.hold_s, settings.rest_s, settings.free_s)
+        plan = plan_for(settings.model_dump())
         return {"seconds": sum(c["seconds"] or 0 for c in plan), "cues": len(plan), "plan": plan}
 
     @app.post("/api/session/start")

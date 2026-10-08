@@ -37,7 +37,7 @@ DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 BATCH = 512
 CALIBRATION_STEPS = 300
 THRESHOLD = gesture_model.THRESHOLD
-MOVING = ["finger", "free"]
+MOVING = ["finger", "free", "move"]
 ANGLE_ROWS = {"none moving": "moving fingers, no calibration",
               "transform moving": "moving fingers, transform from 2 repetitions",
               "none held": "held grips, no calibration",
