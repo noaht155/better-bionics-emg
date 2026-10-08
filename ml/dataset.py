@@ -27,8 +27,10 @@ RATE = 500
 WINDOW = 100
 STEP = 25
 TRIM_START_S = 1.0
-# Used when a session's own camera delay couldn't be measured, about the middle of the measured 68 to 126 ms
-DEFAULT_CAMERA_DELAY_S = 0.09
+# Camera frames reach the PC 37 ms after they are taken (LED test 2026-10-07) and EMG samples arrive up to 17 ms
+# late (armband round trip 2026-10-08), so the true shift is 20 to 37 ms; the middle is off by at most 9 ms. Used for
+# every session: the tap delays in session.json (96 to 168 ms) were biased and are no longer read
+CAMERA_DELAY_S = 0.028
 # A camera frame further than this from a window's end doesn't label it
 MAX_FRAME_GAP_S = 0.1
 # A frame with a trained joint bent backwards past this is a tracking glitch (MediaPipe lost or flipped the hand,
@@ -37,7 +39,7 @@ MAX_FRAME_GAP_S = 0.1
 IMPOSSIBLE_DEG = -60
 CACHE = Path(__file__).with_name("cache")
 # Bump when the windows or labels change, old cache files are then rebuilt
-VERSION = f"3-f{FILTER_VERSION}-w{WINDOW}-s{STEP}-{'.'.join(GESTURE_SET)}"
+VERSION = f"4-f{FILTER_VERSION}-w{WINDOW}-s{STEP}-{'.'.join(GESTURE_SET)}"
 
 
 def good_sessions(data_dir=DATA_DIR):
@@ -55,7 +57,7 @@ def good_sessions(data_dir=DATA_DIR):
 def camera_times(cam, meta):
     """Frame times on the EMG clock. Frames arrive in pairs from Media Foundation, so the arrival time jitters by
     up to a frame. The camera itself runs at a steady rate and every grabbed frame has a number, so a straight line
-    of arrival time against frame number gives clean times. Then the measured camera delay is taken off."""
+    of arrival time against frame number gives clean times. Then the fixed camera delay is taken off."""
     t, frame = cam["t"], cam["frame"]
     if len(t) < 10:
         return t
@@ -63,8 +65,7 @@ def camera_times(cam, meta):
     fitted = a * frame + b
     # Arrival is never early, only late, so the line is moved down to the earliest arrivals
     fitted += np.percentile(t - fitted, 5)
-    delay = meta.get("camera_delay_s")
-    return fitted - (delay if delay is not None else DEFAULT_CAMERA_DELAY_S)
+    return fitted - CAMERA_DELAY_S
 
 
 def _repetitions(segs):

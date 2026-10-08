@@ -19,22 +19,22 @@ def frames(seconds=60, delay=0.12, seed=0):
 
 
 def test_fit_removes_jitter_and_delay():
-    cam, taken = frames()
-    t = dataset.camera_times(cam, {"camera_delay_s": 0.12})
+    cam, taken = frames(delay=dataset.CAMERA_DELAY_S)
+    t = dataset.camera_times(cam, {})
     err = t - taken
     # Within a few ms of when the frame was taken, no frame-to-frame jitter left
     assert np.abs(err).max() < 0.01
     assert np.std(np.diff(t)) < 1e-4
 
 
-def test_unknown_delay_uses_the_default():
-    cam, taken = frames(delay=dataset.DEFAULT_CAMERA_DELAY_S)
-    t = dataset.camera_times(cam, {"camera_delay_s": None})
-    assert np.abs(t - taken).max() < 0.01
+def test_tap_delay_in_session_is_ignored():
+    """The taps were biased (96 to 168 ms against 20 to 37 ms measured directly), a stored value must not be used."""
+    cam, _ = frames(delay=dataset.CAMERA_DELAY_S)
+    assert np.array_equal(dataset.camera_times(cam, {}), dataset.camera_times(cam, {"camera_delay_s": 0.15}))
 
 
 def test_wrong_delay_shifts_everything():
-    """The fit can only remove jitter, the delay itself has to be measured: a wrong value moves every label."""
+    """The fit can only remove jitter, the delay itself has to be right: a different real delay moves every label."""
     cam, taken = frames(delay=0.12)
-    t = dataset.camera_times(cam, {"camera_delay_s": 0.05})
+    t = dataset.camera_times(cam, {})
     assert np.median(t - taken) > 0.06

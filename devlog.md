@@ -776,17 +776,18 @@ interval over 120 tests, all 3 seeds and no gain on shifted labels.
 - So nothing available on the existing recordings moves moving-finger decoding by 0.05. The gap to DB8 (0.71 vs
   0.39 to 0.46) is in what the recordings contain, not in the model or training.
 
+**Fixed camera delay in training** (`ml/dataset.py`). Labels now use one fixed delay of 28 ms for every session
+(`CAMERA_DELAY_S`), the middle of the 20 to 37 ms the LED test and the armband round trip allow, off by at most
+9 ms. The tap delays in `session.json` (96 to 168 ms) are no longer read; the recorder still measures and shows
+them. Camera frames now sit 70 to 140 ms later on the EMG clock than before. Cache version 4, so `ml/cache/` rebuilds on
+the next load. The screen above and every earlier angle number used the tap delays. Tests updated
+(`test_camera.py`).
+
 ## Open
 
-- Next major fix, not before the diagnostics screen (`diagnostics/out/validation/`) has finished, since it imports
-  `ml/` and `emg-reading/`: replace the tap delay with a fixed one. Camera 37 ms on the `dataset.camera_times`
-  clock (LED test 2026-10-07), armband round trip 17 ms (2026-10-08), so the label shift is between 20 and 37 ms.
-  Pick a value in that range with Noah (the middle, about 28 ms, is off by at most 9 ms, under a third of a camera
-  frame). `dataset.camera_times` uses
-  `camera_delay_s` from `session.json` (written by `sync.py` from the taps, fallback `DEFAULT_CAMERA_DELAY_S`).
-  Rebuild `ml/cache/` and rerun the angle evaluation after. Re-measure with `diagnostics/camera_led/led_delay.py`
-  only if the camera, its capture settings, the grab code or the computer change, and with
-  `diagnostics/armband_rtt/armband_rtt.py rtt` if the band, its firmware or the WiFi setup change.
+- Camera delay: re-measure with `diagnostics/camera_led/led_delay.py` only if the camera, its capture settings, the
+  grab code or the computer change, and with `diagnostics/armband_rtt/armband_rtt.py rtt` if the band, its
+  firmware or the WiFi setup change; then update `CAMERA_DELAY_S`.
 - Angles (screen 2026-10-08): no change to the network beats the current baseline on the existing recordings, keep
   it (at least 5 min of same-day fine-tune). If the guard bug is ever fixed in a rerun, guard around each test window.
   Next: one session with the DB8

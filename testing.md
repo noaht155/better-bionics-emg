@@ -74,13 +74,13 @@ Every reported accuracy comes from these functions, so they are checked on examp
 ### Camera timing (`tests/test_camera.py`)
 
 Frames arrive in pairs with up to a frame of jitter; `dataset.camera_times` fits a straight line of time against
-frame number and takes off the measured camera delay.
+frame number and takes off the fixed camera delay (28 ms, `CAMERA_DELAY_S`).
 
 | Test | Checks |
 |---|---|
 | `test_fit_removes_jitter_and_delay` | On 60 s of simulated paired, jittered, delayed frames, every fitted time is within 10 ms of when the frame was taken, with no frame-to-frame jitter left |
-| `test_unknown_delay_uses_the_default` | A session without a measured delay uses the 90 ms default |
-| `test_wrong_delay_shifts_everything` | The fit can't fix a wrong delay: it shifts every label. The delay has to be measured |
+| `test_tap_delay_in_session_is_ignored` | A tap delay stored in `session.json` is not used, the taps were biased |
+| `test_wrong_delay_shifts_everything` | The fit can't fix a wrong delay: it shifts every label. The delay has to be right |
 
 ### Signal quality (`tests/test_quality.py`)
 
