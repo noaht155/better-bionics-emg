@@ -701,8 +701,62 @@ fingertips, closure; intervals exclude zero), r moving +0.00 to +0.01 (no change
 help follow movement. Cascade and mixture are equal; the cascade also has an extra layer, so part of its gain may be
 capacity. Single seed: run-to-run noise was about 0.01 to 0.03 r (2026-10-06).
 
+**Two rings of 4 instead of one ring of 8** (separate test, `diagnostics/ring_layout/layout.py`, `out/results.md`
+there). Idea: move 4 pads (2 loose + the hub's 2 on the bottom, 4 on top) into a second ring. Checked on DB8, which
+has two aligned rows of 8 (3 and 5.5 cm below the elbow; row 2 sensor i matches row 1 sensor i by correlation),
+same-day ridge and scoring of `validate.py`, S1 to S10 (S11 and S12 have dead row 2 sensors, so the old "row 2"
+number in `diagnostics/REPORT.md` includes dead channels for them). Fingers r moving, amplitude + covariance: one ring
+of 8 0.63, 4+4 aligned 0.62, 4+4 staggered 0.64, one ring of 4 0.48, all 16 0.73. Paired against one ring of 8:
+4+4 aligned -0.01, staggered +0.01 (intervals include zero), ring of 4 -0.16, 16 channels +0.09. Same pattern for
+closure and R2. With 8 channels, moving pads into a second ring changes nothing; channel count helps (4 to 8 +0.16,
+8 to 16 +0.09). Not worth rearranging the band. A second ring is worth it in the socket only as extra channels.
+
+**Camera delay from an LED** (separate test, `diagnostics/camera_led/led_delay.py`). The ESP32 switches the ch 0 LED
+(`M` command over USB, round trip 3 ms) at a logged time, the webcam films it with the recorder's capture settings,
+first frame past half brightness counts. 40 on and 40 off switches, dark room, CPU busy with the screen. Camera delay
+about 64 ms with frame times fitted against the grab number, 80 ms with raw arrival times (median minus half a frame,
+30.0 fps). On switches show up about 47 ms earlier than off switches (the lit LED saturates, so a partly lit frame
+already passes the threshold); the median over both cancels that. Raw arrival times scatter -32 to +38 ms around the
+fit. Repeated with the room light on: 63 ms fitted, 70 ms raw, on and off 37 ms apart, so room light doesn't change
+it. With frame times built like `dataset.camera_times` (fitted line moved down to the earliest 5 % of arrivals,
+about 26 ms lower) the delay is 37 ms in both runs, and that is the number for the labels. This is the camera
+alone. A session's delay is the camera's minus the armband's own WiFi delay on the EMG stamps, so it should be under
+37 ms: the taps (96 to 168 ms) can't be right unless the EMG stamps run early, the gyro (15 to 50 ms) is close. Confirm by measuring
+the armband's delay once the band works again (done 2026-10-08, round trip 17 ms).
+
+## 2026-10-08: armband round trip
+
+**Round trip from mode switches** (`diagnostics/armband_rtt/armband_rtt.py`, band powered, not worn, pads not
+needed). What the modes do to the EMG rows: `EEG_MODE` is the normal recording mode (offsets of tens of mV per
+channel). `TEST_MODE` replaces the inputs with an internal 2 Hz square wave, 314 uV peak to peak, the same on all 8
+channels, near 0 DC. `IMP_MODE` streams exact zeros, and back in EEG the inputs swung by tens of mV for seconds
+after, so it isn't used. Each test: switch to TEST at a logged `time.time()`, back to EEG, 40 times each at random
+gaps, first sample where most channels step by over 10 mV. Two runs, 80 switches each:
+- Round trip 16.8 ms median in both runs (14.6 to 26.9 ms, 10 to 90 % about 15.5 to 18 ms), same in both
+  directions. Raw arrival times 17.6 ms. ICMP ping to the band 1 ms median, so the WiFi link is a small part.
+- The band stops sampling for 11.5 ms (7 to 13) at every switch without skipping package numbers, so a run with
+  switches fits at 492 Hz. Each switch got its own clock fit for that reason. Recordings have no switches.
+- The EMG stamps can't lag the true sample time by more than the round trip, so the label shift is between
+  37 - 17 = 20 ms and 37 ms. Equal halves (28.6 ms) don't apply here: most of the 17 ms is the switch pause and
+  packet filling on the band, not two equal WiFi legs. Either way the taps (96 to 168 ms) are wrong.
+- Once (right after a survey that used `IMP_MODE`) the band opened a new stream still in TEST, though EEG had been
+  sent last. Not repeated in two later opens. The recorder never sends a mode, and TEST looks clean to the hum and
+  contact checks, so all 8 channels equal near 0 would be the sign.
+- Method: much better than the taps. It needs no arm, no camera and no timing guess, gives a clean step on all 8
+  channels, and the two runs agreed to 0.1 ms. Use it for the armband side from now on, the LED test for the
+  camera side.
+
 ## Open
 
+- Next major fix, not before the diagnostics screen (`diagnostics/out/validation/`) has finished, since it imports
+  `ml/` and `emg-reading/`: replace the tap delay with a fixed one. Camera 37 ms on the `dataset.camera_times`
+  clock (LED test 2026-10-07), armband round trip 17 ms (2026-10-08), so the label shift is between 20 and 37 ms.
+  Pick a value in that range with Noah (the middle, about 28 ms, is off by at most 9 ms, under a third of a camera
+  frame). `dataset.camera_times` uses
+  `camera_delay_s` from `session.json` (written by `sync.py` from the taps, fallback `DEFAULT_CAMERA_DELAY_S`).
+  Rebuild `ml/cache/` and rerun the angle evaluation after. Re-measure with `diagnostics/camera_led/led_delay.py`
+  only if the camera, its capture settings, the grab code or the computer change, and with
+  `diagnostics/armband_rtt/armband_rtt.py rtt` if the band, its firmware or the WiFi setup change.
 - Angles (validation 2026-10-07): best is the network pretrained on all sessions plus a same-day fine-tune on
   moving fingers, per-finger or closure targets, covariance features for ridge. Next: one session with the DB8
   protocol (9 movements x 10 + 10 + 2, one posture) and a protractor check of the camera, to split the remaining
@@ -729,7 +783,5 @@ capacity. Single seed: run-to-run noise was about 0.01 to 0.03 r (2026-10-06).
   which disagreed by up to 135 ms in session `164337`.
 - Tap test round the band to confirm channels 0 to 7 run in order round the arm, the ring assumes it. Then record
   one mirrored session to check the channel flip on real data.
-- Camera delay: find out whether the taps or the gyro comparison is biased (they differ by about 90 ms in every
-  session), for example with a video of an LED the ESP32 switches at a logged time. Then replace the taps.
 - Ring network: rerun as sessions come in; fix the rest false alarms after calibration (rest weighting); then
   continual updates with replay and the benchmark.
