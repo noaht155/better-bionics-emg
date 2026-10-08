@@ -746,6 +746,36 @@ gaps, first sample where most channels step by over 10 mV. Two runs, 80 switches
   channels, and the two runs agreed to 0.1 ms. Use it for the armband side from now on, the LED test for the
   camera side.
 
+**Finger decoding screen** (`diagnostics/VALIDATION.md`, second protocol, written before running; full results
+there). 30 candidates for continuous finger decoding on the existing recordings, each the baseline (ring network,
+grip-conditioned continuous head, pretrained on the other sessions + same-day fine-tune) plus one change, same run,
+3 seeds, scored on moving windows (fingers and closure, r and R2). Dev set 6 sessions; the 3 newest finger-block
+sessions locked away and scored once at the end. A clear win needed +0.05 with a Bonferroni-corrected bootstrap
+interval over 120 tests, all 3 seeds and no gain on shifted labels.
+- No clear win. Dev baseline: fingers r 0.46 / R2 0.14, closure r 0.54 / R2 0.27.
+- Clear losses: calibration of 0 or 1 min (-0.11, -0.13 r; 1 min is worse than none, fine-tuning all weights on it
+  overfits), double augmentation, no holds in the continuous loss, smoothing 0.1, temporal layers. 5 min of
+  calibration is as good as the 9 min of two blocks.
+- No meaningful effect: covariance or filter bank inputs to the network, 20 Hz low cut, open/fist label scaling,
+  session input normalisation, label smoothing, dropping ch 6, seed ensembles. Small consistent losses under 0.05:
+  Huber, rest gating, dropping ch 5, dropping free movement, finger cues or the older sessions.
+- Can't tell, under the bar anyway: IMU input +0.03 r, moving-window weighting +0.02 r / +0.03 R2 (5 of 6 sessions).
+- Temporal context: the planned end-to-end TCN and GRU runs were invalid (training in chunks of consecutive windows
+  broke the network by itself: -0.13 r, grips -23 points with no temporal layer). Rerun with the temporal layer on
+  the baseline's frozen features: moving r unchanged, moving R2 -0.05 to -0.12. The GRU fits held hands better
+  (+0.04 r all windows) but lags in movement.
+- Image landmarks are less decodable than world landmarks; the thumb tip target ties the thumb angle.
+- DB8: the ring network beats ridge there too (moving fingers r 0.71 vs 0.61, R2 0.47 vs 0.33, 12 subjects, intervals
+  clear of zero), so its lead isn't specific to our band moving between sessions.
+- Locked sessions, baseline scored once: fingers r 0.39 / R2 0.08, closure r 0.48 / R2 0.14 on moving windows,
+  grips 84 % balanced.
+- Bug found after the runs, not rerun: the session-end sync segment carries the table posture, so the 5 s guard
+  around the table block's whole time span left no calibration data and the table block was never tested. All arms
+  and the locked run were tested on the forward and raised blocks only; comparisons stay paired, a third of the test
+  data went unused.
+- So nothing available on the existing recordings moves moving-finger decoding by 0.05. The gap to DB8 (0.71 vs
+  0.39 to 0.46) is in what the recordings contain, not in the model or training.
+
 ## Open
 
 - Next major fix, not before the diagnostics screen (`diagnostics/out/validation/`) has finished, since it imports
@@ -757,8 +787,9 @@ gaps, first sample where most channels step by over 10 mV. Two runs, 80 switches
   Rebuild `ml/cache/` and rerun the angle evaluation after. Re-measure with `diagnostics/camera_led/led_delay.py`
   only if the camera, its capture settings, the grab code or the computer change, and with
   `diagnostics/armband_rtt/armband_rtt.py rtt` if the band, its firmware or the WiFi setup change.
-- Angles (validation 2026-10-07): best is the network pretrained on all sessions plus a same-day fine-tune on
-  moving fingers, per-finger or closure targets, covariance features for ridge. Next: one session with the DB8
+- Angles (screen 2026-10-08): no change to the network beats the current baseline on the existing recordings, keep
+  it (at least 5 min of same-day fine-tune). If the guard bug is ever fixed in a rerun, guard around each test window.
+  Next: one session with the DB8
   protocol (9 movements x 10 + 10 + 2, one posture) and a protractor check of the camera, to split the remaining
   gap into protocol, sensors and labels; then a live control test, since offline r doesn't predict live control.
 
