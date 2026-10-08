@@ -783,6 +783,15 @@ them. Camera frames now sit 70 to 140 ms later on the EMG clock than before. Cac
 the next load. The screen above and every earlier angle number used the tap delays. Tests updated
 (`test_camera.py`).
 
+**Grip + closure against per-finger output** (`diagnostics/validate.py blend`, the screen's dev baseline
+predictions, old camera delay, forward and raised blocks). Grip + closure: the grip head picks a shape (calibration
+medians of that grip and of the open hand), predicted closure sets how far along it is. Moving windows r / R2:
+per-finger head 0.467 / 0.145, grip + closure 0.394 / -0.054, a per-finger blend with weights fitted on the other
+block 0.459 / 0.105 (weights 0.73 to 0.88 towards per-finger). Per-finger also wins on all windows (R2 0.468 vs
+0.371). The continuous head already reads the grip probabilities, so the templates add nothing it doesn't have.
+No separate grip + closure head; a grip mode that snaps to the template could still feel steadier live, which only
+a live test can show.
+
 ## Open
 
 - Camera delay: re-measure with `diagnostics/camera_led/led_delay.py` only if the camera, its capture settings, the
