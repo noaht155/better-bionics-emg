@@ -157,7 +157,7 @@ async function openPreview() {
     const { plan } = await post("/api/plan", planBody());
     const seen = new Set();
     const cues = plan.filter((c) => !seen.has(c.text) && seen.add(c.text));
-    preview = { cues, at: 0 };
+    preview = { cues, at: 0, shownAt: performance.now() };
   } catch (err) {
     $("setup-error").textContent = err.message;
     return;
@@ -176,10 +176,10 @@ function closePreview() {
 function stepPreview(by) {
   if (!preview) return;
   preview.at = Math.min(Math.max(preview.at + by, 0), preview.cues.length - 1);
-  drawPreview();
+  preview.shownAt = performance.now();
 }
 
-function drawPreview() {
+function drawPreview(dt = 0) {
   const cue = preview.cues[preview.at];
   const posture = config.postures[cue.posture] ?? cue.posture;
   $("preview-info").textContent = cue.kind === "break" ? "waits for Continue" : `${cue.seconds} s, ${posture}`;
@@ -187,12 +187,10 @@ function drawPreview() {
   $("preview-text").innerHTML = cueTitle(cue.text);
   const ctx = $("preview-hand").getContext("2d");
   ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
-  // Plays on a loop at the real pace, as it will during the session
-  const angles = cue.kind === "break" ? null : cueFrame(cue, (performance.now() / 1000) % (cue.seconds || 4));
-  if (angles) {
-    drawSolidHand(ctx, angles, { view: solidView, mirror: mirrored(), color: SOLID_COLOR });
-    requestAnimationFrame(() => preview?.cues[preview.at] === cue && drawPreview());
-  }
+  // Plays on a loop at the real pace from the moment the cue is shown, the hand easing over from the last one
+  const t = ((performance.now() - preview.shownAt) / 1000) % (cue.seconds || 4);
+  const angles = follow("preview", cue.kind === "break" ? null : cueFrame(cue, t), dt);
+  if (angles) drawSolidHand(ctx, angles, { view: solidView, mirror: mirrored(), color: SOLID_COLOR });
 }
 
 attachRotate($("preview-hand"), solidView, () => preview && drawPreview());
@@ -306,16 +304,52 @@ function drawSession() {
   $("btn-main").textContent = s.paused || cue.kind === "break" ? "Continue (space)" : "Pause (space)";
   $("session-info").textContent = `${s.folder}   ${s.samples} EMG samples, ${s.frames} camera frames`;
 
-  const ctx = $("target").getContext("2d");
-  ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
   const caption = $("target-label");
   caption.textContent = target ? `${target.upcoming ? "Next" : "Now"}: ${target.title}` : "";
   caption.classList.toggle("upcoming", !!target?.upcoming);
+}
+
+// The drawn hands ease towards their target instead of jumping, so a change of cue looks like one hand moving.
+// They redraw every screen frame; between the server's updates (20 a second) the cue time runs on locally
+const EASE_S = 0.15;
+const shown = {};
+let stateAt = 0;
+let lastFrame = performance.now();
+
+function follow(key, angles, dt) {
+  if (!angles) return (shown[key] = null);
+  const cur = shown[key];
+  if (!cur) return (shown[key] = { ...angles });
+  const k = 1 - Math.exp(-dt / EASE_S);
+  for (const j in angles) cur[j] += k * (angles[j] - cur[j]);
+  return cur;
+}
+
+function drawTarget(dt) {
+  const s = state?.session;
+  const ctx = $("target").getContext("2d");
+  ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+  if (!s) return follow("target", null);
+  const elapsed = s.cue_elapsed + (s.paused ? 0 : (performance.now() - stateAt) / 1000);
+  const target = targetPose(elapsed);
+  const angles = follow("target", target?.angles, dt);
   // The next gesture is drawn darker so it doesn't read as the current one. Not transparent, the overlapping
   // parts would show through each other
-  if (target) {
-    drawSolidHand(ctx, target.angles, { view: solidView, mirror: mirrored(), color: target.upcoming ? UPCOMING_COLOR : SOLID_COLOR });
+  if (angles) {
+    drawSolidHand(ctx, angles, { view: solidView, mirror: mirrored(), color: target.upcoming ? UPCOMING_COLOR : SOLID_COLOR });
   }
+}
+
+function frameLoop(now) {
+  const dt = Math.min((now - lastFrame) / 1000, 0.1);
+  lastFrame = now;
+  try {
+    drawTarget(dt);
+    if (preview) drawPreview(dt);
+  } catch (err) {
+    console.error("frameLoop", err);
+  }
+  requestAnimationFrame(frameLoop);
 }
 
 function drawSummary() {
@@ -371,24 +405,24 @@ function cueFrame(cue, t) {
   return anglesByName(config.gestures[cue.label].angles);
 }
 
-function cueAngles(cue, s) {
-  if (cue.label === "wave" || config.gestures[cue.label]) {
-    // The next cue, shown during a rest, is drawn at its end pose so it can be prepared
-    return s.cue === cue ? cueFrame(cue, s.cue_elapsed) : (config.gestures[cue.label] ? anglesByName(config.gestures[cue.label].angles) : null);
-  }
-  return null;
+function cueAngles(cue, s, elapsed) {
+  const g = config.gestures[cue.label];
+  // The next cue, shown during a rest, is drawn at its end pose so it can be prepared. A grip is shown that way
+  // already, so during its own cue it simply holds; the eased hand makes the change from rest
+  if (s.cue !== cue || cue.kind === "hold") return g ? anglesByName(g.angles) : null;
+  return cueFrame(cue, elapsed);
 }
 
 // Target pose of the current cue, or the next gesture during a rest so it can be prepared
 // Returns {angles, title, text, upcoming}, upcoming is true when it shows the next gesture
-function targetPose() {
+function targetPose(elapsed) {
   const s = state.session;
   if (!s) return null;
   let cue = s.cue;
   if (cue.kind === "free" || cue.kind === "sync" || cue.kind === "break") return null;
   const upcoming = cue.label === "rest" && s.next && !!config.gestures[s.next.label];
   if (upcoming) cue = s.next;
-  const angles = cueAngles(cue, s);
+  const angles = cueAngles(cue, s, elapsed ?? s.cue_elapsed);
   const [title, description] = cue.text.split("\n");
   return angles ? { angles, title, text: `${title}\n${description ?? ""}`.trim(), upcoming } : null;
 }
@@ -510,6 +544,7 @@ function connect() {
   const ws = new WebSocket(`ws://${location.host}/ws`);
   ws.onmessage = (e) => {
     state = JSON.parse(e.data);
+    stateAt = performance.now();
     // Each part on its own, so an error in one can't freeze the others (it did freeze the camera overlay once)
     for (const draw of [drawWarnings, drawSession, drawView, drawTools]) {
       try {
@@ -534,6 +569,7 @@ async function init() {
   if (!config.camera) $("view").value = "pose";
   showView();
   connect();
+  requestAnimationFrame(frameLoop);
 }
 
 init();
