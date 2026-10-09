@@ -769,7 +769,7 @@ interval over 120 tests, all 3 seeds and no gain on shifted labels.
   clear of zero), so its lead isn't specific to our band moving between sessions.
 - Locked sessions, baseline scored once: fingers r 0.39 / R2 0.08, closure r 0.48 / R2 0.14 on moving windows,
   grips 84 % balanced.
-- Bug found after the runs, not rerun: the session-end sync segment carries the table posture, so the 5 s guard
+- Bug found after the runs (rerun on 2026-10-09, below): the session-end sync segment carries the table posture, so the 5 s guard
   around the table block's whole time span left no calibration data and the table block was never tested. All arms
   and the locked run were tested on the forward and raised blocks only; comparisons stay paired, a third of the test
   data went unused.
@@ -806,6 +806,23 @@ it helps only about 0.03, protocol B replaces it): 3.6 min per posture. Sync tap
 and the delay measurement at session end with them, since the camera delay is now fixed; `sync.py` stays for
 older sessions. The Train tab's session table shows the protocol instead of the tap delay. The Record form has a protocol switch
 that shows only that protocol's fields.
+
+## 2026-10-09: screen rerun
+
+**Finger decoding screen, rerun** (`diagnostics/VALIDATION.md`, change 3 and "Rerun results"). Same protocol with the
+guard fixed (the table block is tested now) and the labels on the fixed 28 ms camera delay; the invalid end-to-end
+temporal arms dropped, the temporal follow-up included, 120 tests. Overnight, 23:00 to 04:00.
+- No clear win again. Dev baseline: fingers r 0.48 / R2 0.12, closure r 0.59 / R2 0.29 on moving windows.
+- Held in both runs: losses from 1 min of calibration, double augmentation, smoothing 0.1 and the 1 s TCN head;
+  5 min of calibration as good as 9; small consistent gains under the 0.05 bar from moving-window weighting
+  (+0.03 r, all 6 sessions) and IMU input (+0.03 r, 5 of 6, R2 not better).
+- Changed between runs, so not settled: no calibration (-0.11 then -0.06 r), dropping holds, the GRU and 3 s TCN
+  heads (+0.02 r now, R2 worse), covariance input. Dropping free movement or the older sessions is now a clear
+  loss (-0.04 r).
+- Locked sessions, baseline: fingers r 0.40 / R2 0.07, closure r 0.51 / R2 0.17, grips 83 % (first run 0.39 /
+  0.08, 0.48 / 0.14, 84 %).
+- The baseline stays the pipeline. If anything is added later, moving-window weighting and IMU input are the
+  first candidates, both small.
 
 ## Open
 
