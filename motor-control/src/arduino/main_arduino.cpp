@@ -4,7 +4,7 @@
 #include "wifi_config.h"
 
 const char *PROTO_VERSION = "0.2";
-const char *FW_VERSION = "0.2.0";
+const char *FW_VERSION = "0.2.1";
 
 const uint8_t PINS[] = {18, 19, 23, 25, 26, 27, 32};
 const uint8_t NUM_CH = sizeof(PINS) / sizeof(PINS[0]);
@@ -12,6 +12,11 @@ const uint8_t NUM_CH = sizeof(PINS) / sizeof(PINS[0]);
 const uint32_t PWM_FREQ = 5000;
 const uint8_t PWM_BITS = 8;
 const uint32_t PWM_MAX = (1 << PWM_BITS) - 1;
+
+// The L9110S modules pull their inputs up through about 1k, too strong for a pull-down. xIB is left high, so
+// the motor runs while the pin is low and an unpowered or booting ESP32 leaves it off. Set false for LEDs or
+// a low-side driver (ULN2003, MOSFET).
+const bool OUTPUTS_INVERTED = true;
 
 const uint32_t PULSE_MAX_MS = 5000;
 const uint32_t WATCHDOG_MAX_MS = 60000;
@@ -50,7 +55,8 @@ void setDuty(uint8_t ch, uint8_t percent) {
     duty[ch] = percent;
     pulseLen[ch] = 0;
     // 100% maps to PWM_MAX, which the core treats as fully on
-    ledcWrite(ch, (percent * PWM_MAX + 50) / 100);
+    uint32_t value = (percent * PWM_MAX + 50) / 100;
+    ledcWrite(ch, OUTPUTS_INVERTED ? PWM_MAX - value : value);
 }
 
 void allOff() {

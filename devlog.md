@@ -824,6 +824,20 @@ temporal arms dropped, the temporal follow-up included, 120 tests. Overnight, 23
 - The baseline stays the pipeline. If anything is added later, moving-window weighting and IMU input are the
   first candidates, both small.
 
+## 2026-10-13: motor drivers
+
+**Motor drivers arrived as HG7881 dual H-bridge modules (2x L9110S), not the planned ULN2003.** Pins B1A, B1B,
+GND, VCC, A1A, A1B; 2 motors per module, so 4 modules for 7 motors, one GPIO per motor as before. VCC 3.3 V from
+its own regulator (motors rated about 3 V, the L9110S drops a few tenths), shared ground with the ESP32.
+Wiring in `pinmap.md`.
+- The module pulls its inputs up to VCC: with the ESP32 off and xIB grounded the motors ran at full speed. A
+  1 kOhm pull-down on A1A only brought it to 1.6 V, so the pull-up is about 1 kOhm too, and beating it would load
+  the GPIO near its 20 mA limit.
+- Fix: inverted logic. xIB left open (held high by the pull-up), motor runs while xIA is low, both high is off, so
+  an unpowered or booting ESP32 leaves the motors off. Firmware 0.2.1 inverts the duty (`OUTPUTS_INVERTED`); flip
+  it back to false for LEDs or a low-side driver, or those run full on at 0 %. Protocol unchanged.
+- The coin motors feel weak. Noah is considering LRAs instead.
+
 ## Open
 
 - Camera delay: re-measure with `diagnostics/camera_led/led_delay.py` only if the camera, its capture settings, the
@@ -856,5 +870,10 @@ temporal arms dropped, the temporal follow-up included, 120 tests. Overnight, 23
   which disagreed by up to 135 ms in session `164337`.
 - Tap test round the band to confirm channels 0 to 7 run in order round the arm, the ring assumes it. Then record
   one mirrored session to check the channel flip on real data.
+- Motors: firmware 0.2.1 is flashed and channels 0 and 1 follow the duty. When the ULN2003, MOSFETs or LEDs go
+  back on, set `OUTPUTS_INVERTED` to false. Still to measure: lowest duty that starts a motor (the haptics floor),
+  how many levels can be told apart, and EMG spectra with the motors off and on to see if they show up.
+- Haptics: decide on LRAs vs coin motors. LRAs need an AC drive at their resonance (about 170 to 235 Hz), which is
+  inside the 40 to 200 Hz EMG band, so check for motor pickup in the EMG either way.
 - Ring network: rerun as sessions come in; fix the rest false alarms after calibration (rest weighting); then
   continual updates with replay and the benchmark.
