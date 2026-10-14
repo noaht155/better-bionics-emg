@@ -2,8 +2,9 @@
 
 Each tool runs in its own thread and keeps a small state dict for the browser. The logic lives in the
 original scripts (check_connection.report, calibrate.compute, haptics.output_duties, esp32_link.self_test,
-ml.gesture_model's train and LivePredictor, ml.ringnet's NetPredictor), this only feeds them the shared stream
-instead of opening the armband again. Network training and evaluation run as their own process (NetworkJob).
+ml.gesture_model's train and LivePredictor, ml.ringnet's NetPredictor, control.Controller), this only feeds them the
+shared stream instead of opening the armband again. Network training and evaluation run as their own process
+(NetworkJob).
 """
 import json
 import os
@@ -17,8 +18,10 @@ from pathlib import Path
 
 import calibrate
 import check_connection
+from control import DEFAULTS, Controller
 from esp32_link import Esp32, self_test
-from haptics import OUTPUTS, UPDATE_HZ, output_duties
+from gestures import GESTURE_SET, GESTURES
+from haptics import OUTPUTS, UPDATE_HZ, effort, output_duties
 
 # The ml package sits next to emg-reading/ in the repo
 REPO = Path(__file__).resolve().parent.parent
@@ -218,7 +221,8 @@ class Predictor(Tool):
             self._live.threshold = value
         self.state["threshold"] = value
 
-    def use(self, path):
+    def use(self, path, control=None):
+        """control: a Control to step with every prediction (the Control tab), None for the prediction alone."""
         if path.suffix == ".pt":
             # torch is only installed on the training desktop, the rest of the app runs without it
             import torch
@@ -233,13 +237,13 @@ class Predictor(Tool):
         self.stop()
         self.join(2)
         self._stop.clear()
-        self._launch(self._run, model, path.name)
+        self._launch(self._run, model, path.name, control)
         return model
 
     def stop(self):
         self._stop.set()
 
-    def _run(self, model, name):
+    def _run(self, model, name, control):
         if model.get("kind") == "network":
             from ml.ringnet import NetPredictor
             live = NetPredictor(model, self.threshold, gesture_model.UNSURE)
@@ -247,19 +251,66 @@ class Predictor(Tool):
             live = gesture_model.LivePredictor(model)
         live.threshold = self.threshold
         self._live = live
-        self.state.update(model=name, classes=model["classes"], label=None, threshold=self.threshold)
+        self.state.update(model=name, classes=model["classes"], label=None, threshold=self.threshold,
+                          control=control is not None)
         period = model["step_ms"] / 1000
         next_tick = time.perf_counter()
         while not self._stop.is_set():
-            filtered = self.recorder.window(live.win)[1]
+            emg, filtered = self.recorder.window(live.win)
             if filtered.shape[1] == live.win:
                 accel = self.recorder.accel_window(live.win) if model["options"]["accel"] else None
                 label, raw, probs = live.predict(filtered, accel)
                 # Only networks predict finger angles, LDA models leave these None
                 self.state.update(label=label, raw=raw, probs=probs, angles=getattr(live, "angles", None),
                                   effort_angles=getattr(live, "effort_angles", None))
+                if control is not None:
+                    control.step(emg, filtered, probs, period)
             next_tick = max(next_tick + period, time.perf_counter())
             time.sleep(max(0.0, next_tick - time.perf_counter()))
+
+
+class Control:
+    """control.Controller on the predictor's output, stepped inside the predictor's loop so the grip probabilities
+    and the effort come from the same window. Parameters can change while it runs."""
+
+    def __init__(self, recorder):
+        self.recorder = recorder
+        self.params = dict(DEFAULTS)
+        self.state = {"params": self.params}
+        self._controller = None
+        self._ranges = None
+
+    def prepare(self, session):
+        """Effort levels from the session the model trained on, the same levels the haptics take."""
+        levels, _ = calibrate.from_session(session)
+        self._ranges = {ch: (v["rest"], v["max"]) for ch, v in levels.items()}
+        missing = [ch for ch in self.recorder.band.channels if ch not in self._ranges]
+        if missing:
+            raise ValueError(f"{Path(session).name} has no levels for channels {missing}")
+        poses = {g: GESTURES[g][1] for g in GESTURE_SET}
+        self._controller = Controller(self.params, GESTURE_SET, poses)
+        self.state = {"params": self.params, "levels_from": Path(session).name, "step": 0, "state": "idle",
+                      "grip": None, "closure": 0.0, "effort": 0.0, "angles": None, "starts": 0, "releases": 0,
+                      "opens": 0}
+
+    def set_params(self, params):
+        self.params.update(params)
+        if self._controller is not None:
+            self._controller.params.update(params)
+
+    def reset_counts(self):
+        self.state.update(starts=0, releases=0, opens=0)
+
+    def step(self, emg, filtered, probs, dt):
+        n = self.recorder.env_len
+        band = self.recorder.band
+        e = effort(emg[:, -n:], filtered[:, -n:], band.channels, self._ranges, True)
+        out = self._controller.step(probs, e, dt)
+        s = self.state
+        s.update(step=s["step"] + 1, state=out["state"], grip=out["grip"], closure=round(out["closure"], 3),
+                 effort=round(e, 3), angles=[round(a, 1) for a in out["angles"]])
+        if out["event"]:
+            s[out["event"] + "s"] += 1
 
 
 class Trainer(Tool):
@@ -325,13 +376,14 @@ class Tools:
         self.haptics = Haptics(recorder, esp_lock)
         self.test = OutputTest(esp_lock)
         self.predictor = Predictor(recorder)
+        self.control = Control(recorder)
         self.trainer = Trainer(self.predictor)
         self.network = NetworkJob()
 
     def snapshot(self):
         now = time.time()
         out = {}
-        for name in ("check", "calibration", "haptics", "test", "predictor", "trainer", "network"):
+        for name in ("check", "calibration", "haptics", "test", "predictor", "trainer", "network", "control"):
             state = dict(getattr(self, name).state)
             if state.get("until"):
                 state["left"] = max(0.0, state["until"] - now)

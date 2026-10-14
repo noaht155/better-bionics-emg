@@ -18,6 +18,7 @@ function showTab(name) {
   else closeSignals();
   if (name === "train") loadTrainLists();
   if (name === "network") loadNetworkLists();
+  if (name === "control") loadControlLists();
 }
 
 document.querySelectorAll("#tabs button").forEach((b) => b.addEventListener("click", () => showTab(b.dataset.tab)));
@@ -649,6 +650,7 @@ function drawTools() {
   drawTrain(t.trainer);
   drawPredictor(t.predictor);
   drawNetwork(t.network, t.predictor);
+  drawControl(t.control, t.predictor);
 }
 
 function initTools() {

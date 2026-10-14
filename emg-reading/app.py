@@ -25,6 +25,7 @@ from pydantic import BaseModel, Field
 from armband import Armband, Replay
 from calibrate import load_calibration
 from camera import Camera
+from control import DEFAULTS as CONTROL_DEFAULTS
 from esp32_link import WIFI_IP
 from gestures import GESTURE_SET, GESTURES, POSTURES, plan_for
 from hand_angles import JOINTS, RELIABLE
@@ -38,6 +39,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from ml import NETWORK_DIR, dataset, gesture_model  # noqa: E402
 
 WEB_DIR = Path(__file__).with_name("web")
+# Saved control parameter sets, next to the models. "default" is always the spec's values and isn't stored
+PRESET_FILE = gesture_model.MODEL_DIR.parent / "control_presets.json"
 SEND_HZ = 20
 PREVIEW_HZ = 15
 
@@ -113,6 +116,28 @@ class Threshold(BaseModel):
     value: float = Field(ge=0, le=1)
 
 
+class ControlParams(BaseModel):
+    """control.Controller's parameters, see control.py."""
+    threshold: float = Field(ge=0, le=1)
+    vote_n: int = Field(ge=1, le=20)
+    start_level: float = Field(ge=0, le=1)
+    onset_s: float = Field(ge=0, le=5)
+    closure_mode: Literal["position", "speed"]
+    gain: float = Field(ge=0, le=20)
+    hold_level: float = Field(ge=0, le=1)
+    hold_on_relax: bool
+    release_mode: Literal["open_class", "rest", "either"]
+    release_n: int = Field(ge=1, le=20)
+    release_level: float = Field(ge=0, le=1)
+    release_s: float = Field(ge=0, le=5)
+    spring_w: float = Field(ge=0, le=50)
+
+
+class ControlPreset(BaseModel):
+    name: str = Field(pattern=r"^[A-Za-z0-9 _-]{1,40}$")
+    params: ControlParams
+
+
 class NetworkJobSettings(BaseModel):
     job: Literal["evaluate", "evaluate_newest", "train", "calibrate"]
     epochs: int = Field(15, ge=1, le=200)
@@ -176,6 +201,10 @@ def network_list():
         info = torch.load(path, map_location="cpu", weights_only=True)["info"]
         out.append(dict(info, name=path.name))
     return out
+
+
+def saved_presets():
+    return json.loads(PRESET_FILE.read_text()) if PRESET_FILE.exists() else {}
 
 
 def refuse(e):
@@ -383,6 +412,55 @@ def make_app(recorder, band, camera, tools):
             refuse(e)
         return {"ok": True, "haptics": start_model_haptics(model, choice)}
 
+    @app.post("/api/control/start")
+    def control_start(choice: ModelChoice):
+        """The LDA model with the control layer on its output, effort levels from the model's newest training
+        session. Haptics start with it as with Use this model."""
+        path = gesture_model.MODEL_DIR / choice.name
+        if path.parent != gesture_model.MODEL_DIR or path.suffix != ".joblib" or not path.exists():
+            refuse("unknown model")
+        try:
+            session = model_session(gesture_model.load(path))
+            if session is None:
+                refuse("the model's training session isn't on this computer, the effort levels come from it")
+            tools.control.prepare(DATA_DIR / session)
+            model = tools.predictor.use(path, tools.control)
+        except ValueError as e:
+            refuse(e)
+        return {"ok": True, "haptics": start_model_haptics(model, choice)}
+
+    @app.post("/api/control/params")
+    def control_params(params: ControlParams):
+        tools.control.set_params(params.model_dump())
+        return {"ok": True}
+
+    @app.post("/api/control/reset")
+    def control_reset():
+        tools.control.reset_counts()
+        return {"ok": True}
+
+    @app.get("/api/control/presets")
+    def control_presets():
+        return {"default": CONTROL_DEFAULTS, **saved_presets()}
+
+    @app.post("/api/control/presets")
+    def save_control_preset(preset: ControlPreset):
+        if preset.name == "default":
+            refuse("default is fixed, pick another name")
+        presets = saved_presets()
+        presets[preset.name] = preset.params.model_dump()
+        PRESET_FILE.parent.mkdir(parents=True, exist_ok=True)
+        PRESET_FILE.write_text(json.dumps(presets, indent=2) + "\n")
+        return {"ok": True}
+
+    @app.delete("/api/control/presets/{name}")
+    def delete_control_preset(name: str):
+        presets = saved_presets()
+        if presets.pop(name, None) is None:
+            refuse("no saved preset with that name")
+        PRESET_FILE.write_text(json.dumps(presets, indent=2) + "\n")
+        return {"ok": True}
+
     @app.post("/api/model/threshold")
     def set_threshold(threshold: Threshold):
         tools.predictor.set_threshold(threshold.value)
@@ -395,15 +473,20 @@ def make_app(recorder, band, camera, tools):
             tools.haptics.stop()
         return {"ok": True}
 
-    def start_model_haptics(model, link):
-        """Haptics run with every prediction model, with levels from the session the model was calibrated on (a
-        calibrated network) or its newest training session (LDA). Returns what happened, for the page. The model
-        keeps running when the haptics can't start."""
+    def model_session(model):
+        """The session a model's levels come from: the one a calibrated network was calibrated on, or an LDA
+        model's newest training session. None if it isn't on this computer."""
         if model.get("kind") == "network":
             session = model["info"].get("calibrated_on")
         else:
             session = (model.get("sessions") or [None])[-1]
-        if not session or not (DATA_DIR / session / "session.json").exists():
+        return session if session and (DATA_DIR / session / "session.json").exists() else None
+
+    def start_model_haptics(model, link):
+        """Haptics run with every prediction model, with levels from model_session. Returns what happened, for the
+        page. The model keeps running when the haptics can't start."""
+        session = model_session(model)
+        if session is None:
             return "haptics not started: the model's calibration session isn't on this computer"
         tools.haptics.stop()
         tools.haptics.join(timeout=3)

@@ -15,6 +15,7 @@
   <button data-tab="calibrate">Calibrate</button>
   <button data-tab="train">Train</button>
   <button data-tab="network">Deep learning</button>
+  <button data-tab="control">Control</button>
   <button data-tab="haptics">Haptics</button>
   <button data-tab="connection">Connection</button>
   <span id="battery-chip" hidden></span>
@@ -266,6 +267,55 @@
   </section>
 </main>
 
+<main id="tab-control" class="tab single" hidden>
+  <section>
+    <h1>Grip control</h1>
+    <p class="muted">The gesture model picks a grip only while effort rises from rest, then the grip is locked and
+      effort closes the hand along the path from relaxed to the grip's pose, until a release. Effort is each channel's
+      envelope scaled between the rest and max levels of the model's newest training session (the haptics' levels),
+      mean over the channels with pad contact. Every setting applies straight away while it runs.</p>
+    <div class="row narrow">
+      <label>Model <select id="ctl-model"></select></label>
+    </div>
+    <div class="controls">
+      <button id="ctl-start" class="primary">Start</button>
+      <button id="ctl-stop">Stop</button>
+    </div>
+    <p id="ctl-status" class="muted"></p>
+    <p id="ctl-haptics" class="muted"></p>
+    <p id="ctl-error" class="error"></p>
+    <div class="ctl-layout">
+      <div>
+        <canvas id="ctl-hand" width="480" height="400"></canvas>
+        <div id="ctl-label" class="big-label"></div>
+        <div id="ctl-readout" class="battery-detail"></div>
+        <div class="controls"><button id="ctl-reset">Reset counts</button></div>
+      </div>
+      <div>
+        <h2>Settings</h2>
+        <div id="ctl-params"></div>
+        <h2>Presets</h2>
+        <div class="row">
+          <label>Saved <select id="ctl-preset"></select></label>
+          <label>Save as <input id="ctl-preset-name" placeholder="name"></label>
+        </div>
+        <div class="controls">
+          <button id="ctl-load">Load</button>
+          <button id="ctl-save">Save</button>
+          <button id="ctl-delete">Delete</button>
+        </div>
+        <p id="ctl-preset-note" class="muted"></p>
+      </div>
+    </div>
+    <h2>Last 10 s</h2>
+    <p class="muted">Blue: effort. White: closure. Dashed: start level (orange), hold level (grey), release level
+      (red). Green lines mark starts, red lines releases.</p>
+    <canvas id="ctl-trace" width="900" height="220"></canvas>
+    <h2>Grip probabilities</h2>
+    <canvas id="ctl-probs" width="900" height="260"></canvas>
+  </section>
+</main>
+
 <main id="tab-haptics" class="tab single" hidden>
   <section>
     <h1>Haptics</h1>
@@ -312,5 +362,6 @@
 <script src="/web/hand.js"></script>
 <script src="/web/app.js"></script>
 <script src="/web/tools.js"></script>
+<script src="/web/control.js"></script>
 </body>
 </html>

@@ -915,10 +915,40 @@ change, the rest of the hand stays relaxed. The drawn hand follows on a critical
 `web/app.js`) instead of an exponential ease, so speed never jumps; it trails an animated target by under 0.2 s.
 Recorded labels are unaffected (angles come from the camera).
 
+**Simpler pipeline first (Noah and his boss).** Leaning on the network made problems hard to trace. The main path is
+now the grip LDA plus a control layer whose settings can be changed by hand and seen straight away, with settings
+tuned on recorded sessions. The network stays as a benchmark next to it.
+
+**Control layer replay** (`diagnostics/control_sim/`, results in `out/results.md`). LDA calibrated on repetitions 1
+and 2, effort levels from the same repetitions, then the control layer (`emg-reading/control.py`) run over the
+repetition 3 block of 9 protocol A sessions, scored per cue like use: grip locked right, wrong decisions per minute,
+false starts at rest, twitches. 28,680 settings tuned on 6 sessions, the newest 3 held out.
+- First guess (threshold 0.8, 3 votes, start level 0.15, onset 0.6 s): held out 59 % of grip cues locked right, 3.7
+  wrong decisions per minute.
+- Best: threshold 0.7, 8 votes, start level 0.02, onset 3 s, release on rest (below 0.03 for 1.5 s). Held out 87 %,
+  0.28 wrong per minute, 0.37 false starts per minute of rest; about 0.9 s from cue to lock, reaction included.
+  Pinch is the weak grip (56 %). Held-out cues are few (9 per grip), and the held-out set was looked at twice, so
+  87 % is a little optimistic: the next new session is the clean test.
+- What matters: votes (the LDA is often wrong on the rise into a grip, 1 vote 45 %, 7 to 8 votes 86 to 88 %), the
+  start level (pinch and key holds only reach about 0.15 effort since fist sets the max, at 0.15 pinch locks in 22 %
+  of cues) and the release (open class 44 %: protocol A relaxes without opening, so the grip stays locked). A short
+  onset hurts (0.6 s 67 %). Threshold 0.5 to 0.8 barely matters. Older sessions added to the LDA do worse (59 %).
+- So the effort gate and the "only while effort rises" rule are close to off in the best setting; the long vote
+  and releasing on rest do the work. The vote is also what costs latency.
+
+**Control tab** (live mode). The grip LDA's probabilities and the effort (mean over contacted channels of the
+envelope scaled between the model session's rest and max levels, the haptics' levels) go through `control.py`
+inside the existing prediction loop. The tab shows the hand from the controller, its state, locked grip and
+closure, counts starts and releases, plots effort and closure over 10 s, and has one control per setting that
+applies while it runs. Presets are saved in `models/control_presets.json`; "default" is the replay's best. Tried on
+the 2026-09-30 replay only, not on the arm yet. Haptics still follow each channel's envelope, not closure.
+
 ## Open
 
-- Control scheme: brainstorm the grip + effort closure + tactile stop ideas (2026-10-14) before building anything;
-  nothing decided.
+- Control tab: try it on the arm (grab, hold, release; count wrong grips and twitches), check the 0.9 s to lock
+  against fewer votes, and whether pinch closes far enough at gain 1.5 (per-grip max levels or a higher gain).
+  Record one session of everyday activity without cues to measure false starts per minute; the near-zero start
+  level is likely to fire there.
 
 - Camera delay: re-measure with `diagnostics/camera_led/led_delay.py` only if the camera, its capture settings, the
   grab code or the computer change, and with `diagnostics/armband_rtt/armband_rtt.py rtt` if the band, its

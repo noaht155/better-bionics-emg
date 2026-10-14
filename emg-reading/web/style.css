@@ -202,3 +202,11 @@ th { color: var(--muted); font-weight: 400; }
 #target-label.upcoming { color: var(--muted); }
 #rec-badge.practice { background: var(--warn); color: #1b1b1b; }
 #setup label.check { display: flex; margin: 12px 0; }
+.ctl-layout { display: flex; flex-wrap: wrap; gap: 24px; }
+.ctl-layout > div { flex: 1 1 360px; max-width: 520px; }
+#ctl-hand { max-width: 480px; background: #16181c; border-radius: 6px; cursor: grab; touch-action: none; }
+#ctl-trace, #ctl-probs { max-width: 900px; }
+.param { display: grid; grid-template-columns: 9em 1fr 4em; gap: 8px; align-items: center; margin: 6px 0; color: var(--text); }
+.param input[type=range] { width: 100%; padding: 0; }
+.param output { font-variant-numeric: tabular-nums; text-align: right; }
+.param small { grid-column: 1 / -1; color: var(--muted); margin-top: -4px; }

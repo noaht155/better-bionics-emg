@@ -27,13 +27,26 @@ def level(env, rest, max_):
     return float(np.clip((env - rest) / (max_ - rest), 0.0, 1.0))
 
 
-def output_duties(raw, filtered, channels, ranges, car):
-    """raw, filtered: live channels x one envelope window. Returns (duty per output in %, lost per channel)."""
+def channel_levels(raw, filtered, channels, ranges, car):
+    """raw, filtered: live channels x one envelope window. Returns ({channel: level 0 to 1}, lost per channel)."""
     lost = contact_lost(raw)
     y = common_average(filtered, ~lost) if car else filtered
     levels = {}
     for i, ch in enumerate(channels):
         levels[ch] = 0.0 if lost[i] else level(envelope(y[i]), *ranges[ch])
+    return levels, lost
+
+
+def effort(raw, filtered, channels, ranges, car):
+    """How hard the muscles work, 0 to 1: mean level over the channels with pad contact."""
+    levels, lost = channel_levels(raw, filtered, channels, ranges, car)
+    good = [levels[ch] for ch, l in zip(channels, lost) if not l]
+    return float(np.mean(good)) if good else 0.0
+
+
+def output_duties(raw, filtered, channels, ranges, car):
+    """raw, filtered: live channels x one envelope window. Returns (duty per output in %, lost per channel)."""
+    levels, lost = channel_levels(raw, filtered, channels, ranges, car)
     duties = []
     for chs in OUTPUTS:
         live = [levels[ch] for ch in chs if ch in levels]

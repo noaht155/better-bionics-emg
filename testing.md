@@ -117,6 +117,19 @@ These decide when the recorder marks a cue bad and redoes it.
 | `test_live_network_reverses_mirrored_windows` | A network calibrated on a mirrored session reverses the channel order of live windows |
 | `test_live_lda_reverses_mirrored_windows` | The same for an LDA model whose newest training session was mirrored |
 
+### Control layer (`tests/test_control.py`)
+
+| Test | Checks |
+|---|---|
+| `test_start_needs_vote_n_steps_during_onset` | A grip starts only after `vote_n` steps in a row of the same grip above the threshold and the start level; a different winner restarts the count |
+| `test_no_start_after_onset_until_effort_drops` | Once `onset_s` has passed without a decision, nothing starts until effort drops below the start level again |
+| `test_open_class_start_stays_idle` | Picking the open hand keeps the hand idle and open, then blocks until effort drops |
+| `test_lock_ignores_other_classes` | A locked grip doesn't switch when another class wins |
+| `test_position_closure_holds_on_relax` | Position closure follows effort and doesn't go back down while relaxing holds the grip |
+| `test_speed_closure` | Speed closure closes above the hold level and holds below it |
+| `test_release_modes` | Release on the open hand, on rest, or on either |
+| `test_angles_follow_closure` | Output angles sit at the right share of the way from relaxed to the grip's pose, and the spring only moves part of the way in one step |
+
 ## Found by the tests
 
 - **Camera glitches in the angle labels** (2026-10-06): some frames have a trained joint bent backwards past -60
