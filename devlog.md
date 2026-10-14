@@ -995,8 +995,9 @@ time, so "connected" means the reader runs, and the no-data warning covers a rea
 
 **DHCP wait shortened from 20 to 5 s.** The 20 s came from one manual toggle on 2026-09-30 and was never tested. The
 Connection tab now takes the DHCP time (0 skips the step). With the armband power-cycled before each connect, 3 s
-streamed (986 of about 1000 samples in 2 s) and Noah found 5 s the reliable choice; default 5 s. Whether the DHCP
-step is needed at all (0 s) is still to check.
+streamed (986 of about 1000 samples in 2 s) and Noah found 5 s the reliable choice; default 5 s. 0 s (step skipped)
+and 1 s fail, so the DHCP step is needed: confirms the 2026-09-30 explanation that the band only streams to a device
+that asked it for an address since it booted.
 
 ## Open
 
