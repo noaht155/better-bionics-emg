@@ -141,6 +141,8 @@ These decide when the recorder marks a cue bad and redoes it.
 | `test_a_and_b_plans_unchanged` | Protocol A and B plans (seed 5) match a hash taken before protocol C existed, and the extra C fields don't change them |
 | `test_library_entries_are_complete` | Every entry has a category, two-line cue text, sources and 20 angles; reused keys keep their old angles; keyframes start and end at the relaxed hand |
 | `test_c_session_trains_without_leaking_into_protocol_a` | A protocol C session counts as good, loads in `ml.dataset`, and its `custom` cues get no grip label in the network or LDA windows, even for fist and pinch; only the calibration holds do |
+| `test_d_plan_holds_every_activity_once_per_round` | Protocol D: every activity once per round, all in the first posture with the set length, rest after each, the grip calibration twice as plain holds, and `plan_for` uses `d_rounds` and `d_activity_s` |
+| `test_d_session_gets_no_grip_or_rest_labels` | `nogrip` cues get no label at all in the network or LDA windows, rest included, since the wrist and arm move there; only the calibration holds do |
 
 ## Found by the tests
 

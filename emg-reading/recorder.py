@@ -24,7 +24,7 @@ CAMERA_SLOW_FPS = 25
 # Mark bad within this long of a rest cue starting still means the gesture before it
 BAD_GRACE_S = 1.5
 # Cues whose data is used for training. Hum on any channel during one marks it bad and pauses for a redo
-HUM_REDO_KINDS = ("hold", "finger", "free", "move", "custom")
+HUM_REDO_KINDS = ("hold", "finger", "free", "move", "custom", "nogrip")
 # EMG history kept for the signal view and the haptics
 HISTORY_S = 4
 # How long a failed armband read stays in the warning bar

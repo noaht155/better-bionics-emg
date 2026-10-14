@@ -27,7 +27,8 @@ from calibrate import load_calibration
 from camera import Camera
 from control import DEFAULTS as CONTROL_DEFAULTS
 from esp32_link import WIFI_IP
-from gestures import C_MOVE_S, C_ROUNDS, CATEGORIES, GESTURE_SET, GESTURES, LIBRARY, POSTURES, plan_for
+from gestures import (C_MOVE_S, C_ROUNDS, CATEGORIES, D_ACTIVITY_S, D_ROUNDS, GESTURE_SET, GESTURES, LIBRARY, POSTURES,
+                      plan_for)
 from hand_angles import JOINTS, RELIABLE
 from processing import spectrum
 from recorder import Recorder
@@ -60,8 +61,8 @@ class SessionSettings(BaseModel):
     notes: str = ""
     postures: list[Literal[tuple(POSTURES)]] = Field(min_length=1)
     # A: held grips and single fingers. B: the Ninapro-style movements (gestures.protocol_b_plan). C: movements
-    # picked from the library
-    protocol: Literal["A", "B", "C"] = "A"
+    # picked from the library. D: activities that shouldn't start a grip (gestures.protocol_d_plan)
+    protocol: Literal["A", "B", "C", "D"] = "A"
     reps: int = Field(ge=1, le=20)
     hold_s: float = Field(ge=1, le=30)
     rest_s: float = Field(ge=1, le=30)
@@ -72,6 +73,8 @@ class SessionSettings(BaseModel):
     moves: list[Literal[tuple(LIBRARY)]] = []
     c_rounds: int = Field(C_ROUNDS, ge=1, le=20)
     c_move_s: float = Field(C_MOVE_S, ge=3, le=15)
+    d_rounds: int = Field(D_ROUNDS, ge=1, le=5)
+    d_activity_s: float = Field(D_ACTIVITY_S, ge=10, le=120)
     # Same run, nothing saved, for trying out the setup
     practice: bool = False
 
@@ -93,8 +96,8 @@ class Esp32Link(BaseModel):
 class PlanSettings(BaseModel):
     postures: list[Literal[tuple(POSTURES)]]
     # A: held grips and single fingers. B: the Ninapro-style movements (gestures.protocol_b_plan). C: movements
-    # picked from the library
-    protocol: Literal["A", "B", "C"] = "A"
+    # picked from the library. D: activities that shouldn't start a grip (gestures.protocol_d_plan)
+    protocol: Literal["A", "B", "C", "D"] = "A"
     reps: int = Field(ge=1, le=20)
     hold_s: float = Field(ge=1, le=30)
     rest_s: float = Field(ge=1, le=30)
@@ -104,6 +107,8 @@ class PlanSettings(BaseModel):
     moves: list[Literal[tuple(LIBRARY)]] = []
     c_rounds: int = Field(C_ROUNDS, ge=1, le=20)
     c_move_s: float = Field(C_MOVE_S, ge=3, le=15)
+    d_rounds: int = Field(D_ROUNDS, ge=1, le=5)
+    d_activity_s: float = Field(D_ACTIVITY_S, ge=10, le=120)
 
 
 class TrainSettings(BaseModel):

@@ -458,8 +458,60 @@ def protocol_c_plan(moves, postures=("table",), rounds=C_ROUNDS, move_s=C_MOVE_S
     return cues
 
 
+D_ROUNDS = 1
+D_ACTIVITY_S = 40.0
+# Forearm muscle activity that isn't a grip: wrist and arm movement, load, fingers moving without grasping. Any grip
+# the control layer starts during these is a false start
+NO_GRIP = {
+    "wrist_flex": "BEND YOUR WRIST\nslowly up and down, hand relaxed",
+    "wrist_side": "WRIST SIDE TO SIDE\nslowly, hand relaxed",
+    "wrist_turn": "TURN YOUR PALM\nup and down, slowly, hand relaxed",
+    "arm_raise": "RAISE YOUR ARM\nup and down a few times, hand relaxed",
+    "arm_out": "HOLD YOUR ARM OUT\nstraight in front, hand relaxed",
+    "reach_up": "REACH OVERHEAD\nand back down, a few times, hand relaxed",
+    "lean": "LEAN ON YOUR FOREARM\nput weight on it on the table, hand relaxed",
+    "push": "PUSH THE TABLE\nflat hand on the table edge, press and let go a few times",
+    "shake": "SHAKE YOUR HAND OUT\nloose, like drying it",
+    "typing": "TYPE\non the keyboard, normally",
+    "drum": "DRUM YOUR FINGERS\nlightly on the table",
+    "wave_hello": "WAVE HELLO\nopen hand, from the wrist",
+    "talk": "TALK WITH YOUR HANDS\ngesture as if explaining something, no grips",
+    "walk": "STAND UP AND WALK\nswing your arms naturally",
+}
+NO_GRIP_FOLLOW = "don't make a grip"
+
+
+def protocol_d_plan(postures=("table",), rounds=D_ROUNDS, activity_s=D_ACTIVITY_S, rest_s=3.0, hold_s=4.0, seed=None):
+    """False start check: a short calibration block (every grip twice, like protocols B and C) in the first ticked
+    posture, then the NO_GRIP activities in rounds, each once per round in shuffled order, with rest in between.
+
+    kind "nogrip" marks a cue where no grip should start. It never gets a grip or rest label; the calibration holds
+    are plain holds, so the session can calibrate a model and is scored on its own calibration."""
+    rng = random.Random(seed)
+    posture = postures[0]
+    grips = [g for g in GESTURE_SET if g != "rest"]
+    activities = list(NO_GRIP)
+    rest = GESTURES["rest"][0]
+    cues = [_cue("break", "setup", f"{POSTURES[posture]}.\nPress Continue when ready.", None, posture),
+            _cue("hold", "rest", rest, rest_s, posture)]
+    for _ in range(2):
+        rng.shuffle(grips)
+        for g in grips:
+            cues += [_cue("hold", g, f"{GESTURES[g][0]}\n{HOLD_TEXT}", hold_s, posture),
+                     _cue("hold", "rest", rest, rest_s, posture)]
+    for _ in range(rounds):
+        rng.shuffle(activities)
+        for a in activities:
+            cues += [_cue("nogrip", a, f"{NO_GRIP[a]}, {NO_GRIP_FOLLOW}", activity_s, posture),
+                     _cue("hold", "rest", rest, rest_s, posture)]
+    return cues
+
+
 def plan_for(settings, seed=None):
     """The cue list for a session's settings, any protocol."""
+    if settings.get("protocol", "A") == "D":
+        return protocol_d_plan(settings["postures"], settings.get("d_rounds", D_ROUNDS),
+                               settings.get("d_activity_s", D_ACTIVITY_S), settings["rest_s"], settings["hold_s"], seed)
     if settings.get("protocol", "A") == "C":
         return protocol_c_plan(settings.get("moves", []), settings["postures"], settings.get("c_rounds", C_ROUNDS),
                                settings.get("c_move_s", C_MOVE_S), settings["rest_s"], settings["hold_s"], seed)

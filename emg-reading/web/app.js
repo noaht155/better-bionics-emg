@@ -84,14 +84,15 @@ function readSettings() {
     protocol: form.protocol.value,
     reps: num("reps"), hold_s: num("hold_s"), rest_s: num("rest_s"), rounds: num("rounds"), move_s: num("move_s"),
     moves: [...form.querySelectorAll("[name=move]:checked")].map((c) => c.value),
-    c_rounds: num("c_rounds"), c_move_s: num("c_move_s"),
+    c_rounds: num("c_rounds"), c_move_s: num("c_move_s"), d_rounds: num("d_rounds"), d_activity_s: num("d_activity_s"),
     practice: form.practice.checked,
   };
 }
 
 function planBody() {
-  const { postures, protocol, reps, hold_s, rest_s, rounds, move_s, moves, c_rounds, c_move_s } = readSettings();
-  return { postures, protocol, reps, hold_s, rest_s, rounds, move_s, moves, c_rounds, c_move_s };
+  const { postures, protocol, reps, hold_s, rest_s, rounds, move_s, moves, c_rounds, c_move_s, d_rounds, d_activity_s } =
+    readSettings();
+  return { postures, protocol, reps, hold_s, rest_s, rounds, move_s, moves, c_rounds, c_move_s, d_rounds, d_activity_s };
 }
 
 // Protocol C movement picker: checkboxes grouped by category, the hand above plays the one under the pointer
@@ -205,9 +206,9 @@ async function post(path, body) {
 }
 
 $("setup").addEventListener("input", (e) => {
-  // Protocols B and C are normally done with the forearm on the table only, like Ninapro. Other postures can still be
-  // ticked
-  if (e.target.name === "protocol" && ["B", "C"].includes(e.target.value)) {
+  // Protocols B, C and D are normally done with the forearm on the table only, like Ninapro. Other postures can
+  // still be ticked
+  if (e.target.name === "protocol" && ["B", "C", "D"].includes(e.target.value)) {
     $("setup").querySelectorAll("[name=posture]").forEach((c) => { c.checked = c.value === "table"; });
   }
   showProtocolFields();
@@ -512,6 +513,8 @@ function keyFrame(keys, x) {
 // holds and opens over the last 30 %, or follows its keyframes. Every cue starts and ends at the relaxed hand
 function cueFrame(cue, t) {
   const T = cue.seconds || 4;
+  // Protocol D: the hand stays relaxed while the wrist and arm move
+  if (cue.kind === "nogrip") return anglesByName(config.gestures.rest.angles);
   if (cue.kind === "custom") {
     const m = config.library[cue.label];
     if (!m) return null;

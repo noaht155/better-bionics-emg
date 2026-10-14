@@ -1,4 +1,4 @@
-"""Session plans of the recording protocols, and a protocol C session going through the training code."""
+"""Session plans of the recording protocols, and protocol C and D sessions going through the training code."""
 import hashlib
 import json
 from collections import Counter
@@ -8,7 +8,8 @@ import pytest
 
 import ml  # noqa: F401
 import gestures
-from gestures import GESTURE_SET, GESTURES, LIBRARY, plan_for, protocol_b_plan, protocol_c_plan, session_plan
+from gestures import (GESTURE_SET, GESTURES, LIBRARY, NO_GRIP, plan_for, protocol_b_plan, protocol_c_plan,
+                      protocol_d_plan, session_plan)
 from hand_angles import JOINTS
 from ml import dataset, gesture_model
 from session import CAMERA_COLUMNS, load_session, segments
@@ -93,10 +94,9 @@ def test_library_entries_are_complete():
             assert m["keys"][0][1] == GESTURES["rest"][1] == m["keys"][-1][1], key
 
 
-def _fake_c_session(folder):
-    """A completed protocol C session with noise for EMG and the relaxed hand on camera, in the recorder's format."""
+def _fake_session(folder, plan, settings):
+    """A completed session of this plan with noise for EMG and the relaxed hand on camera, in the recorder's format."""
     rate = 500
-    plan = protocol_c_plan(["fist", "pinch", "trigger"], rounds=1, move_s=3, rest_s=1.5, hold_s=2.5, seed=0)
     rows = {"emg": list(range(8)), "accel": [8, 9, 10], "package": 11, "timestamp": 12, "num_rows": 13}
     events, sample, t0 = [], 0, 1.7e9
     for i, cue in enumerate(plan):
@@ -115,8 +115,7 @@ def _fake_c_session(folder):
     cam[:, 2] = 1
     cam[:, -len(JOINTS):] = GESTURES["rest"][1]
     folder.mkdir()
-    meta = {"settings": {"protocol": "C", "postures": ["table"], "band_arm": "left", "port_facing": "shoulder",
-                         "moves": ["fist", "pinch", "trigger"]},
+    meta = {"settings": {"postures": ["table"], "band_arm": "left", "port_facing": "shoulder", **settings},
             "plan": plan, "rate": rate, "rows": rows, "channels": list(range(8)), "camera_columns": CAMERA_COLUMNS,
             "completed": True, "subject": "test"}
     (folder / "session.json").write_text(json.dumps(meta))
@@ -129,7 +128,8 @@ def test_c_session_trains_without_leaking_into_protocol_a(tmp_path):
     """Library cues named like grips (fist, pinch) get no grip label in the network windows or the LDA windows;
     only the calibration holds do."""
     folder = tmp_path / "2026-10-14_120000_test"
-    _fake_c_session(folder)
+    plan = protocol_c_plan(["fist", "pinch", "trigger"], rounds=1, move_s=3, rest_s=1.5, hold_s=2.5, seed=0)
+    _fake_session(folder, plan, {"protocol": "C", "moves": ["fist", "pinch", "trigger"]})
     assert dataset.good_sessions(tmp_path) == [folder]
     d = dataset.build(folder)
     custom = d["kind"] == "custom"
@@ -143,3 +143,37 @@ def test_c_session_trains_without_leaking_into_protocol_a(tmp_path):
         if seg["kind"] == "custom":
             inside = (ends > seg["sample0"]) & (ends <= seg["sample1"])
             assert all(lab is None for lab in labels[inside])
+
+
+def test_d_plan_holds_every_activity_once_per_round():
+    plan = protocol_d_plan(["forward", "table"], rounds=2, activity_s=20, seed=1)
+    nogrip = [c for c in plan if c["kind"] == "nogrip"]
+    assert Counter(c["label"] for c in nogrip) == {a: 2 for a in NO_GRIP}
+    assert all(c["seconds"] == 20 and c["posture"] == "forward" for c in nogrip)
+    # Calibration: every grip twice, as plain holds, in the first posture only
+    holds = Counter((c["posture"], c["label"]) for c in plan if c["kind"] == "hold" and c["label"] != "rest")
+    assert holds == {("forward", g): 2 for g in GRIPS}
+    for a, b in zip(plan, plan[1:]):
+        if a["kind"] == "nogrip":
+            assert (b["kind"], b["label"]) == ("hold", "rest")
+    settings = {"protocol": "D", "postures": ["table"], "reps": 3, "hold_s": 4, "rest_s": 2, "d_rounds": 1,
+                "d_activity_s": 30}
+    assert plan_for(settings, seed=0) == protocol_d_plan(["table"], 1, 30, 2, 4, 0)
+
+
+def test_d_session_gets_no_grip_or_rest_labels(tmp_path):
+    """Activities that aren't grips must not train any class, rest included: the wrist and arm move there."""
+    folder = tmp_path / "2026-10-14_130000_test"
+    plan = protocol_d_plan(rounds=1, activity_s=3, rest_s=1.5, hold_s=2.5, seed=0)
+    _fake_session(folder, plan, {"protocol": "D"})
+    d = dataset.build(folder)
+    nogrip = d["kind"] == "nogrip"
+    assert nogrip.any() and (d["grip"][nogrip] == "").all()
+    assert set(d["grip"][d["grip"] != ""]) == set(GESTURE_SET)
+
+    data = load_session(folder)
+    _, ends, labels, _ = gesture_model.session_windows(data, 500, {"log": True, "accel": False})
+    for seg in segments(data["events"]):
+        if seg["kind"] == "nogrip":
+            inside = (ends > seg["sample0"]) & (ends <= seg["sample1"])
+            assert inside.any() and all(lab is None for lab in labels[inside])

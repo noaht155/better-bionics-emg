@@ -956,12 +956,21 @@ ones in one posture: about 14 min. New cue kind `custom`: never a protocol A gri
 `train_ringnet`, redone on hum. The calibration holds feed protocol A like protocol B's (Noah). Poses were checked
 against the drawing only (pinch 7 mm thumb to index tip), not a real hand.
 
+**Protocol D, false start check** (`gestures.protocol_d_plan`). Every recording so far is cued grips and rest held
+still, so nothing measures how often the control layer starts a grip during forearm activity that isn't one, and the
+tuned start level (0.02) is close to off. A free recording of normal activity wouldn't work, real grabs in it are
+meant. D is a cued list instead: 14 activities that use the forearm without gripping (wrist bending, side to side and
+turning, arm raised, held out and overhead, leaning and pushing on the table, shaking the hand out, typing, drumming,
+waving, talking with the hands, walking), 40 s each, after a grip calibration block like B and C. About 11.5 min.
+New cue kind `nogrip`: never a grip or rest label, redone on hum. Any start the controller makes in one counts as a
+false start. Real grabs are tested live on the Control tab instead.
+
 ## Open
 
 - Control tab: try it on the arm (grab, hold, release; count wrong grips and twitches), check the 0.9 s to lock
   against fewer votes, and whether pinch closes far enough at gain 1.5 (per-grip max levels or a higher gain).
-  Record one session of everyday activity without cues to measure false starts per minute; the near-zero start
-  level is likely to fire there.
+  Record a protocol D session and add its `nogrip` cues to the replay as false starts per minute, then retune
+  against both; the near-zero start level is likely to fire there.
 - Record and play: train the classifier on protocol C's `custom` labels and play back each movement's target
   (or its recorded camera trajectory) under the control layer.
 
