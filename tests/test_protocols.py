@@ -12,6 +12,7 @@ from gestures import (GESTURE_SET, GESTURES, LIBRARY, NO_GRIP, plan_for, protoco
                       protocol_d_plan, session_plan)
 from hand_angles import JOINTS
 from ml import dataset, gesture_model
+from recorder import Recorder
 from session import CAMERA_COLUMNS, load_session, segments
 
 GRIPS = [g for g in GESTURE_SET if g != "rest"]
@@ -177,3 +178,23 @@ def test_d_session_gets_no_grip_or_rest_labels(tmp_path):
         if seg["kind"] == "nogrip":
             inside = (ends > seg["sample0"]) & (ends <= seg["sample1"])
             assert inside.any() and all(lab is None for lab in labels[inside])
+
+
+def test_hand_warning_only_where_the_camera_labels():
+    """The hand-out-of-view warning applies to cues the camera labels and the setup break before them, not between
+    sessions, not during protocol D's activities or the rest right after one."""
+    r = Recorder.__new__(Recorder)
+    r.session, r.plan, r.index = None, [], -1
+    assert not r._camera_needed()
+    r.session = object()
+    r.plan = protocol_d_plan(rounds=1, activity_s=20, seed=0)
+    needed = []
+    for r.index in range(len(r.plan)):
+        needed.append(r._camera_needed())
+    kinds = [c["kind"] for c in r.plan]
+    assert needed[0] and kinds[0] == "break"
+    for i, cue in enumerate(r.plan):
+        if cue["kind"] == "nogrip" or (cue["label"] == "rest" and kinds[i - 1] == "nogrip"):
+            assert not needed[i]
+        elif cue["kind"] == "hold":
+            assert needed[i]

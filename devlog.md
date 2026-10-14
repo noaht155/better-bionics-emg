@@ -975,6 +975,13 @@ AES, which the script's profile uses. First version called itself (a helper name
 case) and failed with call depth overflow; fixed, and the log now shows every step with timestamps. Worked on the
 real band 2026-10-14; after reopening the stream the app checks samples arrive (2 s).
 
+**Warnings only where they matter (design rule, Noah).** A warning shows only when the thing it warns about affects
+what is being recorded or done right now. The hand-out-of-view and hand-at-the-edge warnings now only show during
+cues the camera labels (grips, rest, finger, free, B and C movements) and the setup break before them; not between
+sessions, not during protocol D's activities (the arm leaves the picture on purpose) or the rest right after one
+(`recorder._camera_needed`). Warnings about something broken (no camera, slow camera, armband not connected, hum)
+always show. New warnings follow the same rule.
+
 ## Open
 
 - Control tab: try it on the arm (grab, hold, release; count wrong grips and twitches), check the 0.9 s to lock

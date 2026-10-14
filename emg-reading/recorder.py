@@ -19,6 +19,8 @@ from session import PracticeWriter, SessionWriter
 TICK_S = 0.02
 # Hand counts as out of view after this long without a detection
 HAND_LOST_S = 0.5
+# Cues whose windows get joint angle labels from the camera; the hand warnings only matter during these
+CAMERA_KINDS = ("hold", "finger", "free", "move", "custom")
 # The webcam runs at 30 fps, a drop to 15 means frames are being lost somewhere
 CAMERA_SLOW_FPS = 25
 # Mark bad within this long of a rest cue starting still means the gesture before it
@@ -290,14 +292,28 @@ class Recorder:
         else:
             edge = self._wrist_edge()
             hand = f"{self.camera.hand.capitalize()} hand"
-            if time.time() - self.hand_seen > HAND_LOST_S:
-                out.append(("hand", f"{hand} lost at the {edge} edge of the picture, move the camera so the "
-                                    "whole hand is well inside" if edge else f"{hand} out of view"))
-            elif edge:
-                out.append(("hand_edge", f"{hand} near the {edge} edge of the picture, tracking may drop"))
+            if self._camera_needed():
+                if time.time() - self.hand_seen > HAND_LOST_S:
+                    out.append(("hand", f"{hand} lost at the {edge} edge of the picture, move the camera so the "
+                                        "whole hand is well inside" if edge else f"{hand} out of view"))
+                elif edge:
+                    out.append(("hand_edge", f"{hand} near the {edge} edge of the picture, tracking may drop"))
             if 0 < self.camera.fps < CAMERA_SLOW_FPS:
                 out.append(("camera_slow", f"Camera at {self.camera.fps:.0f} fps"))
         return [{"code": c, "text": t} for c, t in out]
+
+    def _camera_needed(self):
+        """Whether the current cue needs the hand in view: a cue the camera labels, or a setup break before one so
+        the hand is placed in time. Not between sessions, not during protocol D's activities (the arm moves out of
+        the picture there) or the rest right after one."""
+        if self.session is None or not 0 <= self.index < len(self.plan):
+            return False
+        cue = self.plan[self.index]
+        if cue["kind"] == "break":
+            return self.index + 1 < len(self.plan) and self.plan[self.index + 1]["kind"] in CAMERA_KINDS
+        if cue["label"] == "rest" and self.index > 0 and self.plan[self.index - 1]["kind"] == "nogrip":
+            return False
+        return cue["kind"] in CAMERA_KINDS
 
     def _wrist_edge(self):
         """Which edge of the picture the wrist was last seen near, as the mirrored preview shows it, or None.
