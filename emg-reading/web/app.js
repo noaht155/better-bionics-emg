@@ -15,7 +15,6 @@ const view = { yaw: -45, pitch: -25 };
 // The filled hand reads best with the palm towards the viewer, turned a little
 const solidView = { yaw: 25, pitch: -20 };
 const SOLID_COLOR = "#c8cdd6";
-const UPCOMING_COLOR = "#6f7682";
 
 function anglesByName(list) {
   return Object.fromEntries(config.joints.map((j, i) => [j, list[i]]));
@@ -327,9 +326,12 @@ function drawSession() {
   caption.classList.toggle("upcoming", !!target?.upcoming);
 }
 
-// The drawn hands ease towards their target instead of jumping, so a change of cue looks like one hand moving.
+// The drawn hands follow their target on a critically damped spring, so neither the position nor the speed ever
+// jumps and a change of cue looks like one hand moving (a plain exponential ease starts at full speed and reads as
+// a snap). About 0.4 s to settle, and it trails an animated target by 2 / SPRING_W, under 0.2 s.
 // They redraw every screen frame; between the server's updates (20 a second) the cue time runs on locally
-const EASE_S = 0.15;
+const SPRING_W = 12;
+const SPRING_STEP_S = 0.005;
 const shown = {};
 let stateAt = 0;
 let lastFrame = performance.now();
@@ -337,10 +339,19 @@ let lastFrame = performance.now();
 function follow(key, angles, dt) {
   if (!angles) return (shown[key] = null);
   const cur = shown[key];
-  if (!cur) return (shown[key] = { ...angles });
-  const k = 1 - Math.exp(-dt / EASE_S);
-  for (const j in angles) cur[j] += k * (angles[j] - cur[j]);
-  return cur;
+  if (!cur) return (shown[key] = { pos: { ...angles }, vel: {} }).pos;
+  const n = Math.max(1, Math.ceil(dt / SPRING_STEP_S));
+  const h = dt / n;
+  for (const j in angles) {
+    let x = cur.pos[j] ?? angles[j], v = cur.vel[j] ?? 0;
+    for (let i = 0; i < n; i++) {
+      v += h * (SPRING_W * SPRING_W * (angles[j] - x) - 2 * SPRING_W * v);
+      x += h * v;
+    }
+    cur.pos[j] = x;
+    cur.vel[j] = v;
+  }
+  return cur.pos;
 }
 
 function drawTarget(dt) {
@@ -351,11 +362,7 @@ function drawTarget(dt) {
   const elapsed = s.cue_elapsed + (s.paused ? 0 : (performance.now() - stateAt) / 1000);
   const target = targetPose(elapsed);
   const angles = follow("target", target?.angles, dt);
-  // The next gesture is drawn darker so it doesn't read as the current one. Not transparent, the overlapping
-  // parts would show through each other
-  if (angles) {
-    drawSolidHand(ctx, angles, { view: solidView, mirror: mirrored(), color: target.upcoming ? UPCOMING_COLOR : SOLID_COLOR });
-  }
+  if (angles) drawSolidHand(ctx, angles, { view: solidView, mirror: mirrored(), color: SOLID_COLOR });
 }
 
 function frameLoop(now) {
@@ -386,12 +393,15 @@ const FINGER_NAMES = ["thumb", "index", "middle", "ring", "pinky"];
 const clamp01 = (x) => Math.min(Math.max(x, 0), 1);
 const ease = (x) => (1 - Math.cos(Math.PI * clamp01(x))) / 2;
 
-// The open hand plus a share of the way to each named pose: [[label, share], ...]
-function blendPoses(parts) {
+// The relaxed hand plus a share of the way to each named pose: [[label, share], ...]. A grip (whole) moves every
+// joint to its pose. A movement or finger target is stored as the open hand with some joints changed, so only those
+// joints move and the rest of the hand stays relaxed
+function blendPoses(parts, whole = false) {
+  const rest = config.gestures.rest.angles;
   const open = config.gestures.open.angles;
-  const out = open.slice();
+  const out = rest.slice();
   for (const [label, f] of parts) {
-    config.gestures[label].angles.forEach((a, i) => { out[i] += f * (a - open[i]); });
+    config.gestures[label].angles.forEach((a, i) => { if (whole || a !== open[i]) out[i] += f * (a - rest[i]); });
   }
   return anglesByName(out);
 }
@@ -406,7 +416,7 @@ function fingerShare(x) {
 
 // Where the target hand is t seconds into a cue, so the person can follow it: a protocol B movement closes and
 // opens once, a finger cue does its three bends, the wave bends the fingers one after another, a grip closes from
-// the open hand in half a second and then holds
+// the relaxed hand in half a second and then holds. Every cue starts and ends at the relaxed hand
 function cueFrame(cue, t) {
   const T = cue.seconds || 4;
   if (cue.kind === "move") return blendPoses([[cue.label, (1 - Math.cos(2 * Math.PI * clamp01(t / T))) / 2]]);
@@ -419,29 +429,24 @@ function cueFrame(cue, t) {
   }
   if (!config.gestures[cue.label]) return null;
   if (cue.kind === "finger") return blendPoses([[cue.label, fingerShare((t % (T / 3)) / (T / 3))]]);
-  if (cue.kind === "hold" && cue.label !== "rest") return blendPoses([[cue.label, ease(t / 0.5)]]);
+  if (cue.kind === "hold" && cue.label !== "rest") return blendPoses([[cue.label, ease(t / 0.5)]], true);
   return anglesByName(config.gestures[cue.label].angles);
 }
 
 function cueAngles(cue, s, elapsed) {
-  const g = config.gestures[cue.label];
-  // The next cue, shown during a rest, is drawn at its end pose so it can be prepared. A grip is shown that way
-  // already, so during its own cue it simply holds; the eased hand makes the change from rest
-  if (s.cue !== cue || cue.kind === "hold") return g ? anglesByName(g.angles) : null;
-  return cueFrame(cue, elapsed);
+  return cueFrame(cue, elapsed ?? s.cue_elapsed);
 }
 
-// Target pose of the current cue, or the next gesture during a rest so it can be prepared
-// Returns {angles, title, text, upcoming}, upcoming is true when it shows the next gesture
+// Target pose of the current cue. During a rest the hand stays relaxed and the text names the next gesture
+// Returns {angles, title, text, upcoming}, upcoming is true when the text is the next gesture's
 function targetPose(elapsed) {
   const s = state.session;
   if (!s) return null;
-  let cue = s.cue;
+  const cue = s.cue;
   if (cue.kind === "free" || cue.kind === "sync" || cue.kind === "break") return null;
   const upcoming = cue.label === "rest" && s.next && !!config.gestures[s.next.label];
-  if (upcoming) cue = s.next;
   const angles = cueAngles(cue, s, elapsed ?? s.cue_elapsed);
-  const [title, description] = cue.text.split("\n");
+  const [title, description] = (upcoming ? s.next : cue).text.split("\n");
   return angles ? { angles, title, text: `${title}\n${description ?? ""}`.trim(), upcoming } : null;
 }
 
