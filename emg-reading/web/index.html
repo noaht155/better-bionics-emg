@@ -57,13 +57,28 @@
         <select name="protocol">
           <option value="A">A: held grips and single fingers</option>
           <option value="B">B: Ninapro-style movements, with a short grip calibration</option>
+          <option value="C">C: movements you pick, with a short grip calibration</option>
         </select>
       </label>
       <fieldset id="postures"><legend>Postures</legend></fieldset>
+      <fieldset id="moves" data-protocol="C">
+        <legend>Movements</legend>
+        <div class="pick-top">
+          <canvas id="pick-hand" width="200" height="170"></canvas>
+          <div>
+            <p id="pick-info" class="muted">Point at a movement to see it. * marks the grips used most in daily life.</p>
+            <button type="button" id="pick-common">Tick the common ones</button>
+            <button type="button" id="pick-none">Clear</button>
+          </div>
+        </div>
+        <div id="pick-list"></div>
+      </fieldset>
       <div class="row">
         <label data-protocol="A">Repetitions <input name="reps" type="number" min="1" max="20" value="3"></label>
         <label data-protocol="B">Rounds <input name="rounds" type="number" min="1" max="20" value="6"></label>
         <label data-protocol="B">Movement s <input name="move_s" type="number" min="2" max="15" step="0.5" value="5"></label>
+        <label data-protocol="C">Rounds <input name="c_rounds" type="number" min="1" max="20" value="5"></label>
+        <label data-protocol="C">Movement s <input name="c_move_s" type="number" min="3" max="15" step="0.5" value="6"></label>
         <label>Hold s <input name="hold_s" type="number" min="1" max="30" step="0.5" value="4"></label>
         <label>Rest s <input name="rest_s" type="number" min="1" max="30" step="0.5" value="3"></label>
       </div>

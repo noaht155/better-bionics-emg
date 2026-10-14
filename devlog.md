@@ -943,12 +943,27 @@ closure, counts starts and releases, plots effort and closure over 10 s, and has
 applies while it runs. Presets are saved in `models/control_presets.json`; "default" is the replay's best. Tried on
 the 2026-09-30 replay only, not on the arm yet. Haptics still follow each channel's envelope, not closure.
 
+**Protocol C, custom movements** (`gestures.LIBRARY`, `protocol_c_plan`), the recording side of "record and play":
+the person picks movements, the EMG classifier recognises which one starts and the hand plays it back (not built
+yet, C only records). A library of 57 hand movements on the Record form, grouped as power, precision, lateral and
+flat, point and press, signs, single fingers and moving gestures. Sources: GRASP taxonomy (Feix 2016), Cutkosky,
+Ninapro A to C, and the bebionic, i-Limb, TASKA, Ability Hand and Michelangelo grip lists. The most used grips are
+marked (Bullock 2013: medium wrap 23 % of grasping time, precision disk 17 %, the top 10 cover 80 %; Vergara 2014:
+pinch, cylinder, lateral pinch). Wrist movements are left out, the drawing has no wrist. Each posture: the grips twice
+as calibration, then the picked movements in rounds (each once per round, shuffled), each a 6 s cue that follows the
+target hand in, holds and relaxes; moving gestures (trigger, tap, count, snap) follow their own keyframes. 17 common
+ones in one posture: about 14 min. New cue kind `custom`: never a protocol A grip label, counts as moving in
+`train_ringnet`, redone on hum. The calibration holds feed protocol A like protocol B's (Noah). Poses were checked
+against the drawing only (pinch 7 mm thumb to index tip), not a real hand.
+
 ## Open
 
 - Control tab: try it on the arm (grab, hold, release; count wrong grips and twitches), check the 0.9 s to lock
   against fewer votes, and whether pinch closes far enough at gain 1.5 (per-grip max levels or a higher gain).
   Record one session of everyday activity without cues to measure false starts per minute; the near-zero start
   level is likely to fire there.
+- Record and play: train the classifier on protocol C's `custom` labels and play back each movement's target
+  (or its recorded camera trajectory) under the control layer.
 
 - Camera delay: re-measure with `diagnostics/camera_led/led_delay.py` only if the camera, its capture settings, the
   grab code or the computer change, and with `diagnostics/armband_rtt/armband_rtt.py rtt` if the band, its

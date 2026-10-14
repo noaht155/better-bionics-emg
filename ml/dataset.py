@@ -5,7 +5,8 @@ shared filter, 8 channels x WINDOW samples, ending every STEP samples, with what
 - grip: the cued grip if the window lies in the trimmed part of a hold cue (same rule as the LDA), else None
 - rep: which repetition of that grip in that posture (1 to 3), 0 outside held grips
 - posture: the posture of the cue the window ends in
-- kind: the kind of that cue (hold, finger, free, sync, break), finger and free are the moving fingers
+- kind: the kind of that cue (hold, finger, free, move, custom, sync, break), all but hold, sync and break are
+  moving fingers. custom (protocol C) never gets a grip label, even where its key is a grip name
 - angles: the 20 joint angles from the camera at the window's last sample, NaN when the hand wasn't tracked
 
 Each session is processed once and cached in ml/cache/ (ignored by git, it holds personal data).

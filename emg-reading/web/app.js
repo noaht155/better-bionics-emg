@@ -42,10 +42,14 @@ function loadSettings() {
     label.innerHTML = `<input type="checkbox" name="posture" value="${name}" checked> ${text}`;
     $("postures").append(label);
   }
+  buildPicker();
   for (const [k, v] of Object.entries(saved)) {
     if (PER_SESSION.includes(k)) continue;
     if (k === "postures") {
       form.querySelectorAll("[name=posture]").forEach((c) => { c.checked = v.includes(c.value); });
+    } else if (k === "moves") {
+      form.querySelectorAll("[name=move]").forEach((c) => { c.checked = v.includes(c.value); });
+      syncCategories();
     } else if (form[k] && typeof v !== "object") {
       form[k].value = v;
     }
@@ -79,13 +83,86 @@ function readSettings() {
     postures: [...form.querySelectorAll("[name=posture]:checked")].map((c) => c.value),
     protocol: form.protocol.value,
     reps: num("reps"), hold_s: num("hold_s"), rest_s: num("rest_s"), rounds: num("rounds"), move_s: num("move_s"),
+    moves: [...form.querySelectorAll("[name=move]:checked")].map((c) => c.value),
+    c_rounds: num("c_rounds"), c_move_s: num("c_move_s"),
     practice: form.practice.checked,
   };
 }
 
 function planBody() {
-  const { postures, protocol, reps, hold_s, rest_s, rounds, move_s } = readSettings();
-  return { postures, protocol, reps, hold_s, rest_s, rounds, move_s };
+  const { postures, protocol, reps, hold_s, rest_s, rounds, move_s, moves, c_rounds, c_move_s } = readSettings();
+  return { postures, protocol, reps, hold_s, rest_s, rounds, move_s, moves, c_rounds, c_move_s };
+}
+
+// Protocol C movement picker: checkboxes grouped by category, the hand above plays the one under the pointer
+let pick = null;
+
+function buildPicker() {
+  const list = $("pick-list");
+  for (const [cat, title] of Object.entries(config.categories)) {
+    const head = document.createElement("label");
+    head.className = "pick-head";
+    head.innerHTML = `<input type="checkbox" data-cat="${cat}"> ${title}`;
+    list.append(head);
+    for (const [key, m] of Object.entries(config.library)) {
+      if (m.category !== cat) continue;
+      const label = document.createElement("label");
+      label.title = m.sources;
+      label.dataset.move = key;
+      const star = m.common ? " *" : "";
+      label.innerHTML = `<input type="checkbox" name="move" value="${key}" data-cat="${cat}"> ${m.name}${star}`;
+      list.append(label);
+    }
+  }
+  list.addEventListener("pointerover", (e) => {
+    const label = e.target.closest("label[data-move]");
+    if (label && label.dataset.move !== pick?.label) showPick(label.dataset.move);
+  });
+  list.addEventListener("change", (e) => {
+    const cat = e.target.dataset.cat;
+    if (e.target.name !== "move" && cat) {
+      list.querySelectorAll(`[name=move][data-cat=${cat}]`).forEach((c) => { c.checked = e.target.checked; });
+    }
+    syncCategories();
+  });
+  $("pick-common").addEventListener("click", () => {
+    list.querySelectorAll("[name=move]").forEach((c) => { c.checked = config.library[c.value].common; });
+    syncCategories();
+    updateDuration();
+  });
+  $("pick-none").addEventListener("click", () => {
+    list.querySelectorAll("[name=move]").forEach((c) => { c.checked = false; });
+    syncCategories();
+    updateDuration();
+  });
+}
+
+function showPick(key) {
+  pick = { label: key, shownAt: performance.now() };
+  const m = config.library[key];
+  $("pick-info").textContent = `${m.name}: ${m.text.split("\n")[1]}. From ${m.sources}`;
+  $("pick-list").querySelectorAll("label[data-move]").forEach((l) => {
+    l.classList.toggle("shown", l.dataset.move === key);
+  });
+}
+
+function syncCategories() {
+  $("pick-list").querySelectorAll(".pick-head input").forEach((head) => {
+    const boxes = [...$("pick-list").querySelectorAll(`[name=move][data-cat=${head.dataset.cat}]`)];
+    const n = boxes.filter((c) => c.checked).length;
+    head.checked = n === boxes.length;
+    head.indeterminate = n > 0 && n < boxes.length;
+  });
+}
+
+function drawPick(dt) {
+  const ctx = $("pick-hand").getContext("2d");
+  ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+  if (!pick || $("moves").hidden || $("setup").hidden) return;
+  const cue = { kind: "custom", label: pick.label, seconds: Number($("setup").c_move_s.value) || 6 };
+  const t = ((performance.now() - pick.shownAt) / 1000) % cue.seconds;
+  const angles = follow("pick", cueFrame(cue, t), dt);
+  if (angles) drawSolidHand(ctx, angles, { view: solidView, mirror: mirrored(), color: SOLID_COLOR });
 }
 
 // Only the fields the chosen protocol uses
@@ -100,6 +177,10 @@ async function updateDuration() {
   const s = readSettings();
   if (!s.postures.length) {
     $("duration").textContent = "Tick at least one posture";
+    return;
+  }
+  if (s.protocol === "C" && !s.moves.length) {
+    $("duration").textContent = "Tick at least one movement";
     return;
   }
   try {
@@ -124,8 +205,9 @@ async function post(path, body) {
 }
 
 $("setup").addEventListener("input", (e) => {
-  // Protocol B is normally done with the forearm on the table only, like Ninapro. Other postures can still be ticked
-  if (e.target.name === "protocol" && e.target.value === "B") {
+  // Protocols B and C are normally done with the forearm on the table only, like Ninapro. Other postures can still be
+  // ticked
+  if (e.target.name === "protocol" && ["B", "C"].includes(e.target.value)) {
     $("setup").querySelectorAll("[name=posture]").forEach((c) => { c.checked = c.value === "table"; });
   }
   showProtocolFields();
@@ -371,6 +453,7 @@ function frameLoop(now) {
   try {
     drawTarget(dt);
     if (preview) drawPreview(dt);
+    drawPick(dt);
   } catch (err) {
     console.error("frameLoop", err);
   }
@@ -414,11 +497,28 @@ function fingerShare(x) {
   return 1 - ease((x - 0.65) / 0.35);
 }
 
+// Between the keyframes of a dynamic protocol C movement, x the share of the cue time
+function keyFrame(keys, x) {
+  let i = 0;
+  while (i < keys.length - 2 && x > keys[i + 1][0]) i++;
+  const [[t0, a], [t1, b]] = [keys[i], keys[i + 1]];
+  const f = t1 > t0 ? ease((x - t0) / (t1 - t0)) : 1;
+  return anglesByName(a.map((v, j) => v + f * (b[j] - v)));
+}
+
 // Where the target hand is t seconds into a cue, so the person can follow it: a protocol B movement closes and
 // opens once, a finger cue does its three bends, the wave bends the fingers one after another, a grip closes from
-// the relaxed hand in half a second and then holds. Every cue starts and ends at the relaxed hand
+// the relaxed hand in half a second and then holds. A protocol C movement closes over the first 30 % of the cue,
+// holds and opens over the last 30 %, or follows its keyframes. Every cue starts and ends at the relaxed hand
 function cueFrame(cue, t) {
   const T = cue.seconds || 4;
+  if (cue.kind === "custom") {
+    const m = config.library[cue.label];
+    if (!m) return null;
+    const x = clamp01(t / T);
+    if (m.keys) return keyFrame(m.keys, x);
+    return blendPoses([[cue.label, x < 0.3 ? ease(x / 0.3) : x > 0.7 ? 1 - ease((x - 0.7) / 0.3) : 1]], !m.partial);
+  }
   if (cue.kind === "move") return blendPoses([[cue.label, (1 - Math.cos(2 * Math.PI * clamp01(t / T))) / 2]]);
   if (cue.label === "wave") {
     const cycle = 2;
@@ -455,7 +555,7 @@ function drawPose() {
   ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
   const s = state.session;
   const cue = s?.cue;
-  const g = cue && ["hold", "finger", "move"].includes(cue.kind) ? config.gestures[cue.label] : null;
+  const g = cue && ["hold", "finger", "move", "custom"].includes(cue.kind) ? config.gestures[cue.label] : null;
   const target = g ? cueAngles(cue, s) : null;
   const tracked = state.hand ? anglesByName(state.hand.angles) : null;
   if (target) drawHand(ctx, target, { view, mirror: mirrored(), color: TARGET_COLOR, width: 9, alpha: 0.6 });

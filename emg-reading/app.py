@@ -27,7 +27,7 @@ from calibrate import load_calibration
 from camera import Camera
 from control import DEFAULTS as CONTROL_DEFAULTS
 from esp32_link import WIFI_IP
-from gestures import GESTURE_SET, GESTURES, POSTURES, plan_for
+from gestures import C_MOVE_S, C_ROUNDS, CATEGORIES, GESTURE_SET, GESTURES, LIBRARY, POSTURES, plan_for
 from hand_angles import JOINTS, RELIABLE
 from processing import spectrum
 from recorder import Recorder
@@ -59,14 +59,19 @@ class SessionSettings(BaseModel):
     placement: str = ""
     notes: str = ""
     postures: list[Literal[tuple(POSTURES)]] = Field(min_length=1)
-    # A: held grips and single fingers. B: the Ninapro-style movements (gestures.protocol_b_plan)
-    protocol: Literal["A", "B"] = "A"
+    # A: held grips and single fingers. B: the Ninapro-style movements (gestures.protocol_b_plan). C: movements
+    # picked from the library
+    protocol: Literal["A", "B", "C"] = "A"
     reps: int = Field(ge=1, le=20)
     hold_s: float = Field(ge=1, le=30)
     rest_s: float = Field(ge=1, le=30)
     free_s: float = Field(0, ge=0, le=600)
     rounds: int = Field(6, ge=1, le=20)
     move_s: float = Field(5, ge=2, le=15)
+    # C: movements picked from gestures.LIBRARY (gestures.protocol_c_plan)
+    moves: list[Literal[tuple(LIBRARY)]] = []
+    c_rounds: int = Field(C_ROUNDS, ge=1, le=20)
+    c_move_s: float = Field(C_MOVE_S, ge=3, le=15)
     # Same run, nothing saved, for trying out the setup
     practice: bool = False
 
@@ -87,14 +92,18 @@ class Esp32Link(BaseModel):
 
 class PlanSettings(BaseModel):
     postures: list[Literal[tuple(POSTURES)]]
-    # A: held grips and single fingers. B: the Ninapro-style movements (gestures.protocol_b_plan)
-    protocol: Literal["A", "B"] = "A"
+    # A: held grips and single fingers. B: the Ninapro-style movements (gestures.protocol_b_plan). C: movements
+    # picked from the library
+    protocol: Literal["A", "B", "C"] = "A"
     reps: int = Field(ge=1, le=20)
     hold_s: float = Field(ge=1, le=30)
     rest_s: float = Field(ge=1, le=30)
     free_s: float = Field(0, ge=0, le=600)
     rounds: int = Field(6, ge=1, le=20)
     move_s: float = Field(5, ge=2, le=15)
+    moves: list[Literal[tuple(LIBRARY)]] = []
+    c_rounds: int = Field(C_ROUNDS, ge=1, le=20)
+    c_move_s: float = Field(C_MOVE_S, ge=3, le=15)
 
 
 class TrainSettings(BaseModel):
@@ -258,7 +267,7 @@ def make_app(recorder, band, camera, tools):
         return {"joints": JOINTS, "reliable": RELIABLE, "channels": band.channels, "rate": band.rate,
                 "source": band.source, "calibration": calibration,
                 "gestures": {name: {"text": text, "angles": angles} for name, (text, angles) in GESTURES.items()},
-                "gesture_set": GESTURE_SET,
+                "gesture_set": GESTURE_SET, "library": LIBRARY, "categories": CATEGORIES,
                 "postures": POSTURES, "camera": camera is not None,
                 "tracked_hand": camera.hand if camera else None, "esp32_wifi_ip": WIFI_IP}
 
@@ -266,7 +275,10 @@ def make_app(recorder, band, camera, tools):
     def plan_length(settings: PlanSettings):
         """Length of the session these settings give, from the real plan so the page needn't copy its logic. The
         plan itself is for the cue preview; grip order is shuffled again when the session starts."""
-        plan = plan_for(settings.model_dump())
+        try:
+            plan = plan_for(settings.model_dump())
+        except ValueError as e:
+            refuse(e)
         return {"seconds": sum(c["seconds"] or 0 for c in plan), "cues": len(plan), "plan": plan}
 
     @app.post("/api/session/start")

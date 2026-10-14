@@ -210,3 +210,11 @@ th { color: var(--muted); font-weight: 400; }
 .param input[type=range] { width: 100%; padding: 0; }
 .param output { font-variant-numeric: tabular-nums; text-align: right; }
 .param small { grid-column: 1 / -1; color: var(--muted); margin-top: -4px; }
+
+.pick-top { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+.pick-top button { padding: 4px 10px; margin: 4px 4px 0 0; }
+#pick-hand { width: 200px; max-width: 100%; background: #16181c; border-radius: 6px; }
+#pick-list .pick-head { display: block; margin: 10px 0 2px; font-weight: 600; }
+#pick-list .pick-head input { margin-right: 6px; }
+#pick-list label:not(.pick-head) { min-width: 170px; margin: 2px 12px 2px 0; }
+#pick-list label.shown { color: var(--accent); }

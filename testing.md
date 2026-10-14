@@ -130,6 +130,18 @@ These decide when the recorder marks a cue bad and redoes it.
 | `test_release_modes` | Release on the open hand, on rest, or on either |
 | `test_angles_follow_closure` | Output angles sit at the right share of the way from relaxed to the grip's pose, and the spring only moves part of the way in one step |
 
+### Protocols (`tests/test_protocols.py`)
+
+| Test | Checks |
+|---|---|
+| `test_c_plan_holds_the_selection_once_per_round` | Each picked movement once per round in every posture, cue kind `custom`, rest after each, and the calibration block of every grip twice as plain holds |
+| `test_c_plan_rounds_are_shuffled_and_seeded` | Same seed gives the same plan, and rounds differ in order |
+| `test_c_plan_refuses_an_empty_or_unknown_selection` | No movements, or an unknown one, raises an error instead of an empty session |
+| `test_plan_for_c_uses_its_own_fields` | `plan_for` uses `moves`, `c_rounds` and `c_move_s`, not B's rounds and movement time |
+| `test_a_and_b_plans_unchanged` | Protocol A and B plans (seed 5) match a hash taken before protocol C existed, and the extra C fields don't change them |
+| `test_library_entries_are_complete` | Every entry has a category, two-line cue text, sources and 20 angles; reused keys keep their old angles; keyframes start and end at the relaxed hand |
+| `test_c_session_trains_without_leaking_into_protocol_a` | A protocol C session counts as good, loads in `ml.dataset`, and its `custom` cues get no grip label in the network or LDA windows, even for fist and pinch; only the calibration holds do |
+
 ## Found by the tests
 
 - **Camera glitches in the angle labels** (2026-10-06): some frames have a trained joint bent backwards past -60
