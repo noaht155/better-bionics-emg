@@ -3,6 +3,7 @@
 ## Armband
 - Ref and bias OK
 - Broken pads: none. Ch 0, 2, 5 had no connection, reflowed 2026-09-29, verified 2026-09-30 (all 8 channels rise 9 to 14x on a clench)
+- 2026-10-13: two pad wires snapped at the solder joint, most likely ch 0 and 2 (not confirmed by a press test). Spliced, joint covered with low-temperature hot glue. Rest 3.2 to 4.5 uV, hum under 14 uV on all channels afterwards
 - Battery: Akyga AKY0081 980 mAh, soldered. Recovered from deep discharge 2026-09-28
 - Case opened 2026-09-28
 - Since then the electrode pads are pushed under the band by hand, without the casing. Their positions vary from session to session beyond what the placement note (band position) records

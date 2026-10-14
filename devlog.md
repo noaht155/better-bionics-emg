@@ -838,14 +838,95 @@ Wiring in `pinmap.md`.
   it back to false for LEDs or a low-side driver, or those run full on at 0 %. Protocol unchanged.
 - The coin motors feel weak. Noah is considering LRAs instead.
 
+**Pad wires repaired.** Two pad wires had snapped at the solder joint again, most likely ch 0 and 2 (Noah's count
+was 1 and 3 from one; not confirmed with a press test). Spliced, and the joint covered with low-temperature hot glue
+pressed flat with parchment paper, tapering towards the pad edge. After the repair, at rest: filtered RMS 3.2 to
+4.5 uV on all 8 channels, hum 2.3 to 4.7 uV except ch 5 at 13.6 uV, no lost samples. Clench and channel order not
+checked yet.
+
+**First protocol B session** (`2026-10-13_170753`, 10 min, table, right after the pad repair). Scored with the screen (`diagnostics/protocol_b.py`)
+baseline (`diagnostics/validate_net.py run_held`, unchanged), pretrained on all 9 older sessions. The session has one
+posture block, so the split is by time instead: calibration block always in training, the 6 movement rounds in
+thirds, fine-tune on the calibration + 4 rounds, test the other 2 (3 folds, 3 seeds). Moving windows:
+- Fine-tuned: fingers r 0.56 (seeds 0.553 to 0.561), R2 0.14; closure r 0.66. Older sessions, same baseline:
+  0.39 to 0.52 per session (dev mean 0.48, locked 0.40), R2 about 0.10.
+- Without fine-tuning: fingers r 0.50, R2 0.20 (older sessions 0.22 to 0.51). Fine-tuning raises r but lowers R2 here.
+- Part of the gain is the content: chance r (labels shifted 30 s or more) is 0.16 here vs 0.08 to 0.22, mean 0.12, on the
+  older sessions. Above chance: 0.39 vs 0.34 on average.
+- Not like for like: test windows are DB8 movements in the same posture, older sessions were tested on another
+  posture block with finger cues and free movement; and the pads were just repaired.
+- Passes the bar set before the run (above 0.53), so more protocol B sessions are worth recording. One session, so
+  not settled: rerun after every 2 or 3.
+- Second session (`2026-10-13_173556`, band off and on, 7 cm): fine-tuned fingers r 0.51 (0.50 to 0.53), R2 -0.16;
+  without fine-tuning r 0.51, R2 0.10. Chance 0.13. Mean of the two fine-tuned 0.54, just over the bar; the second
+  alone is at the top of the old range. Above chance both are 0.38 to 0.39 vs 0.34 on the older sessions.
+- Without fine-tuning both sessions score 0.50 to 0.51, against 0.22 to 0.51 (mean about 0.41) on the older ones.
+- Fine-tuning makes R2 on moving windows worse in both (0.20 to 0.14, 0.10 to -0.16): it follows the movement a
+  little better but at the wrong size. Look into this before putting a same-day fine-tune into the app.
+
+**Placement fields on the Record form.** The second session got the first one's placement and notes copied over by
+the remembered form (fixed by hand in its `session.json`: 7 cm, no notes). Now `crease_distance` + `crease_unit`
+(distance of the band from the anterior elbow crease) and `module_side` (main module on the muscle belly, anterior,
+or the bony side, posterior) are required in `settings`, start empty, are cleared after every start and are never remembered (the form names them if one is missing);
+`placement` (now optional free notes) and `notes` aren't remembered either.
+
+## 2026-10-14: one decision per finger
+
+**Idea (Noah):** instead of joint angles, one decision per finger, labelled from the cues rather than the camera;
+the hand's tactile sensors decide when to stop. Checked on the existing 11 sessions (`diagnostics/finger_states.py`,
+results in `out/finger_states/`). Four decisions: thumb, index, middle, ring + little (they share a flexor). LDA,
+protocol A features, per held session without calibration and with its first half as calibration.
+- Binary per grip (closed if knuckle + middle joint average 40 deg, thumb in for every grip but rest and open) makes
+  fist, tripod and key pinch the same pattern. They differ in thumb position and how far the fingers close.
+- Binary, calibrated: per finger 73 to 83 % balanced, all 4 right 71 %. The 7-grip LDA with its grip turned into
+  finger states does better on every finger: 82 to 88 %, all 4 right 80 %. On the protocol B movements and animated
+  finger cues, where fingers move on their own: all 4 right 55 % vs 60 % from the grip LDA.
+- Single fingers on their own (older own-pace finger cues, scored against the camera): 51 to 59 % balanced, about
+  chance. Those cues have no cue timing, so they weren't in training; only the 2 protocol B sessions had labelled
+  single-finger movement.
+- 3-way (closing / opening / no change, from the cue timeline slope, current + 200 ms delta features): 44 to 49 %
+  balanced (chance 33 %), about half of the movements caught, 2 to 4 false commands per minute.
+- Reaction delay to a grip cue (camera crossing halfway): median 0.15 to 0.45 s per session, spread (IQR) 0.1 to
+  0.45 s, so cue-only labels are blurred by about 0.2 s. Transitions last 0.3 to 0.5 s, which hurts 3-way most.
+- So per-finger decisions don't beat picking a grip, and single fingers aren't separable with this data and LDA. A
+  grip classifier plus tactile stop and EMG-driven speed gives the same control idea with the better decoder.
+
+**Ideas for continuous-feeling control (not decided, for brainstorming with Noah).** Split the job: the grip
+classifier picks the shape (the most reliable output, 80 to 86 % calibrated, about 4 % wrong at the 0.8 threshold)
+and one continuous signal sets how far the hand closes (effort: a clench is 9 to 14x rest; network closure r 0.59 to
+0.66 on moving windows, better than any single finger).
+1. Grip chosen only while effort rises from rest, then locked until back at rest, so it never switches mid-grasp.
+2. Closure follows EMG intensity scaled between calibrated rest and max (as the haptics), along the path from open to
+   the chosen grip's closed pose; position or speed from effort is still open.
+3. Tactile sensors stop each finger on contact, so the hand wraps round the object.
+4. Relaxing holds the grip; the open-hand class releases it.
+5. The same critically damped spring as the cue hand on the motor targets, against jitter.
+- Costs: no free single-finger movement (7 shapes, each closed continuously, like most commercial hands); the
+  2026-10-08 offline test scored grip + closure below the per-finger head (r 0.39 vs 0.47), but as angle tracking,
+  which is not this design's job; rest false alarms after calibration still open (the lock limits them).
+- Possible next step: a live mode in the app (virtual hand with lock, effort closure and spring, haptics following
+  closure), tried on grab, hold and release, counting wrong grips and twitches. Alternative still open: a protocol C
+  of animated single-finger close/open cues to test independent fingers with real labels.
+
+**Cue hand on the Record screen:** every cue now starts and ends at the relaxed pose (fingers bent 20 to 30 deg,
+`rest` in `gestures.py`) instead of the flat open hand; during a rest the hand stays relaxed and only the text names
+the next gesture (it used to jump to the next gesture's pose). Movement and finger targets move only the joints they
+change, the rest of the hand stays relaxed. The drawn hand follows on a critically damped spring (`SPRING_W` 12 in
+`web/app.js`) instead of an exponential ease, so speed never jumps; it trails an animated target by under 0.2 s.
+Recorded labels are unaffected (angles come from the camera).
+
 ## Open
+
+- Control scheme: brainstorm the grip + effort closure + tactile stop ideas (2026-10-14) before building anything;
+  nothing decided.
 
 - Camera delay: re-measure with `diagnostics/camera_led/led_delay.py` only if the camera, its capture settings, the
   grab code or the computer change, and with `diagnostics/armband_rtt/armband_rtt.py rtt` if the band, its
   firmware or the WiFi setup change; then update `CAMERA_DELAY_S`.
 - Angles (screen 2026-10-08): no change to the network beats the current baseline on the existing recordings, keep
   it (at least 5 min of same-day fine-tune). If the guard bug is ever fixed in a rerun, guard around each test window.
-  Next: record protocol B sessions (DB8 movements, forearm on the table) and a protractor check of the camera, to
+  Next: record protocol B sessions (DB8 movements, forearm on the table; first one 2026-10-13 passed the pilot bar,
+  rerun the time-split test every 2 or 3 sessions) and a protractor check of the camera, to
   split the remaining gap into protocol, sensors and labels; then a live control test, since offline r doesn't
   predict live control.
 
