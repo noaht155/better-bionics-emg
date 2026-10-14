@@ -78,7 +78,15 @@ async function pollSpectrum() {
 }
 
 function channelRows(ctx) {
-  const { width: w, height: h } = ctx.canvas;
+  // Bitmap matches the canvas's size on screen, otherwise a wide or high-dpi screen stretches it and blurs the traces
+  const canvas = ctx.canvas;
+  const dpr = window.devicePixelRatio || 1;
+  const w = canvas.clientWidth, h = canvas.clientHeight;
+  if (canvas.width !== Math.round(w * dpr) || canvas.height !== Math.round(h * dpr)) {
+    canvas.width = Math.round(w * dpr);
+    canvas.height = Math.round(h * dpr);
+  }
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   ctx.clearRect(0, 0, w, h);
   const rowH = h / config.channels.length;
   ctx.font = "13px system-ui";

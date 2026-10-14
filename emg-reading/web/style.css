@@ -73,6 +73,7 @@ label input:not([type=checkbox]), label select { display: block; width: 100%; ma
 
 fieldset { border: 1px solid #3a3f49; border-radius: 6px; margin: 8px 0; }
 fieldset label { display: inline-block; margin-right: 16px; color: var(--text); }
+#net-train-sessions label { display: block; margin: 4px 0; }
 
 button { cursor: pointer; padding: 8px 16px; }
 button[type=submit] { background: var(--accent); border-color: var(--accent); color: #0b1a2b; font-weight: 600; }
@@ -158,6 +159,7 @@ canvas { display: block; width: 100%; height: auto; }
 }
 
 main.single { grid-template-columns: 1fr; }
+#signals { height: calc(100vh - 150px); min-height: 400px; }
 
 h2 { font-size: 16px; margin: 20px 0 6px; }
 
