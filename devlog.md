@@ -999,12 +999,28 @@ streamed (986 of about 1000 samples in 2 s) and Noah found 5 s the reliable choi
 and 1 s fail, so the DHCP step is needed: confirms the 2026-09-30 explanation that the band only streams to a device
 that asked it for an address since it booted.
 
+**First protocol D session** (`2026-10-14_181042`, table, 10.4 min). Stopped early on a low armband battery; Noah
+marked it good (`completed` set, reason in `accepted` in its `session.json`). Calibration complete (every grip
+twice, one hum redo), 10 of 14 activities (typing, drum, push and arm raise missing).
+
+**Several D activities bring out known hand shapes (Noah).** They aren't all "no grip": a classifier firing there can
+be right. Two groups for scoring:
+- Arm and wrist only, any start is a false start: wrist bend, wrist side to side, forearm rotation, arm raise, arm
+  out, reach overhead, lean, walk, shake the hand out.
+- Hand shapes expected: wave hello and push the table (open hand), talk with your hands (open, point and others),
+  typing and drumming (single fingers moving, can look like point, key or tripod). Score these apart, with the open
+  hand not counted as wrong in wave and push.
+"Turn your palm" was unclear, now "rotate your forearm: palm up, then palm down, like turning a doorknob".
+
 ## Open
 
 - Control tab: try it on the arm (grab, hold, release; count wrong grips and twitches), check the 0.9 s to lock
   against fewer votes, and whether pinch closes far enough at gain 1.5 (per-grip max levels or a higher gain).
   Record a protocol D session and add its `nogrip` cues to the replay as false starts per minute, then retune
   against both; the near-zero start level is likely to fire there.
+  Score the two groups of D activities apart (2026-10-14).
+- Arm animation for cues: forearm, wrist and upper arm in the cue drawing, so D's activities and the wrist
+  movements left out of protocol C can be shown (Noah asked, not started).
 - Record and play: train the classifier on protocol C's `custom` labels and play back each movement's target
   (or its recorded camera trajectory) under the control layer.
 

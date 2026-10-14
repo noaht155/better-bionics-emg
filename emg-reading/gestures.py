@@ -465,7 +465,7 @@ D_ACTIVITY_S = 40.0
 NO_GRIP = {
     "wrist_flex": "BEND YOUR WRIST\nslowly up and down, hand relaxed",
     "wrist_side": "WRIST SIDE TO SIDE\nslowly, hand relaxed",
-    "wrist_turn": "TURN YOUR PALM\nup and down, slowly, hand relaxed",
+    "wrist_turn": "ROTATE YOUR FOREARM\npalm up, then palm down, like turning a doorknob, slowly, hand loose",
     "arm_raise": "RAISE YOUR ARM\nup and down a few times, hand relaxed",
     "arm_out": "HOLD YOUR ARM OUT\nstraight in front, hand relaxed",
     "reach_up": "REACH OVERHEAD\nand back down, a few times, hand relaxed",
