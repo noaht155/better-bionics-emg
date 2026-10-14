@@ -311,6 +311,14 @@ def make_app(recorder, band, camera, tools):
             refuse(e)
         return {"ok": True}
 
+    @app.post("/api/armband/wifi")
+    def armband_wifi():
+        try:
+            tools.wifi.start()
+        except ValueError as e:
+            refuse(e)
+        return {"ok": True}
+
     @app.post("/api/calibrate")
     def calibrate(settings: CalibrationSettings):
         try:

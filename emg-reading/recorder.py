@@ -279,6 +279,8 @@ class Recorder:
 
     def warnings(self):
         out = self.quality.warnings()
+        if getattr(self.band, "connected", True) is False:
+            out.append(("armband", "Armband not connected: switch it on, then Connect armband WiFi on the Connection tab"))
         if self.loop_error is not None and time.time() - self.loop_error[0] < ERROR_SHOWN_S:
             out.append(("loop_error", f"Reading the armband failed: {self.loop_error[1]}"))
         if self.camera is None:

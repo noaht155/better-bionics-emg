@@ -33,6 +33,8 @@ JOB_LINES = 40
 
 CHECK_S = 5.0
 COUNTDOWN_S = 3
+WIFI_SCRIPT = Path(__file__).with_name("connect_armband.ps1")
+WIFI_CHECK_S = 2.0
 
 
 class Tool:
@@ -75,6 +77,60 @@ class ConnectionCheck(Tool):
         band = self.recorder.band
         self.state["lines"] = [f"streaming from {band.source} for {CHECK_S:g} s"] + check_connection.report(
             data, band.rows, band.rate, CHECK_S, battery=band.source == "armband")
+
+
+class ArmbandWifi(Tool):
+    """Runs connect_armband.ps1 (forget and rejoin the armband's WiFi, DHCP, back to the static IP; Windows asks for
+    admin rights) and then reopens the armband stream, since the band needs a new start request after that."""
+
+    def __init__(self, recorder):
+        super().__init__()
+        self.recorder = recorder
+
+    def start(self):
+        if sys.platform != "win32":
+            raise ValueError("only needed on the Windows desktop, the Mac gets an address from the armband")
+        if self.recorder.band.source != "armband":
+            raise ValueError(f"the app reads from {self.recorder.band.source}, not the armband")
+        if self.recorder.session is not None:
+            raise ValueError("a session is recording, the stream would drop")
+        self._launch(self._run)
+
+    def _run(self):
+        fd, log = tempfile.mkstemp(suffix=".log")
+        os.close(fd)
+        first = [f"Starting {WIFI_SCRIPT.name}"]
+        self.state["lines"] = first
+        try:
+            proc = subprocess.Popen(["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File",
+                                     str(WIFI_SCRIPT), "-Log", log], stdout=subprocess.PIPE,
+                                    stderr=subprocess.STDOUT, text=True)
+            while proc.poll() is None:
+                time.sleep(0.5)
+                self.state["lines"] = first + _read_lines(log)
+            lines = first + _read_lines(log) + [line for line in proc.stdout.read().splitlines() if line]
+            self.state["lines"] = lines
+            if proc.returncode != 0:
+                raise RuntimeError(lines[-1] if len(lines) > 1 else f"the script failed (exit code {proc.returncode})")
+            self.state["lines"] = lines = lines + ["Reopening the armband stream"]
+            self.recorder.band.restart()
+            before = self.recorder.received
+            time.sleep(WIFI_CHECK_S)
+            got = self.recorder.received - before
+            if not got:
+                raise RuntimeError(f"stream reopened but no samples in {WIFI_CHECK_S:g} s, switch the armband off and "
+                                   "on and try again")
+            self.state["lines"] = lines + [f"Streaming: {got} samples in {WIFI_CHECK_S:g} s "
+                                           f"(about {self.recorder.band.rate * WIFI_CHECK_S:.0f} expected)"]
+        finally:
+            Path(log).unlink(missing_ok=True)
+
+
+def _read_lines(path):
+    try:
+        return [line for line in Path(path).read_text(encoding="utf-8-sig").splitlines() if line]
+    except OSError:
+        return []
 
 
 class Calibration(Tool):
@@ -372,6 +428,7 @@ class Tools:
     def __init__(self, recorder):
         esp_lock = threading.Lock()
         self.check = ConnectionCheck(recorder)
+        self.wifi = ArmbandWifi(recorder)
         self.calibration = Calibration(recorder)
         self.haptics = Haptics(recorder, esp_lock)
         self.test = OutputTest(esp_lock)
@@ -383,7 +440,7 @@ class Tools:
     def snapshot(self):
         now = time.time()
         out = {}
-        for name in ("check", "calibration", "haptics", "test", "predictor", "trainer", "network", "control"):
+        for name in ("check", "wifi", "calibration", "haptics", "test", "predictor", "trainer", "network", "control"):
             state = dict(getattr(self, name).state)
             if state.get("until"):
                 state["left"] = max(0.0, state["until"] - now)

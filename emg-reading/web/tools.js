@@ -605,6 +605,21 @@ $("conn-start").addEventListener("click", async () => {
   }
 });
 
+$("wifi-start").addEventListener("click", async () => {
+  $("wifi-error").textContent = "";
+  try {
+    await post("/api/armband/wifi");
+  } catch (err) {
+    $("wifi-error").textContent = err.message;
+  }
+});
+
+function drawWifi(t) {
+  $("wifi-start").disabled = t.running;
+  if (t.error) $("wifi-error").textContent = t.error;
+  $("wifi-result").textContent = (t.lines || []).join("\n") + (t.running ? "\n..." : "");
+}
+
 function drawConnection(t) {
   $("conn-start").disabled = t.running;
   progress("conn-bar", t);
@@ -647,6 +662,7 @@ function drawTools() {
   drawCalibration(t.calibration);
   drawHaptics(t.haptics, t.test);
   drawConnection(t.check);
+  drawWifi(t.wifi);
   drawTrain(t.trainer);
   drawPredictor(t.predictor);
   drawNetwork(t.network, t.predictor);

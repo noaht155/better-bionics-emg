@@ -965,6 +965,16 @@ waving, talking with the hands, walking), 40 s each, after a grip calibration bl
 New cue kind `nogrip`: never a grip or rest label, redone on hum. Any start the controller makes in one counts as a
 false start. Real grabs are tested live on the Control tab instead.
 
+**Armband WiFi from the app** (`emg-reading/connect_armband.ps1`, Connection tab). The power-up routine (forget and
+rejoin `Mindrove_ARB_66bb04`, DHCP for 20 s, back to the static 192.168.4.2) is one button now; it asks for admin
+rights through the UAC prompt (Noah's choice over a scheduled task), checks the band answers on 192.168.4.1, then
+reopens the stream, since the band needs a new start request. The app used to refuse to start when the band wasn't
+reachable (`prepare_session` fails at once, checked with the WiFi off), which made the button useless right after a
+power-up: it now starts without the armband and warns until it's connected. Windows' saved profile allows WPA2 with
+AES, which the script's profile uses. First version called itself (a helper named `Netsh`, PowerShell ignores
+case) and failed with call depth overflow; fixed, and the log now shows every step with timestamps. Worked on the
+real band 2026-10-14; after reopening the stream the app checks samples arrive (2 s).
+
 ## Open
 
 - Control tab: try it on the arm (grab, hold, release; count wrong grips and twitches), check the 0.9 s to lock

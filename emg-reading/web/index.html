@@ -370,6 +370,13 @@
     <div class="bar"><div id="conn-bar"></div></div>
     <p id="conn-error" class="error"></p>
     <pre id="conn-result"></pre>
+    <h2>Armband WiFi</h2>
+    <p class="muted">After the armband is switched on: forgets and rejoins its WiFi, switches the adapter to DHCP for
+      20 s so the band sees an address request, then back to the static 192.168.4.2, and restarts the stream. Windows
+      desktop only, asks for admin rights on the PC's screen. About 30 s.</p>
+    <button id="wifi-start">Connect armband WiFi</button>
+    <p id="wifi-error" class="error"></p>
+    <pre id="wifi-result"></pre>
     <h2>Armband battery</h2>
     <div id="battery-detail" class="battery-detail"></div>
     <p class="muted">The drain rate comes from the last 15 minutes and needs about 5 minutes of streaming and a drop of

@@ -9,6 +9,12 @@ python -m venv .venv
 
 ## Connecting the armband
 
+On the Windows desktop all of step 1 and 2 is automated: switch the armband on, then press **Connect armband WiFi** on
+the app's Connection tab (or run `powershell -ExecutionPolicy Bypass -File connect_armband.ps1`). It forgets and
+rejoins the armband's WiFi, switches to DHCP for 20 s, sets the static IP back, checks the band answers and restarts
+the stream. Windows asks for admin rights on the PC's screen each time. The app starts without the armband and
+shows a warning until it is connected. The manual steps:
+
 1. Turn the armband on and join its WiFi network (`Mindrove_ARB_...`, password `#mindrove`).
 2. Check the WiFi address with `ipconfig`. It should be `192.168.4.x`. On the desktop PC (Realtek 8852CE) the armband's DHCP reply never arrives and the address is `169.254.x.x`. The MacBook gets an address normally. If it's `169.254.x.x`, set a static IP on the WiFi adapter. Run in an admin PowerShell:
 

@@ -1,10 +1,12 @@
 """Open the armband (or the synthetic board) and read its live EMG channels.
 Replay plays back recorded raw data in real time instead."""
+import threading
 import time
 from pathlib import Path
 
 import numpy as np
 from mindrove.board_shim import BoardShim, BoardIds, MindRoveInputParams
+from mindrove.exit_codes import MindRoveError
 
 from channels import live_channels
 
@@ -28,23 +30,49 @@ class Armband:
         self.emg_rows = [emg_rows[ch] for ch in self.channels]
         BoardShim.disable_board_logger()
         self._board = BoardShim(board_id, MindRoveInputParams())
+        self._lock = threading.Lock()
+        self.connected = False
 
     def read(self):
         """Samples that arrived since the last call, one row per live channel."""
-        return self._board.get_board_data()[self.emg_rows]
+        return self.read_all()[self.emg_rows]
 
     def read_all(self):
         """Samples that arrived since the last call, all board rows."""
-        return self._board.get_board_data()
+        with self._lock:
+            if not self.connected:
+                return np.zeros((self.rows["num_rows"], 0))
+            return self._board.get_board_data()
 
-    def __enter__(self):
+    def restart(self):
+        """Close and reopen the stream. After the WiFi was reset the band needs a new start request."""
+        with self._lock:
+            self._close()
+            self._open()
+
+    def _open(self):
         self._board.prepare_session()
         self._board.start_stream()
+        self.connected = True
+
+    def _close(self):
+        if self.connected:
+            self.connected = False
+            self._board.stop_stream()
+            self._board.release_session()
+
+    def __enter__(self):
+        try:
+            self._open()
+        # The band's WiFi isn't joined yet after it was switched on. Start without it, so the app's Connection tab
+        # can join it and open the stream
+        except MindRoveError as e:
+            print(f"armband not reachable, starting without it: {e}")
         return self
 
     def __exit__(self, *exc):
-        self._board.stop_stream()
-        self._board.release_session()
+        with self._lock:
+            self._close()
 
 
 class Replay(Armband):
