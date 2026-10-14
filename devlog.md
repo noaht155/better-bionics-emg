@@ -982,6 +982,17 @@ sessions, not during protocol D's activities (the arm leaves the picture on purp
 (`recorder._camera_needed`). Warnings about something broken (no camera, slow camera, armband not connected, hum)
 always show. New warnings follow the same rule.
 
+**The MindRove library crashed the app; it runs in its own process now** (`armband.Armband`, `armband.py --reader`).
+Windows logged three crashes of the app's Python process on 2026-10-14, all in native code Python can't catch: twice
+a fast-fail (`0xc0000409`) in `MindRoveWrapper.dll` when the WiFi script changed the network under an open stream,
+once heap corruption (`0xc0000374`) when the app stopped the stream of a band that had been switched off. Closing,
+releasing and reopening the stream on a stable network was fine (two cycles, about 500 samples/s, no crash), so the
+library fails on dead connections, not on reopening. Now a small reader process holds the library and pipes the
+samples to the app; closing kills the reader instead of stopping the stream, and a crash only ends the reader (the
+app shows the band as not connected and Connect starts a new one). The app starts without the band; the command line
+scripts still stop with an error. Opening succeeded with the band off and WiFi down once and failed at once another
+time, so "connected" means the reader runs, and the no-data warning covers a reader that gets nothing.
+
 ## Open
 
 - Control tab: try it on the arm (grab, hold, release; count wrong grips and twitches), check the 0.9 s to lock

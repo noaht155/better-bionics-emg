@@ -87,24 +87,27 @@ class ArmbandWifi(Tool):
         super().__init__()
         self.recorder = recorder
 
-    def start(self):
+    def start(self, dhcp_s=5):
         if sys.platform != "win32":
             raise ValueError("only needed on the Windows desktop, the Mac gets an address from the armband")
         if self.recorder.band.source != "armband":
             raise ValueError(f"the app reads from {self.recorder.band.source}, not the armband")
         if self.recorder.session is not None:
             raise ValueError("a session is recording, the stream would drop")
-        self._launch(self._run)
+        self._launch(self._run, dhcp_s)
 
-    def _run(self):
+    def _run(self, dhcp_s):
         fd, log = tempfile.mkstemp(suffix=".log")
         os.close(fd)
-        first = [f"Starting {WIFI_SCRIPT.name}"]
+        band = self.recorder.band
+        first = ["Closing the armband stream before the network changes",
+                 f"Starting {WIFI_SCRIPT.name}, DHCP {dhcp_s} s"]
         self.state["lines"] = first
+        band.close()
         try:
             proc = subprocess.Popen(["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File",
-                                     str(WIFI_SCRIPT), "-Log", log], stdout=subprocess.PIPE,
-                                    stderr=subprocess.STDOUT, text=True)
+                                     str(WIFI_SCRIPT), "-DhcpSeconds", str(dhcp_s), "-Log", log],
+                                    stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
             while proc.poll() is None:
                 time.sleep(0.5)
                 self.state["lines"] = first + _read_lines(log)
@@ -113,7 +116,7 @@ class ArmbandWifi(Tool):
             if proc.returncode != 0:
                 raise RuntimeError(lines[-1] if len(lines) > 1 else f"the script failed (exit code {proc.returncode})")
             self.state["lines"] = lines = lines + ["Reopening the armband stream"]
-            self.recorder.band.restart()
+            band.open()
             before = self.recorder.received
             time.sleep(WIFI_CHECK_S)
             got = self.recorder.received - before
@@ -121,9 +124,15 @@ class ArmbandWifi(Tool):
                 raise RuntimeError(f"stream reopened but no samples in {WIFI_CHECK_S:g} s, switch the armband off and "
                                    "on and try again")
             self.state["lines"] = lines + [f"Streaming: {got} samples in {WIFI_CHECK_S:g} s "
-                                           f"(about {self.recorder.band.rate * WIFI_CHECK_S:.0f} expected)"]
+                                           f"(about {band.rate * WIFI_CHECK_S:.0f} expected)"]
         finally:
             Path(log).unlink(missing_ok=True)
+            # A failed run still tries to get the stream back; if the band can't be reached the warning bar says so
+            if not band.connected:
+                try:
+                    band.open()
+                except Exception:
+                    pass
 
 
 def _read_lines(path):

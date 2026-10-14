@@ -583,7 +583,7 @@ def main():
     parser.add_argument("--port", type=int, default=8000)
     args = parser.parse_args()
 
-    band = Replay(args.replay) if args.replay else Armband(args.synthetic)
+    band = Replay(args.replay) if args.replay else Armband(args.synthetic, optional=True)
     camera = None
     if not args.no_camera:
         camera = Camera(int(args.camera) if args.camera.isdigit() else args.camera, args.hand).start()

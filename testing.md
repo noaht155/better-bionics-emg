@@ -117,6 +117,15 @@ These decide when the recorder marks a cue bad and redoes it.
 | `test_live_network_reverses_mirrored_windows` | A network calibrated on a mirrored session reverses the channel order of live windows |
 | `test_live_lda_reverses_mirrored_windows` | The same for an LDA model whose newest training session was mirrored |
 
+### Armband reader (`tests/test_armband.py`)
+
+| Test | Checks |
+|---|---|
+| `test_reader_streams_all_rows` | The reader process opens the (synthetic) board and passes every board row through; `read` returns the live channels |
+| `test_close_and_reopen` | Closing stops the data and marks the band not connected; opening again streams again |
+| `test_reader_dying_leaves_the_app_running` | A reader killed from outside (a library crash) leaves the app running, reads as not connected with no data, and a new reader can be opened |
+| `test_context_manager_closes_the_reader` | Leaving `with Armband()` ends the reader process |
+
 ### Control layer (`tests/test_control.py`)
 
 | Test | Checks |
