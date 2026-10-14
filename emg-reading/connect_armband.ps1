@@ -11,7 +11,8 @@ param(
     [string]$Adapter = "WiFi",
     [string]$StaticIp = "192.168.4.2",
     [string]$BandIp = "192.168.4.1",
-    [int]$DhcpSeconds = 20,
+    # 0 skips the DHCP step, to test whether it is needed at all
+    [int]$DhcpSeconds = 5,
     # Progress goes here instead of the console, so the elevated copy can pass it back
     [string]$Log
 )
@@ -98,11 +99,15 @@ try {
     if (-not $joined) { throw "couldn't join $Ssid in 15 s (state: $(Wifi-Field 'State')), is the armband on?" }
     Say "  joined $Ssid, signal $(Wifi-Field 'Signal'), address $(Address)"
 
-    Say "Step 4/5: adapter to DHCP for $DhcpSeconds s, so the armband sees an address request"
-    Invoke-Netsh interface ip set address name="$Adapter" source=dhcp | Out-Null
-    for ($left = $DhcpSeconds; $left -gt 0; $left -= 5) {
-        Start-Sleep -Seconds ([Math]::Min(5, $left))
-        Say "  $([Math]::Max(0, $left - 5)) s left, address $(Address) (169.254.x.x is expected on this PC)"
+    if ($DhcpSeconds -le 0) {
+        Say "Step 4/5: skipped (DHCP 0 s)"
+    } else {
+        Say "Step 4/5: adapter to DHCP for $DhcpSeconds s, so the armband sees an address request"
+        Invoke-Netsh interface ip set address name="$Adapter" source=dhcp | Out-Null
+        for ($left = $DhcpSeconds; $left -gt 0; $left -= 5) {
+            Start-Sleep -Seconds ([Math]::Min(5, $left))
+            Say "  $([Math]::Max(0, $left - 5)) s left, address $(Address) (169.254.x.x is expected on this PC)"
+        }
     }
 
     Say "Step 5/5: static $StaticIp back on"

@@ -83,6 +83,11 @@ class HandChoice(BaseModel):
     hand: Literal["right", "left"]
 
 
+class WifiSettings(BaseModel):
+    # How long the adapter stays on DHCP, 0 skips it (connect_armband.ps1)
+    dhcp_s: int = Field(5, ge=0, le=60)
+
+
 class CalibrationSettings(BaseModel):
     seconds: float = Field(ge=2, le=30)
     car: bool
@@ -312,9 +317,9 @@ def make_app(recorder, band, camera, tools):
         return {"ok": True}
 
     @app.post("/api/armband/wifi")
-    def armband_wifi():
+    def armband_wifi(settings: WifiSettings):
         try:
-            tools.wifi.start()
+            tools.wifi.start(settings.dhcp_s)
         except ValueError as e:
             refuse(e)
         return {"ok": True}

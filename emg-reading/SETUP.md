@@ -11,7 +11,7 @@ python -m venv .venv
 
 On the Windows desktop all of step 1 and 2 is automated: switch the armband on, then press **Connect armband WiFi** on
 the app's Connection tab (or run `powershell -ExecutionPolicy Bypass -File connect_armband.ps1`). It forgets and
-rejoins the armband's WiFi, switches to DHCP for 20 s, sets the static IP back, checks the band answers and restarts
+rejoins the armband's WiFi, switches to DHCP for 5 s, sets the static IP back, checks the band answers and restarts
 the stream. Windows asks for admin rights on the PC's screen each time. The app starts without the armband and
 shows a warning until it is connected. The manual steps:
 

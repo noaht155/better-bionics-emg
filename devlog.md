@@ -966,7 +966,7 @@ New cue kind `nogrip`: never a grip or rest label, redone on hum. Any start the 
 false start. Real grabs are tested live on the Control tab instead.
 
 **Armband WiFi from the app** (`emg-reading/connect_armband.ps1`, Connection tab). The power-up routine (forget and
-rejoin `Mindrove_ARB_66bb04`, DHCP for 20 s, back to the static 192.168.4.2) is one button now; it asks for admin
+rejoin `Mindrove_ARB_66bb04`, DHCP (5 s since the trials below), back to the static 192.168.4.2) is one button now; it asks for admin
 rights through the UAC prompt (Noah's choice over a scheduled task), checks the band answers on 192.168.4.1, then
 reopens the stream, since the band needs a new start request. The app used to refuse to start when the band wasn't
 reachable (`prepare_session` fails at once, checked with the WiFi off), which made the button useless right after a
@@ -992,6 +992,11 @@ samples to the app; closing kills the reader instead of stopping the stream, and
 app shows the band as not connected and Connect starts a new one). The app starts without the band; the command line
 scripts still stop with an error. Opening succeeded with the band off and WiFi down once and failed at once another
 time, so "connected" means the reader runs, and the no-data warning covers a reader that gets nothing.
+
+**DHCP wait shortened from 20 to 5 s.** The 20 s came from one manual toggle on 2026-09-30 and was never tested. The
+Connection tab now takes the DHCP time (0 skips the step). With the armband power-cycled before each connect, 3 s
+streamed (986 of about 1000 samples in 2 s) and Noah found 5 s the reliable choice; default 5 s. Whether the DHCP
+step is needed at all (0 s) is still to check.
 
 ## Open
 

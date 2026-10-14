@@ -608,7 +608,7 @@ $("conn-start").addEventListener("click", async () => {
 $("wifi-start").addEventListener("click", async () => {
   $("wifi-error").textContent = "";
   try {
-    await post("/api/armband/wifi");
+    await post("/api/armband/wifi", { dhcp_s: Number($("wifi-dhcp").value) || 0 });
   } catch (err) {
     $("wifi-error").textContent = err.message;
   }
