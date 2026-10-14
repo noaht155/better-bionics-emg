@@ -29,6 +29,11 @@ function mirrored() {
 
 // Setup form
 
+// Filled in fresh every session: a copied placement or note would be wrong after the band moves, and a forgotten
+// practice tick would quietly throw away a real session. Older browsers may still have them saved, so they are
+// skipped on load too
+const PER_SESSION = ["practice", "crease_distance", "crease_unit", "module_side", "placement", "notes"];
+
 function loadSettings() {
   const form = $("setup");
   let saved = {};
@@ -39,6 +44,7 @@ function loadSettings() {
     $("postures").append(label);
   }
   for (const [k, v] of Object.entries(saved)) {
+    if (PER_SESSION.includes(k)) continue;
     if (k === "postures") {
       form.querySelectorAll("[name=posture]").forEach((c) => { c.checked = v.includes(c.value); });
     } else if (form[k] && typeof v !== "object") {
@@ -66,6 +72,9 @@ function readSettings() {
     band_arm: form.band_arm.value,
     port_facing: form.port_facing.value,
     tracked_hand: form.tracked_hand.value,
+    crease_distance: form.crease_distance.value === "" ? null : Number(form.crease_distance.value),
+    crease_unit: form.crease_unit.value,
+    module_side: form.module_side.value,
     placement: form.placement.value.trim(),
     notes: form.notes.value.trim(),
     postures: [...form.querySelectorAll("[name=posture]:checked")].map((c) => c.value),
@@ -137,15 +146,24 @@ $("setup").addEventListener("submit", async (e) => {
   e.preventDefault();
   const settings = readSettings();
   $("setup-error").textContent = "";
-  // Practice isn't remembered, a forgotten tick would quietly throw away a real session
-  const { practice, ...remembered } = settings;
+  const remembered = { ...settings };
+  for (const k of PER_SESSION) delete remembered[k];
   try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(remembered)); } catch { /* private window */ }
   try {
     await post("/api/session/start", settings);
   } catch (err) {
     $("setup-error").textContent = err.message;
+    return;
   }
+  // Blank again for the next run, so the band position has to be entered fresh after the band moves
+  for (const k of PER_SESSION) if (k !== "practice") $("setup")[k].value = "";
 });
+
+// The browser blocks the start on an empty required field; say which ones in words as well
+$("setup").addEventListener("invalid", (e) => {
+  if (!["crease_distance", "crease_unit", "module_side"].includes(e.target.name)) return;
+  $("setup-error").textContent = "Fill in the band position: distance from the elbow crease, its unit and the main module side.";
+}, true);
 
 // Cue preview: every distinct cue of the planned session once, to go through with the person before recording
 

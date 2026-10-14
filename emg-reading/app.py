@@ -48,6 +48,11 @@ class SessionSettings(BaseModel):
     # Which way round the band is. Turned the other way the electrode order round the arm is mirrored
     port_facing: Literal["shoulder", "hand"]
     tracked_hand: Literal["right", "left"]
+    # Band position: distance of the band from the anterior elbow crease, and which side of the forearm the main
+    # module sits on (anterior: muscle belly, palm side; posterior: bony side). placement is free notes on top
+    crease_distance: float = Field(ge=0, le=500)
+    crease_unit: Literal["cm", "mm"]
+    module_side: Literal["anterior", "posterior"]
     placement: str = ""
     notes: str = ""
     postures: list[Literal[tuple(POSTURES)]] = Field(min_length=1)
@@ -118,6 +123,18 @@ class NetworkJobSettings(BaseModel):
     sessions: list[str] | None = None
 
 
+def placement_text(settings):
+    """Band position for the session table. Sessions before 2026-10-13 only have the free text."""
+    parts = []
+    if settings.get("crease_distance") is not None:
+        parts.append(f"{settings['crease_distance']:g} {settings['crease_unit']} from the elbow crease")
+    if settings.get("module_side"):
+        parts.append(f"module {settings['module_side']}")
+    if settings.get("placement"):
+        parts.append(settings["placement"])
+    return ", ".join(parts)
+
+
 def session_list():
     """Recorded sessions, newest first, from their session.json only."""
     out = []
@@ -127,7 +144,7 @@ def session_list():
         gestures = sum(c["kind"] == "hold" and c["label"] != "rest" for c in meta.get("plan", []))
         out.append({"name": path.parent.name, "subject": meta.get("subject"), "postures": settings.get("postures"),
                     "band_arm": settings.get("band_arm"), "port_facing": settings.get("port_facing"),
-                    "placement": settings.get("placement"),
+                    "placement": placement_text(settings),
                     "gestures": gestures, "completed": meta.get("completed"),
                     "seconds": round(meta["ended"] - meta["started"]) if meta.get("ended") else None,
                     "protocol": settings.get("protocol", "A")})

@@ -38,7 +38,20 @@
           <select name="tracked_hand"><option value="right">right hand</option><option value="left">left hand</option></select>
         </label>
       </div>
-      <label>Placement <input name="placement" placeholder="e.g. logo on top, 3 cm below the elbow crease"></label>
+      <div class="row">
+        <label>Distance from anterior elbow crease <input name="crease_distance" type="number" min="0" step="0.5" required></label>
+        <label>Unit
+          <select name="crease_unit" required><option value="">choose</option><option value="cm">cm</option><option value="mm">mm</option></select>
+        </label>
+        <label>Main module on
+          <select name="module_side" required>
+            <option value="">choose</option>
+            <option value="anterior">muscle belly, palm side (anterior)</option>
+            <option value="posterior">bony side, back of the forearm (posterior)</option>
+          </select>
+        </label>
+      </div>
+      <label>Placement notes <input name="placement" placeholder="optional, e.g. rotated a few mm towards the thumb"></label>
       <label>Protocol
         <select name="protocol">
           <option value="A">A: held grips and single fingers</option>
