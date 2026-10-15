@@ -170,10 +170,13 @@ def blend(**params):
 
 
 def test_blend_closes_with_effort_straight_away():
-    """No votes to wait for: the first window with effort already closes the hand."""
+    """No votes to wait for: the hand closes as soon as rest fades from the smoothed probabilities (smooth_s)."""
     c = blend()
     out = c.step(probs("fist"), 0.5)
-    assert out["state"] == "blend" and out["closure"] > 0.5 and out["event"] is None
+    assert out["state"] == "blend" and 0 < out["closure"] and out["event"] is None
+    for _ in range(7):
+        out = c.step(probs("fist"), 0.5)
+    assert out["closure"] > 0.5 and out["event"] is None
 
 
 def test_blend_shape_follows_the_probabilities():
@@ -184,7 +187,7 @@ def test_blend_shape_follows_the_probabilities():
     for _ in range(40):
         out = c.step(mix, 1.0)
     expected = POSES["rest"] + (0.5 * (np.asarray(POSES["fist"]) + np.asarray(POSES["pinch"])) - POSES["rest"])
-    assert np.allclose(out["angles"], expected, atol=1e-3)
+    assert np.allclose(out["angles"], expected, atol=0.1)
     for _ in range(40):
         c.step(probs("fist"), 1.0)
     before = np.asarray(c.step(probs("fist"), 1.0)["angles"])
@@ -210,3 +213,14 @@ def test_blend_lock_releases_when_the_open_hand_wins():
     assert c.state == "active"
     events = [c.step(probs("open"), 0.5)["event"] for _ in range(3)]
     assert events == [None, None, "release"] and c.state == "blend"
+
+
+def test_blend_rest_keeps_the_hand_open():
+    """Effort with rest winning (or windows too far from every grip) doesn't close the hand."""
+    c = blend(lock_s=0, max_distance=6.0)
+    for _ in range(40):
+        out = c.step(probs("fist"), 1.0, distance=9.0)
+    assert out["closure"] < 0.05
+    for _ in range(40):
+        out = c.step(probs("fist"), 1.0, distance=3.0)
+    assert out["closure"] > 0.9

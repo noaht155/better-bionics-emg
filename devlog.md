@@ -1103,6 +1103,19 @@ for 1.5 s, but opening the hand takes effort too, and hold on relax kept the clo
 blend now uses the same releases as lock mode (`release_mode`, so rest_or_class lets go when open or rest wins
 `release_n` steps). Live, `lock_s` set to 0 (never locks) to feel the plain blend first.
 
+Second live run (logged from the app's live state, Noah ran a fixed sequence: each grip twice, fist to pinch, arm
+waving, relax; start level 0.15, max distance 4, no lock):
+- Waving the arm closed the hand to 100 % although its windows were 9.7 from every grip (over max distance, so
+  counted as rest). Cause: blend left rest out of the shape mix, so a rest window only dropped out of the average and
+  the last grip stayed. Fixed: closure is scaled by 1 minus the smoothed rest probability. Replayed on the same run:
+  waving max closure 1.00 to 0.76, mean 0.14 to 0.06, fist unchanged (0.98). It adds a little lag on the rise, rest
+  fades over `smooth_s`.
+- Fist windows sat at distance 4.1 to 4.4, so max distance 4 cuts fist too (fist max closure 0.65 with the fix).
+  6 keeps fist.
+- Light grips only reach effort 0.4 (pinch, tripod), closure 0.38 at gain 1.5 with start level 0.15. Gain 2.5 gives
+  0.64 but twitches at rest up to 0.48.
+- Thumb grips flicker: key read as point (2 of 2 times), tripod mixed with pinch and point. Same as the replays.
+
 ## Open
 
 - Control tab: try it on the arm (grab, hold, release; count wrong grips and twitches), check the 0.9 s to lock

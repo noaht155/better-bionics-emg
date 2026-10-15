@@ -145,6 +145,7 @@ These decide when the recorder marks a cue bad and redoes it.
 | `test_blend_shape_follows_the_probabilities` | Blend mode: half fist, half pinch closes halfway between their poses; a one-window flicker only nudges the shape |
 | `test_blend_locks_and_lets_go` | Blend mode: a grip leading long enough locks the shape, another grip winning doesn't change it, low effort for release_s lets go |
 | `test_blend_lock_releases_when_the_open_hand_wins` | Blend mode: a locked shape lets go when the open hand wins release_n steps under rest_or_class, even with effort up |
+| `test_blend_rest_keeps_the_hand_open` | Blend mode: effort while rest wins (or windows too far from every grip) doesn't close the hand |
 
 ### Protocols (`tests/test_protocols.py`)
 

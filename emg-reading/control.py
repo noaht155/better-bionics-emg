@@ -128,6 +128,10 @@ class Controller:
                 self.open_votes, self.class_votes, self.rest_time = 0, 0, 0.0
 
         c = float(np.clip((effort - p["start_level"]) * p["gain"], 0.0, 1.0))
+        # Rest is the relaxed pose in the mix, so a window counted as rest (far away, or the arm moving) keeps the
+        # hand open even with effort up
+        if self.state != "active":
+            c *= 1.0 - self.smooth["rest"]
         if self.state == "active" and p["hold_on_relax"]:
             c = max(c, self.closure)
         self.closure = c
