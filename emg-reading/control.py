@@ -141,7 +141,8 @@ class Controller:
             total = sum(hand.values())
             shape = (sum(v * self.poses[g] for g, v in hand.items()) / total if total > 0 else self.relaxed)
         target = self.relaxed + c * (shape - self.relaxed)
-        return {"state": self.state, "grip": self.grip or leader, "closure": self.closure,
+        shown = self.grip or (leader if hand[leader] > self.smooth["rest"] else None)
+        return {"state": self.state, "grip": shown, "closure": self.closure,
                 "angles": self._spring(dt, target), "event": event}
 
     def _released(self, probs, effort, dt):
