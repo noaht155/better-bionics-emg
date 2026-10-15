@@ -450,13 +450,22 @@ def make_app(recorder, band, camera, tools):
 
     @app.post("/api/control/start")
     def control_start(choice: ModelChoice):
-        """The LDA model with the control layer on its output, effort levels from the model's newest training
-        session. Haptics start with it as with Use this model."""
-        path = gesture_model.MODEL_DIR / choice.name
-        if path.parent != gesture_model.MODEL_DIR or path.suffix != ".joblib" or not path.exists():
+        """An LDA model or a calibrated network with the control layer on its output, effort levels from the
+        model's newest training session (LDA) or its calibration session (network). Haptics start with it as with
+        Use this model."""
+        network = choice.name.endswith(".pt")
+        folder = NETWORK_DIR if network else gesture_model.MODEL_DIR
+        path = folder / choice.name
+        if path.parent != folder or path.suffix not in (".joblib", ".pt") or not path.exists():
             refuse("unknown model")
         try:
-            session = model_session(gesture_model.load(path))
+            if network:
+                info = next(n for n in network_list() if n["name"] == choice.name)
+                if not info.get("calibrated_on"):
+                    refuse("calibrate the network on a session first, the effort levels come from it")
+                session = model_session({"kind": "network", "info": info})
+            else:
+                session = model_session(gesture_model.load(path))
             if session is None:
                 refuse("the model's training session isn't on this computer, the effort levels come from it")
             tools.control.prepare(DATA_DIR / session)

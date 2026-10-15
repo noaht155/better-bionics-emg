@@ -59,8 +59,11 @@ function sendControlParams() {
 }
 
 async function loadControlLists() {
-  const [models, presets] = await Promise.all([fetch("/api/models"), fetch("/api/control/presets")].map((r) => r.then((x) => x.json())));
+  const [lda, networks, presets] = await Promise.all([fetch("/api/models"), fetch("/api/networks"), fetch("/api/control/presets")].map((r) => r.then((x) => x.json())));
+  // Only calibrated networks, the effort levels come from the session they were calibrated on
+  const models = [...lda, ...networks.filter((n) => n.calibrated_on)];
   fillSelect($("ctl-model"), models, (m) => {
+    if (m.calibrated_on) return `${m.name}, network calibrated on ${m.calibrated_on.slice(0, 17).replace("_", " ")}`;
     const acc = m.balanced != null ? `, ${Math.round(100 * m.balanced)} % balanced on unseen sessions` : "";
     return `${m.name}, trained on ${m.sessions.map((s) => s.slice(0, 17).replace("_", " ")).join(", ")}${acc}`;
   });
