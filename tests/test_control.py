@@ -200,3 +200,13 @@ def test_blend_locks_and_lets_go():
     assert c.step(probs("pinch"), 0.5)["grip"] == "fist"
     events = [c.step(probs("rest"), 0.0)["event"] for _ in range(40)]
     assert "release" in events and c.state == "blend"
+
+
+def test_blend_lock_releases_when_the_open_hand_wins():
+    """Opening the hand takes effort too, so a locked shape has to let go on the class, not only on low effort."""
+    c = blend(release_mode="rest_or_class", release_n=3)
+    for _ in range(30):
+        c.step(probs("fist"), 0.5)
+    assert c.state == "active"
+    events = [c.step(probs("open"), 0.5)["event"] for _ in range(3)]
+    assert events == [None, None, "release"] and c.state == "blend"

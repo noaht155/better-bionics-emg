@@ -1095,8 +1095,13 @@ is discrete by design. Calibrate live tests like the replays from now on (short 
 **Blend mode** (`control.py` mode "blend", next to the lock mode, which stays the default). Closure follows effort
 from the first window; the hand closes towards a mix of the grip poses weighted by the grip probabilities, smoothed
 over `smooth_s` (0.25 s), so the shape settles into the grip as the classifier firms up and one flicker only nudges
-it. One grip at the threshold for `lock_s` (0.5 s) locks the shape until effort stays low for `release_s`. Not tried
-live yet.
+it. One grip at the threshold for `lock_s` (0.5 s) locks the shape until the release mode lets go.
+
+First live try (protocol A calibration `2026-10-15_140633`, model `noah_2026-10-15_141613`): the shape locked to fist
+and stayed at 100 % while the open hand won at full probability. The locked shape only let go on effort under 0.03
+for 1.5 s, but opening the hand takes effort too, and hold on relax kept the closure at its peak. Fixed: a locked
+blend now uses the same releases as lock mode (`release_mode`, so rest_or_class lets go when open or rest wins
+`release_n` steps). Live, `lock_s` set to 0 (never locks) to feel the plain blend first.
 
 ## Open
 

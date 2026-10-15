@@ -10,7 +10,7 @@ mode "blend" (2026-10-15) aims at a hand that feels continuous without decoding 
 the first window, with no votes to wait for, and the hand closes towards a mix of the grip poses weighted by the
 grip probabilities, smoothed over smooth_s, so the shape settles into the grip as the classifier firms up and a one
 window flicker only nudges it. When one grip keeps at least the threshold for lock_s, the shape locks to it (0 never
-locks) until effort stays below the release level for release_s. mode "lock" is the vote and lock design above.
+locks) until the release mode lets go, the same releases as mode "lock", the vote and lock design above.
 """
 import math
 
@@ -96,15 +96,7 @@ class Controller:
                     self.closure = self._closure(effort, dt) if p["closure_mode"] == "position" else 0.0
         else:
             self.closure = self._closure(effort, dt)
-            self.open_votes = self.open_votes + 1 if prob("open") >= p["threshold"] else 0
-            self.class_votes = self.class_votes + 1 if prob("open") + prob("rest") >= p["threshold"] else 0
-            self.rest_time = self.rest_time + dt if effort < p["release_level"] else 0.0
-            by_open = self.open_votes >= p["release_n"]
-            by_class = self.class_votes >= p["release_n"]
-            by_rest = self.rest_time >= p["release_s"] - EPS
-            mode = p["release_mode"]
-            if ((by_open and mode in ("open_class", "either")) or (by_class and mode == "rest_or_class")
-                    or (by_rest and mode in ("rest", "either", "rest_or_class"))):
+            if self._released(probs, effort, dt):
                 self.state, self.grip, self.closure, event = "idle", None, 0.0, "release"
                 self.blocked = True
                 self.candidate, self.votes = None, 0
@@ -124,8 +116,7 @@ class Controller:
         event = None
 
         if self.state == "active":
-            self.rest_time = self.rest_time + dt if effort < p["release_level"] else 0.0
-            if self.rest_time >= p["release_s"] - EPS:
+            if self._released(probs, effort, dt):
                 self.state, self.grip, event = "blend", None, "release"
                 self.leader, self.lead_time = None, 0.0
         else:
@@ -134,7 +125,7 @@ class Controller:
             self.leader = leader
             if p["lock_s"] > 0 and self.lead_time >= p["lock_s"] - EPS and effort >= p["start_level"]:
                 self.state, self.grip, event = "active", leader, "start"
-                self.rest_time = 0.0
+                self.open_votes, self.class_votes, self.rest_time = 0, 0, 0.0
 
         c = float(np.clip((effort - p["start_level"]) * p["gain"], 0.0, 1.0))
         if self.state == "active" and p["hold_on_relax"]:
@@ -148,6 +139,20 @@ class Controller:
         target = self.relaxed + c * (shape - self.relaxed)
         return {"state": self.state, "grip": self.grip or leader, "closure": self.closure,
                 "angles": self._spring(dt, target), "event": event}
+
+    def _released(self, probs, effort, dt):
+        """Counts one step towards each release, true when the release mode's condition is met."""
+        p = self.params
+        prob = lambda g: float(probs.get(g, 0.0))
+        self.open_votes = self.open_votes + 1 if prob("open") >= p["threshold"] else 0
+        self.class_votes = self.class_votes + 1 if prob("open") + prob("rest") >= p["threshold"] else 0
+        self.rest_time = self.rest_time + dt if effort < p["release_level"] else 0.0
+        by_open = self.open_votes >= p["release_n"]
+        by_class = self.class_votes >= p["release_n"]
+        by_rest = self.rest_time >= p["release_s"] - EPS
+        mode = p["release_mode"]
+        return ((by_open and mode in ("open_class", "either")) or (by_class and mode == "rest_or_class")
+                or (by_rest and mode in ("rest", "either", "rest_or_class")))
 
     def _closure(self, effort, dt):
         p = self.params
