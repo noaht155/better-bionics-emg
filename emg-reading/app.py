@@ -27,8 +27,8 @@ from calibrate import load_calibration
 from camera import Camera
 from control import DEFAULTS as CONTROL_DEFAULTS
 from esp32_link import WIFI_IP
-from gestures import (C_MOVE_S, C_ROUNDS, CATEGORIES, D_ACTIVITY_S, D_ROUNDS, GESTURE_SET, GESTURES, LIBRARY, POSTURES,
-                      plan_for)
+from gestures import (C_CLOSE_S, C_MOVE_S, C_ROUNDS, CATEGORIES, D_ACTIVITY_S, D_ROUNDS, GESTURE_SET, GESTURES,
+                      GRIP_CLOSE_S, LIBRARY, POSTURES, plan_for)
 from hand_angles import JOINTS, RELIABLE
 from processing import spectrum
 from recorder import Recorder
@@ -278,6 +278,7 @@ def make_app(recorder, band, camera, tools):
                 "source": band.source, "calibration": calibration,
                 "gestures": {name: {"text": text, "angles": angles} for name, (text, angles) in GESTURES.items()},
                 "gesture_set": GESTURE_SET, "library": LIBRARY, "categories": CATEGORIES,
+                "cue_timing": {"grip_close_s": GRIP_CLOSE_S, "c_close_s": C_CLOSE_S},
                 "postures": POSTURES, "camera": camera is not None,
                 "tracked_hand": camera.hand if camera else None, "esp32_wifi_ip": WIFI_IP}
 

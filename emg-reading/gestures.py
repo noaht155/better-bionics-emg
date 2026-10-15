@@ -348,6 +348,30 @@ for _k, _v in LIBRARY.items():
         GESTURES[_k] = (_v["text"], _v["angles"])
 
 
+# How the cue hand moves (web/app.js cueFrame, sent to the page in the config): a grip closes in GRIP_CLOSE_S, a held
+# protocol C movement in C_CLOSE_S, then both hold until the cue ends. The drawn hand follows on a spring (SPRING_W 12
+# in web/app.js), which trails a moving target by about 2 / 12 s and settles from a jump in about 0.4 s
+GRIP_CLOSE_S = 0.5
+C_CLOSE_S = 1.0
+SPRING_LAG_S = 2 / 12
+SPRING_SETTLE_S = 0.4
+# Time to see the drawn hand arrive and match it, on top of the drawn hand reaching the pose
+REACTION_S = 0.5
+
+
+def settle_s(kind, label):
+    """Seconds at the start of a held cue that are left out of training: the drawn hand reaching the pose plus the
+    reaction time. The rest of the cue, as long as the hold time set for the session, is used. Moving cues have no
+    pose to reach and lose nothing."""
+    if kind == "hold":
+        reach = SPRING_SETTLE_S if label == "rest" else GRIP_CLOSE_S + SPRING_LAG_S
+    elif kind == "custom" and label in LIBRARY and "keys" not in LIBRARY[label]:
+        reach = C_CLOSE_S + SPRING_LAG_S
+    else:
+        return 0.0
+    return reach + REACTION_S
+
+
 def _cue(kind, label, text, seconds, posture):
     return {"kind": kind, "label": label, "text": text, "seconds": seconds, "posture": posture}
 
@@ -418,7 +442,7 @@ def protocol_b_plan(postures=("table",), rounds=MOVE_ROUNDS, move_s=MOVE_S, rest
 
 C_ROUNDS = 5
 C_MOVE_S = 6.0
-C_FOLLOW = "follow the hand in, hold, then relax"
+C_FOLLOW = "follow the hand in and hold"
 C_DYNAMIC_FOLLOW = "follow the hand"
 
 
@@ -427,9 +451,9 @@ def protocol_c_plan(moves, postures=("table",), rounds=C_ROUNDS, move_s=C_MOVE_S
     grip twice, the same cues as protocol B's) and then the picked movements in rounds, each once per round in
     shuffled order, with rest in between.
 
-    kind "custom" is a library movement: the target hand closes over the first 30 % of move_s, holds and opens
-    over the last 30 % (web/app.js cueFrame), dynamic ones follow their keyframes. Its own kind keeps these cues out
-    of the protocol A grip labels even where the key is a grip name (fist, pinch...)."""
+    kind "custom" is a library movement: the target hand closes in C_CLOSE_S and holds to the end of the cue,
+    relaxing in the rest after (web/app.js cueFrame); dynamic ones follow their keyframes. Its own kind keeps these
+    cues out of the protocol A grip labels even where the key is a grip name (fist, pinch...)."""
     moves = list(dict.fromkeys(moves))
     if not moves:
         raise ValueError("pick at least one movement")

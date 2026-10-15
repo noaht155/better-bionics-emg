@@ -1012,6 +1012,26 @@ be right. Two groups for scoring:
   hand not counted as wrong in wave and push.
 "Turn your palm" was unclear, now "rotate your forearm: palm up, then palm down, like turning a doorknob".
 
+**Weakest channel across sessions.** Median grip RMS over median rest-cue RMS per channel (filtered, first 0.5 s of
+each cue dropped), sessions `2026-10-02_175745` to `2026-10-14_181042`: ch 6 is the lowest in 6 of 7 sessions (2.0 to
+3.0, others mostly 3 to 5.7), with a high rest level (up to 22.6 uV). Fist cues only: ch 6 rises the least in 7 of 8 sessions (1.6 to 3.9x,
+others mostly 3 to 10x). Ch 0 has the lowest grip level in most
+sessions but rests low too. `2026-10-14_181042` is weak on every channel (ratio 2.5 to 3.9, rest 16 to 24 uV against
+10 to 14 before), possibly the low battery it stopped on (not checked); ch 7 rest high there and in `2026-10-06_084252`.
+
+## 2026-10-15: settle time, protocol C groups
+
+**How much of a cue training leaves out is measured now** (`gestures.settle_s`). It was a flat 1 s in three places
+(LDA, network dataset, haptic levels). Now: the time the drawn hand needs to reach the pose plus a reaction margin,
+and the rest of the cue (as long as the hold time set for the session) is used. Grips 0.5 s close + 0.17 s spring
+lag + 0.5 s = 1.17 s, rest 0.9 s, held protocol C movements 1.67 s, moving cues nothing. The close times are sent to
+the page, so the drawn hand and the trim can't drift apart. Reaction margin checked on 241 grip cues in 13 sessions
+(`diagnostics/settle/settle.py`, hand within 10 deg of its held shape on camera): settled 0.49 s after the cue
+(median), 0.87 s p90; since the spring animation (2026-10-13 on) median 0.6 to 0.78, p90 about 0.9 to 1.4 s, so 0.5 s
+holds. Pinch is slow: median 1.0 s, p90 2.7 s (placing the thumb). Network cache version 6.
+Held protocol C movements now close in 1 s and hold to the end of the cue (they used to relax over its last 30 %);
+the rest cue after does the relaxing, like grips (Noah).
+
 ## Open
 
 - Control tab: try it on the arm (grab, hold, release; count wrong grips and twitches), check the 0.9 s to lock

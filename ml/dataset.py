@@ -18,7 +18,7 @@ from pathlib import Path
 
 import numpy as np
 
-from gestures import GESTURE_SET
+from gestures import GESTURE_SET, settle_s
 from channels import mirrored
 from hand_angles import JOINTS, RELIABLE
 from ml import low_priority
@@ -28,7 +28,6 @@ from session import DATA_DIR, load_session, segments
 RATE = 500
 WINDOW = 100
 STEP = 25
-TRIM_START_S = 1.0
 # Camera frames reach the PC 37 ms after they are taken (LED test 2026-10-07) and EMG samples arrive up to 17 ms
 # late (armband round trip 2026-10-08), so the true shift is 20 to 37 ms; the middle is off by at most 9 ms. Used for
 # every session: the tap delays in session.json (96 to 168 ms) were biased and are no longer read
@@ -41,7 +40,7 @@ MAX_FRAME_GAP_S = 0.1
 IMPOSSIBLE_DEG = -60
 CACHE = Path(__file__).with_name("cache")
 # Bump when the windows or labels change, old cache files are then rebuilt
-VERSION = f"4-f{FILTER_VERSION}-w{WINDOW}-s{STEP}-{'.'.join(GESTURE_SET)}"
+VERSION = f"6-f{FILTER_VERSION}-w{WINDOW}-s{STEP}-{'.'.join(GESTURE_SET)}"
 
 
 def good_sessions(data_dir=DATA_DIR):
@@ -99,7 +98,6 @@ def build(folder):
     kind = np.full(len(ends), "", dtype=object)
     segs = segments(data["events"])
     rep_of = _repetitions([g for g in segs if g["kind"] == "hold" and g["sample1"]])
-    trim = int(TRIM_START_S * RATE)
     for g in segs:
         if g["sample1"] is None:
             continue
@@ -107,7 +105,7 @@ def build(folder):
         posture[inside] = g["posture"]
         kind[inside] = g["kind"]
         if g["kind"] == "hold" and not g["bad"] and g["label"] in GESTURE_SET:
-            held = inside & (ends - WINDOW >= g["sample0"] + trim)
+            held = inside & (ends - WINDOW >= g["sample0"] + int(settle_s(g["kind"], g["label"]) * RATE))
             grip[held] = g["label"]
             rep[held] = rep_of[g["index"]]
 

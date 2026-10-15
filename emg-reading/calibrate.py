@@ -15,6 +15,7 @@ from pathlib import Path
 import numpy as np
 
 from armband import Armband
+from gestures import settle_s
 from processing import (ENVELOPE_MS, FILTER_VERSION, common_average, contact_lost, envelope_series,
                         filter_block)
 from session import load_session, segments
@@ -100,7 +101,7 @@ def levels(ch, rest_env, active_env, low_note="barely changed, check the pad"):
 
 def from_session(folder, car=True):
     """Levels from a recorded session: rest from every rest cue, max from every held grip, each without its first
-    REACTION_S and without cues marked bad. Returns ({channel: {"rest", "max"}}, report lines)."""
+    settle time (gestures.settle_s) and without cues marked bad. Returns ({channel: {"rest", "max"}}, report lines)."""
     data = load_session(folder)
     channels = data["meta"]["channels"]
     rate = data["meta"]["rate"]
@@ -109,9 +110,9 @@ def from_session(folder, car=True):
     y = filter_block(raw, rate)
     if car:
         y = common_average(y, ~lost)
-    trim = int(REACTION_S * rate)
+    settle = lambda s: int(settle_s(s["kind"], s["label"]) * rate)
     holds = [s for s in segments(data["events"]) if s["kind"] == "hold" and s["sample1"] and not s["bad"]
-             and s["sample1"] - s["sample0"] > trim]
+             and s["sample1"] - s["sample0"] > settle(s)]
     rest = [s for s in holds if s["label"] == "rest"]
     grips = [s for s in holds if s["label"] != "rest"]
     if not rest or not grips:
@@ -119,7 +120,8 @@ def from_session(folder, car=True):
     lines = [f"from {Path(folder).name}: {len(rest)} rest cues, {len(grips)} grips", "ch    rest     max   ratio"]
     result = {}
     for i, ch in enumerate(channels):
-        env = lambda group: np.concatenate([envelope_series(y[i, s["sample0"] + trim:s["sample1"]], rate) for s in group])
+        env = lambda group: np.concatenate([envelope_series(y[i, s["sample0"] + settle(s):s["sample1"]], rate)
+                                            for s in group])
         # Some channels sit over muscles the grips hardly use, a low ratio there isn't a pad problem
         result[ch], line = levels(ch, env(rest), env(grips), "grips barely above rest")
         lines.append(line)

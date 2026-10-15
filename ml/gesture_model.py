@@ -23,7 +23,7 @@ from numpy.lib.stride_tricks import sliding_window_view
 from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
 
 from channels import mirrored
-from gestures import GESTURE_SET
+from gestures import GESTURE_SET, settle_s
 from ml import EMG_READING
 from processing import FILTER_SETTLE_S, FILTER_VERSION, filter_block
 from session import load_session, segments
@@ -34,7 +34,6 @@ MODEL_DIR = EMG_READING / "models" / "gestures"
 WINDOW_MS = 200
 STEP_MS = 50
 # The EMG changed 0.2 to 1.4 s after a cue on 2026-09-30 (mostly about 0.5 s), for gestures and for letting go
-TRIM_START_S = 1.0
 VOTE = 5
 # Below this probability the live output says unsure instead of guessing. On 2026-10-01 at 0.8, within one band
 # position, wrong outputs fell from 27 % of windows to 5 % while 92 % of the answers given were right
@@ -114,12 +113,11 @@ def session_windows(data, rate, options):
 
     labels = np.full(len(ends), None, dtype=object)
     postures = np.full(len(ends), None, dtype=object)
-    trim = int(TRIM_START_S * rate)
     for seg in segments(data["events"]):
         # Older sessions also cued gestures that were dropped from the set, those windows are left out
         if seg["kind"] != "hold" or seg["bad"] or seg["sample1"] is None or seg["label"] not in GESTURE_SET:
             continue
-        inside = (starts >= seg["sample0"] + trim) & (ends <= seg["sample1"])
+        inside = (starts >= seg["sample0"] + int(settle_s(seg["kind"], seg["label"]) * rate)) & (ends <= seg["sample1"])
         labels[inside] = seg["label"]
         postures[inside] = seg["posture"]
     return feats, ends, labels, postures

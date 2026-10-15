@@ -3,7 +3,7 @@ import numpy as np
 import pytest
 
 import ml  # noqa: F401
-from gestures import GESTURE_SET
+from gestures import GESTURE_SET, settle_s
 from ml import dataset, gesture_model
 from session import load_session, segments
 
@@ -27,17 +27,17 @@ def test_shapes(newest):
 
 @needs_sessions
 def test_grip_windows_lie_inside_the_trimmed_hold(newest):
-    """Every grip label comes from a hold cue that isn't marked bad, at least TRIM_START_S after its start."""
+    """Every grip label comes from a hold cue that isn't marked bad, at least its settle time (gestures.settle_s)
+    after its start."""
     folder, d = newest
     holds = [s for s in segments(load_session(folder)["events"]) if s["kind"] == "hold" and s["sample1"]]
-    trim = int(dataset.TRIM_START_S * dataset.RATE)
     for end, grip in zip(d["ends"], d["grip"]):
         if not grip:
             continue
         seg = next(s for s in holds if s["sample0"] < end <= s["sample1"])
         assert seg["label"] == grip
         assert not seg["bad"]
-        assert end - dataset.WINDOW >= seg["sample0"] + trim
+        assert end - dataset.WINDOW >= seg["sample0"] + int(settle_s(seg["kind"], seg["label"]) * dataset.RATE)
 
 
 @needs_sessions

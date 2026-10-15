@@ -509,8 +509,9 @@ function keyFrame(keys, x) {
 
 // Where the target hand is t seconds into a cue, so the person can follow it: a protocol B movement closes and
 // opens once, a finger cue does its three bends, the wave bends the fingers one after another, a grip closes from
-// the relaxed hand in half a second and then holds. A protocol C movement closes over the first 30 % of the cue,
-// holds and opens over the last 30 %, or follows its keyframes. Every cue starts and ends at the relaxed hand
+// the relaxed hand and then holds. A held protocol C movement closes the same way, more slowly, and holds to the end
+// of the cue, or a moving one follows its keyframes. Held poses relax in the rest cue after them. Close times come
+// from gestures.py (config.cue_timing), the same numbers that decide how much of each cue training leaves out
 function cueFrame(cue, t) {
   const T = cue.seconds || 4;
   // Protocol D: the hand stays relaxed while the wrist and arm move
@@ -520,7 +521,7 @@ function cueFrame(cue, t) {
     if (!m) return null;
     const x = clamp01(t / T);
     if (m.keys) return keyFrame(m.keys, x);
-    return blendPoses([[cue.label, x < 0.3 ? ease(x / 0.3) : x > 0.7 ? 1 - ease((x - 0.7) / 0.3) : 1]], !m.partial);
+    return blendPoses([[cue.label, ease(t / config.cue_timing.c_close_s)]], !m.partial);
   }
   if (cue.kind === "move") return blendPoses([[cue.label, (1 - Math.cos(2 * Math.PI * clamp01(t / T))) / 2]]);
   if (cue.label === "wave") {
@@ -532,7 +533,9 @@ function cueFrame(cue, t) {
   }
   if (!config.gestures[cue.label]) return null;
   if (cue.kind === "finger") return blendPoses([[cue.label, fingerShare((t % (T / 3)) / (T / 3))]]);
-  if (cue.kind === "hold" && cue.label !== "rest") return blendPoses([[cue.label, ease(t / 0.5)]], true);
+  if (cue.kind === "hold" && cue.label !== "rest") {
+    return blendPoses([[cue.label, ease(t / config.cue_timing.grip_close_s)]], true);
+  }
   return anglesByName(config.gestures[cue.label].angles);
 }
 
