@@ -188,6 +188,10 @@
     <p class="muted">LDA on 200 ms windows of the filtered EMG. Trains on the ticked sessions, tests each one on a model
       trained on the others, saves the model and makes it the live one.</p>
     <h2>Sessions</h2>
+    <div class="row">
+      <button id="train-all-good">Select all good</button>
+      <button id="train-none">Deselect all</button>
+    </div>
     <table id="train-sessions"></table>
     <div class="row narrow">
       <label class="check"><input type="checkbox" id="train-log" checked> Log amplitude features</label>

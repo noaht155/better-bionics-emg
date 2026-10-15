@@ -306,7 +306,7 @@ async function loadTrainLists() {
     const tr = document.createElement("tr");
     // Keep the choice for sessions already listed, a session recorded since then starts ticked if it finished
     const on = listed.has(s.name) ? checked.has(s.name) : s.completed;
-    tr.innerHTML = `<td><input type="checkbox" value="${s.name}" ${on ? "checked" : ""}></td><td>${s.name}</td>
+    tr.innerHTML = `<td><input type="checkbox" value="${s.name}" data-good="${s.completed ? 1 : ""}" ${on ? "checked" : ""}></td><td>${s.name}</td>
       <td>${s.band_arm ?? ""}${s.port_facing ? `, port to ${s.port_facing}` : ""}</td><td>${(s.postures || []).join(", ")}</td><td>${s.placement || ""}</td>
       <td>${s.seconds ? fmtTime(s.seconds) : ""}${s.completed ? "" : " (stopped early)"}</td>
       <td>${s.protocol}</td>`;
@@ -326,6 +326,14 @@ async function loadTrainLists() {
   if (running && models.some((m) => m.name === running)) select.value = running;
   else if (current && models.some((m) => m.name === current)) select.value = current;
 }
+
+// Good is a completed session, the same rule training data follows
+$("train-all-good").addEventListener("click", () => {
+  for (const c of $("train-sessions").querySelectorAll("input")) c.checked = Boolean(c.dataset.good);
+});
+$("train-none").addEventListener("click", () => {
+  for (const c of $("train-sessions").querySelectorAll("input")) c.checked = false;
+});
 
 $("train-start").addEventListener("click", async () => {
   $("train-error").textContent = "";
