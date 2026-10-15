@@ -1055,6 +1055,19 @@ a thin box between them), knife (index along the blade, thumb on the side of the
 shape). Moving gestures (trigger, two finger trigger, tap, beckon, scissors) hold their grip to the end of the cue
 instead of relaxing over the last 12 %.
 
+**Protocol D replay: false fists during arm activity** (`diagnostics/control_sim/d_replay.py`, the app's control
+layer, LDA and effort levels from the session's own grip block; `2026-10-14_181042`, 6.4 min of activities, one
+session). With the tuned defaults the hand sits closed 32 % of the time in the arm and wrist activities, 27 % in the
+hand-shape ones, 36 % in the rests between. Nearly every start is a fist: reach overhead, wrist bend, lean and arm out
+tense the same forearm flexors, and the classifier has no class for "arm busy, not a grip". The lock keeps it closed
+because release on rest needs 1.5 s of relaxed arm. Release on rest or open hand: 30 / 20 / 25 %; that plus start
+level 0.15 and 12 votes: 18 / 13 / 17 %, still far off and the higher start level costs pinch and key. The control
+layer can't fix it alone: next is giving the classifier the D activities as a "not a grip" class.
+Effort target on the Record screen dropped (Noah): no time to read during a cue, and effort differs too much between
+people (atrophy after an amputation). Smaller protocol C set to choose per person next, from that person's own
+groups; train each group on all its members and let the user pick the active one, so swapping inside a group needs
+no retraining (repetitions spread over the members, so not longer).
+
 ## Open
 
 - Control tab: try it on the arm (grab, hold, release; count wrong grips and twitches), check the 0.9 s to lock
@@ -1063,7 +1076,8 @@ instead of relaxing over the last 12 %.
   against both; the near-zero start level is likely to fire there.
   Score the two groups of D activities apart (2026-10-14).
 - Arm animation for cues: forearm, wrist and upper arm in the cue drawing, so D's activities and the wrist
-  movements left out of protocol C can be shown (Noah asked, not started).
+  movements left out of protocol C can be shown. Later: a bigger build, not needed yet (Noah, 2026-10-15); D's cues
+  are text with the relaxed hand until then.
 - Record and play: train the classifier on protocol C's `custom` labels and play back each movement's target
   (or its recorded camera trajectory) under the control layer.
 
