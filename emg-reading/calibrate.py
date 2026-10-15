@@ -88,10 +88,13 @@ def compute(relaxed, squeezed, rate, channels, car):
     return result, lines
 
 
-def levels(ch, rest_env, active_env, low_note="barely changed, check the pad"):
-    """Rest and max level of one channel from its envelope at rest and while active. Returns (levels, report line)."""
-    rest = float(np.percentile(rest_env, REST_PERCENTILE)) * REST_MARGIN
-    max_ = float(np.percentile(active_env, MAX_PERCENTILE))
+def levels(ch, rest_env, active_env, low_note="barely changed, check the pad", scale=None):
+    """Rest and max level of one channel from its envelope at rest and while active. scale: (rest percentile, rest
+    margin, max percentile), default the haptics' REST_PERCENTILE, REST_MARGIN and MAX_PERCENTILE. Returns (levels,
+    report line)."""
+    rest_pct, margin, max_pct = scale or (REST_PERCENTILE, REST_MARGIN, MAX_PERCENTILE)
+    rest = float(np.percentile(rest_env, rest_pct)) * margin
+    max_ = float(np.percentile(active_env, max_pct))
     note = ""
     if max_ < MIN_RATIO * rest:
         note = f"  {low_note}"
@@ -99,9 +102,10 @@ def levels(ch, rest_env, active_env, low_note="barely changed, check the pad"):
     return {"rest": round(rest, 2), "max": round(max_, 2)}, f"{ch}  {rest:6.1f}  {max_:6.1f}  {max_ / rest:5.1f}x{note}"
 
 
-def from_session(folder, car=True):
+def from_session(folder, car=True, scale=None):
     """Levels from a recorded session: rest from every rest cue, max from every held grip, each without its first
-    settle time (gestures.settle_s) and without cues marked bad. Returns ({channel: {"rest", "max"}}, report lines)."""
+    settle time (gestures.settle_s) and without cues marked bad. scale as in levels(). Returns ({channel: {"rest",
+    "max"}}, report lines)."""
     data = load_session(folder)
     channels = data["meta"]["channels"]
     rate = data["meta"]["rate"]
@@ -123,7 +127,7 @@ def from_session(folder, car=True):
         env = lambda group: np.concatenate([envelope_series(y[i, s["sample0"] + settle(s):s["sample1"]], rate)
                                             for s in group])
         # Some channels sit over muscles the grips hardly use, a low ratio there isn't a pad problem
-        result[ch], line = levels(ch, env(rest), env(grips), "grips barely above rest")
+        result[ch], line = levels(ch, env(rest), env(grips), "grips barely above rest", scale)
         lines.append(line)
     return result, lines
 
