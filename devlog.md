@@ -1132,8 +1132,72 @@ over LDA from them. Today's session is weak for LDA: 1-repetition calibration sc
 (`diagnostics/lda_one_rep.py`), 70 % here. The earlier 80 % LDA numbers were 2-repetition calibrations on 3-repetition
 sessions. The Control tab now also runs calibrated networks (no distance check for them yet).
 
+**Three cheap grip changes, none worth adopting for accuracy** (`diagnostics/grip_checks.py`, log in
+`diagnostics/out/`, 15 sessions leave one session out, 15 epochs, one seed). Calibrated on the other repetitions
+(15 sessions) and on one repetition (9 sessions with 3):
+
+| Method | Balanced (all other / 1 rep) | Wrong at 0.8 | Answers at 0.8 |
+|---|---|---|---|
+| LDA | 80.2 / 78.2 % | 9.4 / 9.3 % | 91 / 89 % |
+| Network + transform + grip head | 84.7 / 81.4 % | 4.8 / 6.2 % | 87 / 86 % |
+| Same, batch norm stats from the calibration windows | 84.2 / 81.4 % | 5.2 / 6.2 % | 87 / 86 % |
+| LDA on the calibrated network's features | 84.2 / 80.9 % | 9.3 / 10.9 % | 97 / 96 % |
+| LDA and network probabilities averaged | 84.7 / 82.7 % | 2.4 / 3.2 % | 80 / 79 % |
+
+Batch norm adaptation and LDA on network features gain nothing. The average of LDA and network has the same balanced
+accuracy but halves the wrong grips shown at the threshold, at the cost of answering about 7 points less often: an
+option for the Control tab if wrong grips matter more than speed, not a gain in accuracy.
+
+**Do combined hand shapes add up in the EMG?** (`diagnostics/additivity.py`, `2026-10-15_100023`). Idea (Noah):
+detect several known patterns in a window at once and blend them, like object detection, so a half-closed fist or a key
+pinch with the other fingers open come out as mixes. That only works if the EMG of a combination is close to the sum
+of its parts. Templates: channel covariance of each grip's calibration holds minus rest; each protocol C cue fitted as
+a non-negative mix of the 6 grip templates. 6 templates explain 89 % on average (one average template 50 %), so the
+patterns carry information, but:
+- Fist, point and open land on themselves (1.08, 1.03, 0.67). Key comes out as pinch 0.66 + point 0.45 (key 0.17),
+  pinch matches nothing above 0.13: the thumb grips aren't separate patterns even within the session.
+- Combinations don't split into their parts: pinch with the others closed is pinch 0.21 and no fist, hook is tripod
+  + point. "Fingers closed" in a light grip doesn't look like a weak fist.
+So whole grips aren't the building blocks. If blending is tried, the parts have to be what the band separates (effort,
+index in or out, open, thumb engaged), not the thumb grips apart.
+
+**Channel order round the arm, from the data.** Per-window log RMS minus its mean over channels (the pattern, not the
+effort), correlated per session over all grip windows, averaged over 15 sessions: channels 0 to 5 correlate most with
+their neighbours (0.36, 0.53, 0.36, 0.25, 0.32), falling with distance round the ring (1 apart 0.16, 4 apart -0.31).
+Channels 6 and 7 don't fit (-0.37 with 5, -0.11 with each other, -0.05 with 0). So 0 to 5 run in order; 6 and 7 on
+the base module are either out of order or see little of the grips (ch 6 is also the weakest channel). Not a tap test.
+
+**Cursor tab: abstract control** (`cursor.py`, `tools.CursorTask`). Different approach from the classifiers: nothing
+is trained, the person learns a fixed map (abstract myoelectric control, Dyson, Barnes and Nazarpour, who found
+people learn it in minutes and keep it across days and arm positions). Each channel's level (haptics' levels from a
+chosen session) pulls a dot towards that electrode's direction round the ring, so the side of the forearm that works
+sets the direction and effort sets the distance; relaxed and even co-contraction stay in the middle. Center-out
+targets with a home zone, dwell and timeout; every target run logged to `data/cursor/` with the path and levels per
+step, so learning can be compared day to day. Rotation and mirror settings to line the map up.
+Offline on `2026-10-15_140633` (no practice, just the map on recorded grips): natural grips all land between 130 and
+185 deg (pinch near 0), so the other directions need new contractions; that is what gets learnt. The dot wobbles 0.11
+within a held grip at 0.3 s smoothing (0.16 at 0.15 s), 0.01 to 0.02 at rest; defaults set easy from that (4 targets,
+size 0.25, smoothing 0.3).
+First live try: ch 0, 1 and 7 hardly moved the dot (Noah: likely the pads near the bone). Partly true (ch 0 and 1 rise
+6.1x and 4.9x from rest median in a grip, ch 2 to 5 8 to 10x; ch 7 6.8x but rests at 10.6 uV against 4.4), mostly the
+haptics' scale: rest 99th x 1.5 hit the max floor (2x rest) on every channel, leaving ch 1 and 6 at 0.45 and 0.30 in a
+grip while 2, 3 and 5 sat at 1.0. The cursor now has its own scale (`cursor.LEVEL_SCALE`, rest 95th x 1.2, max 95th
+of the grips, `calibrate.from_session(scale=...)`): every channel 0.69 to 0.85 in a grip, dot at rest still inside
+the home zone (95th percentile 0.09). Haptics unchanged.
+Practice logs (`data/cursor/2026-10-15_162815`, `162926`, 25 trials, 4 targets): 3 hits, none at 0 or 270 deg. Ch 6
+never passed 0.10 in any trial while the others reached 0.8 to 1.0, so nothing pulls towards 270, and pushing hard
+fires every channel, which cancels out near the middle (the dot averaged 0.14 to 0.28 from it). The ring map assumes
+working pads all round and one side firing alone; neither holds. A map fitted to natural grips instead (least squares
+from the 8 smoothed levels to one target per grip, no offset, fitted on repetition 1, tested on 2, 3 sessions): rest
+99 to 100 % in the home zone, open 40 to 72 %, point 0 to 64 %, fist 14 to 19 %, pinch 1 to 4 %; with 6 grips key and
+tripod 0 to 26 %. A linear map of the envelopes separates about the same few things the classifiers do (open, point,
+fist and effort). Planned test: 15 min a day for 3 days, hit rate and time to hit per day. If day 3 clearly
+beats the grip classifier's about 80 %, grips get assigned to target zones and the hand follows the dot.
+
 ## Open
 
+- Cursor tab: 15 min practice a day for 3 days, compare hit rate and time to hit per day from `data/cursor/`. If it
+  learns well: grips as target zones, the hand driven from the dot, haptics following the dot.
 - Control tab: try it on the arm (grab, hold, release; count wrong grips and twitches), check the 0.9 s to lock
   against fewer votes, and whether pinch closes far enough at gain 1.5 (per-grip max levels or a higher gain).
   Try the distance check and rest_or_class release live (retrain the LDA first).
@@ -1174,7 +1238,8 @@ sessions. The Control tab now also runs calibrated networks (no distance check f
   flow tested with LDA first.
 - Measure the camera delay over the whole session (accelerometer against camera wrist movement) instead of 6 taps,
   which disagreed by up to 135 ms in session `164337`.
-- Tap test round the band to confirm channels 0 to 7 run in order round the arm, the ring assumes it. Then record
+- Tap test round the band to confirm channels 0 to 7 run in order round the arm, the ring assumes it. The data says
+  0 to 5 are in order, 6 and 7 unclear (2026-10-15). Then record
   one mirrored session to check the channel flip on real data.
 - Motors: firmware 0.2.1 is flashed and channels 0 and 1 follow the duty. When the ULN2003, MOSFETs or LEDs go
   back on, set `OUTPUTS_INVERTED` to false. Still to measure: lowest duty that starts a motor (the haptics floor),
