@@ -138,6 +138,9 @@ These decide when the recorder marks a cue bad and redoes it.
 | `test_speed_closure` | Speed closure closes above the hold level and holds below it |
 | `test_release_modes` | Release on the open hand, on rest, or on either |
 | `test_angles_follow_closure` | Output angles sit at the right share of the way from relaxed to the grip's pose, and the spring only moves part of the way in one step |
+| `test_far_windows_count_as_rest` | A window farther than `max_distance` from every trained grip can't vote for one, whatever its probability; 0 turns the check off |
+| `test_rest_or_class_release` | `rest_or_class` lets go when rest wins `release_n` steps even with effort up, or on low effort; a far window counts as rest for it |
+| `test_distance_space_inside_and_outside_a_class` | `gesture_model.distance_space`: training windows sit a few spreads from their class centre, a window away from every class many spreads |
 
 ### Protocols (`tests/test_protocols.py`)
 

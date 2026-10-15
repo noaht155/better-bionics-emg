@@ -145,10 +145,12 @@ class ControlParams(BaseModel):
     gain: float = Field(ge=0, le=20)
     hold_level: float = Field(ge=0, le=1)
     hold_on_relax: bool
-    release_mode: Literal["open_class", "rest", "either"]
+    release_mode: Literal["open_class", "rest", "either", "rest_or_class"]
     release_n: int = Field(ge=1, le=20)
     release_level: float = Field(ge=0, le=1)
     release_s: float = Field(ge=0, le=5)
+    # Presets saved before the distance check have no value, they get the default
+    max_distance: float = Field(CONTROL_DEFAULTS["max_distance"], ge=0, le=50)
     spring_w: float = Field(ge=0, le=50)
 
 

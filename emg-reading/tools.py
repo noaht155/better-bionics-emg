@@ -329,7 +329,7 @@ class Predictor(Tool):
                 self.state.update(label=label, raw=raw, probs=probs, angles=getattr(live, "angles", None),
                                   effort_angles=getattr(live, "effort_angles", None))
                 if control is not None:
-                    control.step(emg, filtered, probs, period)
+                    control.step(emg, filtered, probs, period, getattr(live, "distance", None))
             next_tick = max(next_tick + period, time.perf_counter())
             time.sleep(max(0.0, next_tick - time.perf_counter()))
 
@@ -366,14 +366,15 @@ class Control:
     def reset_counts(self):
         self.state.update(starts=0, releases=0, opens=0)
 
-    def step(self, emg, filtered, probs, dt):
+    def step(self, emg, filtered, probs, dt, distance=None):
         n = self.recorder.env_len
         band = self.recorder.band
         e = effort(emg[:, -n:], filtered[:, -n:], band.channels, self._ranges, True)
-        out = self._controller.step(probs, e, dt)
+        out = self._controller.step(probs, e, dt, distance)
         s = self.state
         s.update(step=s["step"] + 1, state=out["state"], grip=out["grip"], closure=round(out["closure"], 3),
-                 effort=round(e, 3), angles=[round(a, 1) for a in out["angles"]])
+                 effort=round(e, 3), angles=[round(a, 1) for a in out["angles"]],
+                 distance=None if distance is None else round(distance, 2))
         if out["event"]:
             s[out["event"] + "s"] += 1
 

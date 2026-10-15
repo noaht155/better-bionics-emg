@@ -119,3 +119,46 @@ def test_angles_follow_closure():
     # The spring only moves part of the way in one step
     j = JOINTS.index("index_pip")
     assert POSES["rest"][j] < out["angles"][j] < POSES["fist"][j]
+
+
+def test_far_windows_count_as_rest():
+    """A window farther than max_distance from every trained grip can't vote for one, whatever its probability."""
+    c = make(vote_n=2, max_distance=6.0)
+    assert [c.step(probs("fist"), 0.5, distance=9.0)["event"] for _ in range(4)] == [None] * 4
+    assert [c.step(probs("fist"), 0.5, distance=3.0)["event"] for _ in range(2)] == [None, "start"]
+    off = make(vote_n=2, max_distance=0.0)
+    assert [off.step(probs("fist"), 0.5, distance=9.0)["event"] for _ in range(2)] == [None, "start"]
+
+
+def test_rest_or_class_release():
+    """rest_or_class lets go when rest wins release_n steps even while effort stays up, or on low effort."""
+    c = make(vote_n=1, release_mode="rest_or_class", release_n=3)
+    c.step(probs("fist"), 0.5)
+    assert [c.step(probs("rest"), 0.5)["event"] for _ in range(3)] == [None, None, "release"]
+    c = make(vote_n=1, release_mode="rest_or_class", release_n=3, release_s=0.5)
+    c.step(probs("fist"), 0.5)
+    events = [c.step(probs("fist"), 0.0)["event"] for _ in range(10)]
+    assert "release" in events
+    # A far window counts as rest for the release too
+    c = make(vote_n=1, release_mode="rest_or_class", release_n=2, max_distance=6.0)
+    c.step(probs("fist"), 0.5, distance=2.0)
+    assert [c.step(probs("fist"), 0.5, distance=9.0)["event"] for _ in range(2)] == [None, "release"]
+
+
+def test_distance_space_inside_and_outside_a_class():
+    """gesture_model.distance_space: training windows sit a few spreads from their class centre, a window far from
+    every class is many spreads away."""
+    import numpy as np
+    from ml.gesture_model import distance_space
+    rng = np.random.default_rng(0)
+    centres = {"rest": np.zeros(6), "fist": np.r_[5.0, np.zeros(5)], "pinch": np.r_[0, 5.0, np.zeros(4)]}
+    feats = np.vstack([rng.normal(c, 1.0, (200, 6)) for c in centres.values()])
+    labels = np.repeat(list(centres), 200).astype(object)
+    space = distance_space(feats, labels)
+
+    def dist(x, cls):
+        z = space["lda"].transform(x[None])[0] - space["centres"][cls]
+        return float(np.sqrt(z @ space["cov_inv"] @ z))
+    inside = np.median([dist(x, "fist") for x in feats[labels == "fist"]])
+    outside = dist(np.r_[5.0, 0, 0, 0, 0, 0] + np.r_[0, -12.0, 0, 0, 0, 0], "fist")
+    assert inside < 2.5 and outside > 3 * inside

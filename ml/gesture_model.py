@@ -128,6 +128,16 @@ def make_lda():
     return LinearDiscriminantAnalysis(solver="lsqr", shrinkage="auto")
 
 
+def distance_space(feats, labels):
+    """The LDA space (same shrinkage LDA, eigen solver because lsqr has no transform) with each class's centre and
+    the pooled spread of the training windows around their centres, for LivePredictor.distance."""
+    lda = LinearDiscriminantAnalysis(solver="eigen", shrinkage="auto").fit(feats, labels)
+    z = lda.transform(feats)
+    centres = {c: z[labels == c].mean(axis=0) for c in lda.classes_}
+    spread = np.cov(np.concatenate([z[labels == c] - centres[c] for c in lda.classes_]).T)
+    return {"lda": lda, "centres": centres, "cov_inv": np.linalg.pinv(spread)}
+
+
 def majority(predictions, vote):
     """Causal majority vote over the last vote predictions, ties go to the newest."""
     out = np.empty(len(predictions), dtype=object)
@@ -250,7 +260,8 @@ def train(folders, options, evaluate_it=True):
     labels = np.concatenate([s[2] for s in sessions.values()])
     known = labels != None  # noqa: E711
     lda = make_lda().fit(feats[known], labels[known])
-    model = {"lda": lda, "options": options, "classes": [str(c) for c in lda.classes_],
+    model = {"lda": lda, "space": distance_space(feats[known], labels[known]),
+             "options": options, "classes": [str(c) for c in lda.classes_],
              "channels": list(channels.pop()), "rate": metas[0]["rate"], "filter_version": FILTER_VERSION,
              "window_ms": WINDOW_MS, "step_ms": STEP_MS,
              "vote": options["vote"], "sessions": list(sessions), "subject": metas[0].get("subject"),
@@ -285,6 +296,10 @@ class LivePredictor:
         self.win = int(model["window_ms"] / 1000 * model["rate"])
         self.recent = deque(maxlen=model["vote"])
         self.threshold = THRESHOLD
+        # How far the newest window is from the training windows of the class it was given (Mahalanobis, in units
+        # of their spread). A window unlike every trained class still gets one of them with full confidence, the
+        # distance shows it. None for models saved before 2026-10-15
+        self.distance = None
 
     def predict(self, filtered, accel=None):
         """filtered: channels x at least one window of filtered EMG, accel: 3 x the same samples (only if the
@@ -298,6 +313,10 @@ class LivePredictor:
         if self.model["options"]["accel"]:
             feats = np.concatenate([feats, accel[:, -self.win:].mean(axis=1)])
         probs = self.model["lda"].predict_proba(feats[None])[0]
+        space = self.model.get("space")
+        if space is not None:
+            z = space["lda"].transform(feats[None])[0] - space["centres"][self.model["classes"][int(np.argmax(probs))]]
+            self.distance = float(np.sqrt(z @ space["cov_inv"] @ z))
         raw = self.model["classes"][int(np.argmax(probs))] if probs.max() >= self.threshold else UNSURE
         self.recent.append(raw)
         counts = Counter(self.recent)

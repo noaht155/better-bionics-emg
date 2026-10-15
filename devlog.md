@@ -1068,13 +1068,28 @@ people (atrophy after an amputation). Smaller protocol C set to choose per perso
 groups; train each group on all its members and let the user pick the active one, so swapping inside a group needs
 no retraining (repetitions spread over the members, so not longer).
 
+**False grips during arm activity: distance check and class release** (`control.py`, `gesture_model.distance_space`).
+Second protocol D session (`2026-10-15_105900`, complete, all 14 activities, module posterior) was worse than the
+first: hand closed 63 / 75 / 52 % of the time (arm / hand shapes / rests). Two findings:
+- Probability can't flag them: during the false grips the winning grip has the same confidence as real grips
+  (median 1.00 both), a 0.99 threshold removes 29 % of false and 22 % of real grip windows. The LDA only says which
+  grip is nearest. The distance of the window from that grip's calibration windows does separate them (real
+  median 3.6, arm activity 10.3; cutoff 6 drops 82 % of false windows and 10 % of real ones, `d_confidence.py`).
+- The lock keeps a false grip closed: release on low effort needs 1.5 s below 0.03, which arm activity rarely gives.
+Fix, no extra training data: windows farther than `max_distance` (6) count as rest, and a new release mode
+`rest_or_class` also lets go when rest or the open hand wins `release_n` (6) steps. On the replays
+(`tune_release.py`): D sessions 0 / 0 / 0 % and 4 / 7 / 1 % closed; protocol A unchanged (86.4 % correct locks,
+0.44 wrong per minute, 0.09 twitches per cue), time to lock 0.95 to 1.00 s. A "not a grip" class trained on D's
+activities (equal priors, each activity left out) worked too but adds nothing on top and needs the extra block,
+Noah's point against it. The remaining wrong locks in protocol A are grips mixed with each other (key and point,
+tripod and pinch: the thumb grips), which distance can't see. New defaults on the Control tab; models trained
+before today have no distance (the check is off for them), retrain to use it. Two D sessions, one person, table.
+
 ## Open
 
 - Control tab: try it on the arm (grab, hold, release; count wrong grips and twitches), check the 0.9 s to lock
   against fewer votes, and whether pinch closes far enough at gain 1.5 (per-grip max levels or a higher gain).
-  Record a protocol D session and add its `nogrip` cues to the replay as false starts per minute, then retune
-  against both; the near-zero start level is likely to fire there.
-  Score the two groups of D activities apart (2026-10-14).
+  Try the distance check and rest_or_class release live (retrain the LDA first).
 - Arm animation for cues: forearm, wrist and upper arm in the cue drawing, so D's activities and the wrist
   movements left out of protocol C can be shown. Later: a bigger build, not needed yet (Noah, 2026-10-15); D's cues
   are text with the relaxed hand until then.

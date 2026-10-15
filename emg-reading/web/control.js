@@ -10,10 +10,11 @@ const CONTROL_PARAMS = [
   { key: "gain", label: "Gain", min: 0, max: 10, step: 0.1, help: "closure per unit of effort (position) or per second (speed)" },
   { key: "hold_level", label: "Hold level", min: 0, max: 0.6, step: 0.01, help: "speed mode: effort at which the closure stays still" },
   { key: "hold_on_relax", label: "Hold on relax", help: "relaxing keeps the hand where it is instead of opening it" },
-  { key: "release_mode", label: "Release", options: ["either", "open_class", "rest"], help: "open_class: the open hand gesture. rest: effort stays low. either: whichever comes first" },
-  { key: "release_n", label: "Release votes", min: 1, max: 10, step: 1, help: "steps in a row the open hand has to win to release" },
+  { key: "release_mode", label: "Release", options: ["rest_or_class", "either", "open_class", "rest"], help: "rest_or_class: rest or the open hand wins, or effort stays low. open_class: the open hand gesture. rest: effort stays low. either: open hand or low effort" },
+  { key: "release_n", label: "Release votes", min: 1, max: 10, step: 1, help: "steps in a row the open hand (or rest, in rest_or_class) has to win to release" },
   { key: "release_level", label: "Release level", min: 0, max: 0.5, step: 0.01, help: "effort below which the hand counts as at rest" },
   { key: "release_s", label: "Release s", min: 0, max: 3, step: 0.05, help: "time below the release level before the grip lets go" },
+  { key: "max_distance", label: "Max distance", min: 0, max: 15, step: 0.5, help: "windows farther than this from every trained grip count as rest, 0 turns it off. Needs a model trained since 2026-10-15" },
   { key: "spring_w", label: "Spring", min: 0, max: 30, step: 0.5, help: "how fast the hand follows its target, 0 jumps straight there" },
 ];
 const TRACE_STEPS = 200;
@@ -179,7 +180,9 @@ function drawControl(c, p) {
     : "relaxed<small>waiting for a grip</small>";
   $("ctl-readout").innerHTML = running ? `<div>${Math.round(100 * c.effort)} %<small>effort</small></div>
     <div>${Math.round(100 * c.closure)} %<small>closure</small></div><div>${c.starts}<small>starts</small></div>
-    <div>${c.releases}<small>releases</small></div><div>${c.opens}<small>open hand picked</small></div>` : "";
+    <div>${c.releases}<small>releases</small></div><div>${c.opens}<small>open hand picked</small></div>
+    <div>${c.distance == null ? "n/a" : c.distance.toFixed(1)}<small>distance${c.distance != null && ctl.params.max_distance > 0
+      && c.distance > ctl.params.max_distance ? ", counted as rest" : ""}</small></div>` : "";
   if (currentTab !== "control") return;
   drawControlHand(c, running);
   drawTrace();
