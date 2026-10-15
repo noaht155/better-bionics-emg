@@ -1116,6 +1116,22 @@ waving, relax; start level 0.15, max distance 4, no lock):
   0.64 but twitches at rest up to 0.48.
 - Thumb grips flicker: key read as point (2 of 2 times), tripod mixed with pinch and point. Same as the replays.
 
+**All sessions plus the first calibration, today's session held out** (`2026-10-15_140633`, 2 repetitions, table and
+forward; calibrated on one repetition, tested on the other; `ml.train_ringnet --held`, `diagnostics/lda_all_plus_cal.py`):
+
+| Method | Balanced | Grips only |
+|---|---|---|
+| LDA on the other 14 sessions | 57.7 % | 50.7 % |
+| LDA on the 1 calibration repetition | 70.1 % | 65.4 % |
+| LDA on the other 14 sessions + the calibration repetition | 58.8 % | 51.9 % |
+| Network, no calibration | 73.4 % | 69.2 % |
+| Network + transform + grip head from 1 repetition | 80.2 % | 77.4 % |
+
+LDA can't use the old sessions (the old placements drown the one calibration repetition), the network gains 10 points
+over LDA from them. Today's session is weak for LDA: 1-repetition calibration scores 73 to 92 % on the other sessions
+(`diagnostics/lda_one_rep.py`), 70 % here. The earlier 80 % LDA numbers were 2-repetition calibrations on 3-repetition
+sessions. The Control tab now also runs calibrated networks (no distance check for them yet).
+
 ## Open
 
 - Control tab: try it on the arm (grab, hold, release; count wrong grips and twitches), check the 0.9 s to lock
