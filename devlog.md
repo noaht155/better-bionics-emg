@@ -1032,6 +1032,10 @@ holds. Pinch is slow: median 1.0 s, p90 2.7 s (placing the thumb). Network cache
 Held protocol C movements now close in 1 s and hold to the end of the cue (they used to relax over its last 30 %);
 the rest cue after does the relaxing, like grips (Noah).
 
+**A cue cut short by a pause counts as bad** (`session.segments`, Noah). Continue redoes the cue, so the attempt the
+pause interrupted (often letting go to type or read) was going into training as the cued grip. Now it is left out
+and the redo after the resume counts, in every session, old ones included. Hum pauses already did this.
+
 ## Open
 
 - Control tab: try it on the arm (grab, hold, release; count wrong grips and twitches), check the 0.9 s to lock

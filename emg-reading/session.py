@@ -157,11 +157,14 @@ def sample_times(package, arrival):
 
 def segments(events, end_t=None):
     """Cue segments from the event list: dicts with the cue fields plus t0, t1, sample0, sample1 and bad.
-    A segment ends at the next cue, pause or stop."""
+    A segment ends at the next cue, pause or stop. A cue cut short by a pause counts as bad: Continue redoes it,
+    and the redo after the resume is the one that counts (Noah, 2026-10-15)."""
     out = []
     for e in events:
         if out and out[-1]["t1"] is None and e["kind"] in ("cue", "pause", "stop"):
             out[-1].update(t1=e["t"], sample1=e["sample"])
+            if e["kind"] == "pause":
+                out[-1]["bad"] = True
         if e["kind"] == "cue":
             out.append(dict(e["cue"], index=e["index"], t0=e["t"], sample0=e["sample"], t1=None, sample1=None,
                             bad=False))

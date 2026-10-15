@@ -198,3 +198,16 @@ def test_hand_warning_only_where_the_camera_labels():
             assert not needed[i]
         elif cue["kind"] == "hold":
             assert needed[i]
+
+
+def test_cue_cut_short_by_a_pause_is_bad():
+    """The attempt a pause interrupts is left out, the redo after the resume counts."""
+    cue = {"kind": "hold", "label": "fist", "text": "", "seconds": 4, "posture": "table"}
+    events = [{"t": 0.0, "sample": 0, "kind": "cue", "index": 0, "cue": cue},
+              {"t": 1.5, "sample": 750, "kind": "pause"},
+              {"t": 9.0, "sample": 750, "kind": "resume"},
+              {"t": 9.0, "sample": 750, "kind": "cue", "index": 0, "cue": cue},
+              {"t": 13.0, "sample": 2750, "kind": "stop"}]
+    first, redo = segments(events)
+    assert first["bad"] and (first["sample0"], first["sample1"]) == (0, 750)
+    assert not redo["bad"] and (redo["sample0"], redo["sample1"]) == (750, 2750)
