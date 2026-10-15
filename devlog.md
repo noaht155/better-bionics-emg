@@ -1036,6 +1036,25 @@ the rest cue after does the relaxing, like grips (Noah).
 pause interrupted (often letting go to type or read) was going into training as the cued grip. Now it is left out
 and the redo after the resume counts, in every session, old ones included. Hum pauses already did this.
 
+**First protocol C session** (`2026-10-15_100023`, table, 17 common movements x 5 rounds, 19.5 min). Bad: both
+knife cues Noah flagged and the redone pinch (cue 103), marked after the session. LDA with protocol A's features,
+trained on rounds 1 to 3, tested on 4 and 5 (`diagnostics/c_groups/confusion.py`, `drift.py`):
+- 17 movements 35 % balanced (chance 6 %). Rounds held out in between (1, 3, 5 to 2, 4) 47 %, own training rounds
+  78 %, so part of the drop is drift over 20 minutes. The session's own grip calibration scored 74 % (7 grips, rep 1
+  to rep 2), normal: the band was fine, 17 movements are far more than this signal separates.
+- Noah's predictions held: knife taken for point 63 % (right 4 %), thumb and 2 fingers for tripod 42 % (right 0 %),
+  the power grips mix (hook 4 %, precision disk 4 %). Fist 99 %, point 92 %: the firm, clear shapes.
+- Groups from the confusions: 8 groups 60 % balanced (cylinder, hook, pinch, pinch others closed / point, knife,
+  lateral tripod / thumb 2, thumb 3, tripod / trigger, light tool / power sphere, precision disk / key / open / fist),
+  12 groups 50 %.
+- Likely part of it: effort. The gentle shapes collapse into each other (as key pinch did before the firm-hold cue
+  on 2026-10-01). Props are out (Noah: it has to work for people without a hand, whose data is an attempted grip
+  with nothing in it); an effort target on the Record screen is the idea to discuss.
+Drawings fixed: thumb and 2, 3 and 4 fingers (the thumb stopped 44 to 59 mm short of the fingers, now 12 to 18 mm,
+a thin box between them), knife (index along the blade, thumb on the side of the handle, no longer the point
+shape). Moving gestures (trigger, two finger trigger, tap, beckon, scissors) hold their grip to the end of the cue
+instead of relaxing over the last 12 %.
+
 ## Open
 
 - Control tab: try it on the arm (grab, hold, release; count wrong grips and twitches), check the 0.9 s to lock

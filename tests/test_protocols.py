@@ -92,7 +92,8 @@ def test_library_entries_are_complete():
         if "keys" in m:
             times = [t for t, _ in m["keys"]]
             assert times[0] == 0 and times[-1] == 1 and times == sorted(times), key
-            assert m["keys"][0][1] == GESTURES["rest"][1] == m["keys"][-1][1], key
+            # Start relaxed; the end is held to the end of the cue and relaxes in the rest after
+            assert m["keys"][0][1] == GESTURES["rest"][1], key
 
 
 def _fake_session(folder, plan, settings):

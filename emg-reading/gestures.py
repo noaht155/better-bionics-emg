@@ -151,14 +151,15 @@ def _lib(key, name, category, sources, text, angles, common=False, partial=False
         LIBRARY[key]["keys"] = [[float(t), [float(a) for a in pose]] for t, pose in keys]
 
 
-def _cycle(pose_a, pose_b, times, start=0.12, end=0.88):
-    """Keyframes that go relaxed, pose_a, then pose_b and back to pose_a `times` times, relaxed again."""
+def _cycle(pose_a, pose_b, times, start=0.12, end=0.9):
+    """Keyframes that go relaxed, pose_a, then pose_b and back to pose_a `times` times, and hold pose_a to the end of
+    the cue. The hand relaxes in the rest cue after, like the held poses."""
     rest = GESTURES["rest"][1]
     step = (end - start) / (2 * times)
     keys = [(0, rest), (start, pose_a)]
     for i in range(times):
         keys += [(start + (2 * i + 1) * step, pose_b), (start + (2 * i + 2) * step, pose_a)]
-    return keys + [(1, rest)]
+    return keys + [(1, pose_a)]
 
 
 CATEGORIES = {"power": "Power grips", "precision": "Precision grips", "lateral": "Lateral and flat grips",
@@ -180,7 +181,7 @@ _lib("light_tool", "Light tool", "power", "Feix 5, Cutkosky, Bullock top 10",
      _pose((5, 5, 10, 5), (65, 75, 40), (65, 75, 40), (65, 75, 40), (65, 75, 40)), True)
 _lib("index_extension", "Index extension", "power", "Feix 17, Ninapro C, Bullock top 10",
      "INDEX ON TOP\nhold a knife, index straight along the back of the blade",
-     _pose((40, 30, 15, 40), (20, 15, 5), CYLINDER, CYLINDER, CYLINDER), True)
+     _pose((37, 18, 5, 7), (45, 15, 5), CYLINDER, CYLINDER, CYLINDER), True)
 _lib("power_sphere", "Power sphere", "power", "Feix 11, Cutkosky, Ninapro C, Bullock top 10",
      "POWER SPHERE\nwhole hand round an apple, fingers spread",
      _pose((30, 55, 15, 15), (45, 45, 25, 12), (45, 45, 25, 0), (45, 45, 25, -10), (45, 45, 25, -18)), True)
@@ -223,13 +224,13 @@ _lib("precision_sphere", "Precision sphere", "precision", "Feix 13, Cutkosky, Ni
      _pose((30, 50, 10, 10), (35, 35, 25, 12), (35, 35, 25, 0), (35, 35, 25, -10), (35, 35, 25, -20)))
 _lib("thumb_2_finger", "Thumb and 2 fingers", "precision", "Feix 8 prismatic 2 finger, Cutkosky, Bullock top 10",
      "THUMB AND 2 FINGERS\nthumb pad against the index and middle pads, a thin box",
-     _pose((35, 45, 5, 5), (45, 20, 10), (45, 20, 10), RELAXED, RELAXED), True)
+     _pose((30, 30, 30, 30), (66, 51, 23), (66, 51, 23), RELAXED, RELAXED), True)
 _lib("thumb_3_finger", "Thumb and 3 fingers", "precision", "Feix 7 prismatic 3 finger, Cutkosky, Bullock top 10",
      "THUMB AND 3 FINGERS\nthumb pad against the index, middle and ring pads",
-     _pose((35, 45, 5, 5), (45, 20, 10), (45, 20, 10), (45, 20, 10), RELAXED), True)
+     _pose((30, 30, 30, 30), (61, 56, 27), (61, 56, 27), (61, 56, 27), RELAXED), True)
 _lib("thumb_4_finger", "Thumb and 4 fingers", "precision", "Feix 6 prismatic 4 finger, Cutkosky, Ninapro C",
      "THUMB AND 4 FINGERS\nthumb pad against all four finger pads, a book",
-     _pose((35, 45, 5, 5), (45, 20, 10), (45, 20, 10), (45, 20, 10), (45, 20, 10)))
+     _pose((32, 31, 31, 31), (56, 58, 42), (56, 58, 42), (56, 58, 42), (56, 58, 42)))
 _lib("parallel_extension", "Parallel extension", "precision", "Feix 22, Ninapro C, Feix 18 extension type",
      "FLAT PINCH\nfingers straight from the knuckles, thumb under them, a plate edge",
      _pose((40, 45, 10, 5), (60, 0, 0), (60, 0, 0), (60, 0, 0), (60, 0, 0)))
