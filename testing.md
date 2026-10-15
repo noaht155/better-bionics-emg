@@ -141,6 +141,9 @@ These decide when the recorder marks a cue bad and redoes it.
 | `test_far_windows_count_as_rest` | A window farther than `max_distance` from every trained grip can't vote for one, whatever its probability; 0 turns the check off |
 | `test_rest_or_class_release` | `rest_or_class` lets go when rest wins `release_n` steps even with effort up, or on low effort; a far window counts as rest for it |
 | `test_distance_space_inside_and_outside_a_class` | `gesture_model.distance_space`: training windows sit a few spreads from their class centre, a window away from every class many spreads |
+| `test_blend_closes_with_effort_straight_away` | Blend mode: the first window with effort already closes the hand, no votes to wait for |
+| `test_blend_shape_follows_the_probabilities` | Blend mode: half fist, half pinch closes halfway between their poses; a one-window flicker only nudges the shape |
+| `test_blend_locks_and_lets_go` | Blend mode: a grip leading long enough locks the shape, another grip winning doesn't change it, low effort for release_s lets go |
 
 ### Protocols (`tests/test_protocols.py`)
 

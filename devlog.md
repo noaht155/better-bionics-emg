@@ -1085,11 +1085,26 @@ Noah's point against it. The remaining wrong locks in protocol A are grips mixed
 tripod and pinch: the thumb grips), which distance can't see. New defaults on the Control tab; models trained
 before today have no distance (the check is off for them), retrain to use it. Two D sessions, one person, table.
 
+**Live test of the lock design felt bad, back to the goal** (Noah). The distance check and release work above came
+from replays of cued recordings and didn't carry over: live the hand waited most of a second for 8 votes in a row,
+any flicker reset the count, and forearm effort fell into fist. The live test was also calibrated on a D session's
+2 holds per grip (my suggestion), against the about 6 per grip across postures every replay number assumed, so it
+wasn't a fair test. The real goal is a hand that feels continuous without decoding fingers, and voting then locking
+is discrete by design. Calibrate live tests like the replays from now on (short protocol A, 2 repetitions, 2 postures).
+
+**Blend mode** (`control.py` mode "blend", next to the lock mode, which stays the default). Closure follows effort
+from the first window; the hand closes towards a mix of the grip poses weighted by the grip probabilities, smoothed
+over `smooth_s` (0.25 s), so the shape settles into the grip as the classifier firms up and one flicker only nudges
+it. One grip at the threshold for `lock_s` (0.5 s) locks the shape until effort stays low for `release_s`. Not tried
+live yet.
+
 ## Open
 
 - Control tab: try it on the arm (grab, hold, release; count wrong grips and twitches), check the 0.9 s to lock
   against fewer votes, and whether pinch closes far enough at gain 1.5 (per-grip max levels or a higher gain).
   Try the distance check and rest_or_class release live (retrain the LDA first).
+- Blend mode live: calibrate with a short protocol A session first, tune with the live loop (set settings over
+  the API, Noah tests). Then log Control runs to a file and a cued live test with scores.
 - Arm animation for cues: forearm, wrist and upper arm in the cue drawing, so D's activities and the wrist
   movements left out of protocol C can be shown. Later: a bigger build, not needed yet (Noah, 2026-10-15); D's cues
   are text with the relaxed hand until then.

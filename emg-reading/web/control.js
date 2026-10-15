@@ -2,6 +2,9 @@
 // controller inside the model's loop and sends its state with the rest; the page draws it and posts setting changes.
 
 const CONTROL_PARAMS = [
+  { key: "mode", label: "Mode", options: ["lock", "blend"], help: "lock: votes pick a grip, then it locks. blend: the hand closes with effort straight away towards a mix of the likely grips, the shape settles as the model firms up" },
+  { key: "smooth_s", label: "Smoothing s", min: 0, max: 1.5, step: 0.05, help: "blend: how long the grip probabilities are averaged over, longer is steadier but slower to change shape" },
+  { key: "lock_s", label: "Lock after s", min: 0, max: 2, step: 0.05, help: "blend: one grip above the threshold this long locks the shape, 0 never locks" },
   { key: "threshold", label: "Threshold", min: 0, max: 0.99, step: 0.01, help: "grip probability that counts as a vote, also for the open-hand release" },
   { key: "vote_n", label: "Votes", min: 1, max: 15, step: 1, help: "steps in a row (50 ms each) the same grip has to win to start" },
   { key: "start_level", label: "Start level", min: 0.01, max: 0.6, step: 0.01, help: "effort that counts as a rise from rest" },
@@ -177,6 +180,7 @@ function drawControl(c, p) {
   const name = (g) => g.replace("_", " ");
   $("ctl-label").innerHTML = !running ? "<small>not running</small>"
     : c.state === "active" ? `${name(c.grip)} ${Math.round(100 * c.closure)} %<small>locked, closure</small>`
+    : c.state === "blend" ? `${c.grip ? name(c.grip) : "relaxed"} ${Math.round(100 * c.closure)} %<small>blending, closest grip and closure</small>`
     : "relaxed<small>waiting for a grip</small>";
   $("ctl-readout").innerHTML = running ? `<div>${Math.round(100 * c.effort)} %<small>effort</small></div>
     <div>${Math.round(100 * c.closure)} %<small>closure</small></div><div>${c.starts}<small>starts</small></div>

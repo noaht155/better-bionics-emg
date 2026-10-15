@@ -1,4 +1,5 @@
 """Control layer state machine (emg-reading/control.py): when a grip starts, stays locked and lets go."""
+import numpy as np
 import pytest
 
 import ml  # noqa: F401
@@ -162,3 +163,40 @@ def test_distance_space_inside_and_outside_a_class():
     inside = np.median([dist(x, "fist") for x in feats[labels == "fist"]])
     outside = dist(np.r_[5.0, 0, 0, 0, 0, 0] + np.r_[0, -12.0, 0, 0, 0, 0], "fist")
     assert inside < 2.5 and outside > 3 * inside
+
+
+def blend(**params):
+    return make(**{"mode": "blend", "smooth_s": 0.25, "lock_s": 0.5, "start_level": 0.02, "gain": 1.5, **params})
+
+
+def test_blend_closes_with_effort_straight_away():
+    """No votes to wait for: the first window with effort already closes the hand."""
+    c = blend()
+    out = c.step(probs("fist"), 0.5)
+    assert out["state"] == "blend" and out["closure"] > 0.5 and out["event"] is None
+
+
+def test_blend_shape_follows_the_probabilities():
+    """Half fist and half pinch closes halfway between their poses; a single flicker only nudges the shape."""
+    c = blend(lock_s=0)
+    mix = {g: 0.0 for g in GESTURE_SET}
+    mix.update(fist=0.5, pinch=0.5)
+    for _ in range(40):
+        out = c.step(mix, 1.0)
+    expected = POSES["rest"] + (0.5 * (np.asarray(POSES["fist"]) + np.asarray(POSES["pinch"])) - POSES["rest"])
+    assert np.allclose(out["angles"], expected, atol=1e-3)
+    for _ in range(40):
+        c.step(probs("fist"), 1.0)
+    before = np.asarray(c.step(probs("fist"), 1.0)["angles"])
+    flicker = np.asarray(c.step(probs("point"), 1.0)["angles"])
+    assert np.abs(flicker - before).max() < 0.3 * np.abs(np.asarray(POSES["point"]) - POSES["fist"]).max()
+
+
+def test_blend_locks_and_lets_go():
+    c = blend()
+    events = [c.step(probs("fist"), 0.5)["event"] for _ in range(30)]
+    assert "start" in events and c.state == "active" and c.grip == "fist"
+    # Locked: another grip winning doesn't change the shape
+    assert c.step(probs("pinch"), 0.5)["grip"] == "fist"
+    events = [c.step(probs("rest"), 0.0)["event"] for _ in range(40)]
+    assert "release" in events and c.state == "blend"

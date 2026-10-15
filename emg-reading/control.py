@@ -5,6 +5,12 @@ calibrated rest and max levels, mean over the good channels), and optionally the
 grip's calibration windows (gesture_model.LivePredictor.distance). The grip is only chosen while effort rises from rest,
 then stays locked until release, so it never switches mid-grasp. Closure follows effort along the path from the
 relaxed pose to the grip's pose. Used by the app's Control tab and the offline replay.
+
+mode "blend" (2026-10-15) aims at a hand that feels continuous without decoding fingers: closure follows effort from
+the first window, with no votes to wait for, and the hand closes towards a mix of the grip poses weighted by the
+grip probabilities, smoothed over smooth_s, so the shape settles into the grip as the classifier firms up and a one
+window flicker only nudges it. When one grip keeps at least the threshold for lock_s, the shape locks to it (0 never
+locks) until effort stays below the release level for release_s. mode "lock" is the vote and lock design above.
 """
 import math
 
@@ -17,7 +23,8 @@ import numpy as np
 # hand also lets go when rest or the open hand wins release_n steps, not only when effort stays low.
 DEFAULTS = {"threshold": 0.7, "vote_n": 8, "start_level": 0.02, "onset_s": 3.0, "closure_mode": "position",
             "gain": 1.5, "hold_level": 0.1, "hold_on_relax": True, "release_mode": "rest_or_class", "release_n": 6,
-            "release_level": 0.03, "release_s": 1.5, "max_distance": 6.0, "spring_w": 12}
+            "release_level": 0.03, "release_s": 1.5, "max_distance": 6.0, "spring_w": 12,
+            "mode": "lock", "smooth_s": 0.25, "lock_s": 0.5}
 # Same integration step as the drawn hands in web/app.js
 SPRING_STEP_S = 0.005
 # Sums of dt drift a little, 12 x 0.05 isn't exactly 0.6
@@ -42,6 +49,9 @@ class Controller:
         self.blocked = False
         self.candidate, self.votes = None, 0
         self.open_votes, self.class_votes, self.rest_time = 0, 0, 0.0
+        self.smooth = {g: 0.0 for g in self.grips}
+        self.smooth["rest"] = 1.0
+        self.leader, self.lead_time = None, 0.0
         self.x = self.relaxed.copy()
         self.v = np.zeros_like(self.x)
 
@@ -51,6 +61,8 @@ class Controller:
             probs = dict(zip(self.grips, np.asarray(probs, float)))
         if p["max_distance"] > 0 and distance is not None and distance > p["max_distance"]:
             probs = {"rest": 1.0}
+        if p["mode"] == "blend":
+            return self._blend(probs, effort, dt)
         prob = lambda g: float(probs.get(g, 0.0))
         event = None
 
@@ -102,6 +114,41 @@ class Controller:
         return {"state": self.state, "grip": self.grip, "closure": self.closure, "angles": self._spring(dt),
                 "event": event}
 
+    def _blend(self, probs, effort, dt):
+        p = self.params
+        a = dt / (p["smooth_s"] + dt) if p["smooth_s"] > 0 else 1.0
+        for g in self.grips:
+            self.smooth[g] += a * (float(probs.get(g, 0.0)) - self.smooth[g])
+        hand = {g: v for g, v in self.smooth.items() if g != "rest"}
+        leader = max(hand, key=hand.get)
+        event = None
+
+        if self.state == "active":
+            self.rest_time = self.rest_time + dt if effort < p["release_level"] else 0.0
+            if self.rest_time >= p["release_s"] - EPS:
+                self.state, self.grip, event = "blend", None, "release"
+                self.leader, self.lead_time = None, 0.0
+        else:
+            self.state = "blend"
+            self.lead_time = self.lead_time + dt if leader == self.leader and hand[leader] >= p["threshold"] else 0.0
+            self.leader = leader
+            if p["lock_s"] > 0 and self.lead_time >= p["lock_s"] - EPS and effort >= p["start_level"]:
+                self.state, self.grip, event = "active", leader, "start"
+                self.rest_time = 0.0
+
+        c = float(np.clip((effort - p["start_level"]) * p["gain"], 0.0, 1.0))
+        if self.state == "active" and p["hold_on_relax"]:
+            c = max(c, self.closure)
+        self.closure = c
+        if self.state == "active":
+            shape = self.poses[self.grip]
+        else:
+            total = sum(hand.values())
+            shape = (sum(v * self.poses[g] for g, v in hand.items()) / total if total > 0 else self.relaxed)
+        target = self.relaxed + c * (shape - self.relaxed)
+        return {"state": self.state, "grip": self.grip or leader, "closure": self.closure,
+                "angles": self._spring(dt, target), "event": event}
+
     def _closure(self, effort, dt):
         p = self.params
         if p["closure_mode"] == "speed":
@@ -113,10 +160,11 @@ class Controller:
                 c = max(c, self.closure)
         return float(np.clip(c, 0.0, 1.0))
 
-    def _spring(self, dt):
+    def _spring(self, dt, target=None):
         """Critically damped spring towards the target pose, the same as follow() in web/app.js."""
-        pose = self.poses[self.grip] if self.grip else self.relaxed
-        target = self.relaxed + self.closure * (pose - self.relaxed)
+        if target is None:
+            pose = self.poses[self.grip] if self.grip else self.relaxed
+            target = self.relaxed + self.closure * (pose - self.relaxed)
         w = self.params["spring_w"]
         if w <= 0:
             self.x, self.v = target.copy(), np.zeros_like(target)
