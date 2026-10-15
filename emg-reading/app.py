@@ -157,6 +157,29 @@ class ControlParams(BaseModel):
     spring_w: float = Field(ge=0, le=50)
 
 
+class CursorParams(BaseModel):
+    """cursor.Cursor's parameters, see cursor.py."""
+    gain: float = Field(ge=0, le=10)
+    smooth_s: float = Field(ge=0, le=2)
+    rotation_deg: float = Field(ge=-180, le=180)
+    flip: bool
+    targets: int = Field(ge=2, le=12)
+    target_r: float = Field(ge=0.2, le=1)
+    target_size: float = Field(ge=0.05, le=0.5)
+    home_size: float = Field(ge=0.05, le=0.5)
+    home_s: float = Field(ge=0, le=3)
+    dwell_s: float = Field(ge=0, le=3)
+    timeout_s: float = Field(ge=1, le=30)
+
+
+class CursorStart(BaseModel):
+    session: str
+
+
+class CursorTargets(BaseModel):
+    on: bool
+
+
 class ControlPreset(BaseModel):
     name: str = Field(pattern=r"^[A-Za-z0-9 _-]{1,40}$")
     params: ControlParams
@@ -504,6 +527,36 @@ def make_app(recorder, band, camera, tools):
         if presets.pop(name, None) is None:
             refuse("no saved preset with that name")
         PRESET_FILE.write_text(json.dumps(presets, indent=2) + "\n")
+        return {"ok": True}
+
+    @app.post("/api/cursor/start")
+    def cursor_start(choice: CursorStart):
+        """The cursor with channel levels from a recorded session (the haptics' levels)."""
+        folder = DATA_DIR / choice.session
+        if folder.parent != DATA_DIR or not (folder / "session.json").exists():
+            refuse("unknown session")
+        try:
+            tools.cursor.start(folder)
+        except ValueError as e:
+            refuse(e)
+        return {"ok": True}
+
+    @app.post("/api/cursor/stop")
+    def cursor_stop():
+        tools.cursor.stop()
+        return {"ok": True}
+
+    @app.post("/api/cursor/params")
+    def cursor_params(params: CursorParams):
+        tools.cursor.set_params(params.model_dump())
+        return {"ok": True}
+
+    @app.post("/api/cursor/targets")
+    def cursor_targets(choice: CursorTargets):
+        try:
+            tools.cursor.targets(choice.on)
+        except ValueError as e:
+            refuse(e)
         return {"ok": True}
 
     @app.post("/api/model/threshold")

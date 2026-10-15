@@ -19,6 +19,7 @@ function showTab(name) {
   if (name === "train") loadTrainLists();
   if (name === "network") loadNetworkLists();
   if (name === "control") loadControlLists();
+  if (name === "cursor") loadCursorSessions();
 }
 
 document.querySelectorAll("#tabs button").forEach((b) => b.addEventListener("click", () => showTab(b.dataset.tab)));
@@ -675,6 +676,7 @@ function drawTools() {
   drawPredictor(t.predictor);
   drawNetwork(t.network, t.predictor);
   drawControl(t.control, t.predictor);
+  drawCursor(t.cursor);
 }
 
 function initTools() {

@@ -11,7 +11,7 @@ From the repo root, with the emg-reading venv:
 emg-reading/.venv/Scripts/python -m pytest tests
 ```
 
-52 tests, about 10 s. Run them before committing changes to `ml/`, the filter or the quality checks. Tests that need
+95 tests, about 13 s. Run them before committing changes to `ml/`, the filter or the quality checks. Tests that need
 recorded sessions (`emg-reading/data/`) or torch skip themselves where those are missing, so on the Mac or a fresh
 clone only the synthetic tests run.
 
@@ -162,6 +162,19 @@ These decide when the recorder marks a cue bad and redoes it.
 | `test_d_session_gets_no_grip_or_rest_labels` | `nogrip` cues get no label at all in the network or LDA windows, rest included, since the wrist and arm move there; only the calibration holds do |
 | `test_hand_warning_only_where_the_camera_labels` | The hand-out-of-view warning only shows during cues the camera labels and the setup break before them; not between sessions, during protocol D's activities or the rest after one |
 | `test_cue_cut_short_by_a_pause_is_bad` | A cue interrupted by a pause is marked bad and left out of training; the redo after the resume counts |
+
+### Cursor (`tests/test_cursor.py`)
+
+The Cursor tab's fixed map from channel levels to a dot (`emg-reading/cursor.py`) and its target task.
+
+| Test | Checks |
+|---|---|
+| `test_map_points_each_channel_its_way` | Each channel alone moves the dot in its own direction round the ring (45 deg apart), as far as its level times the gain; relaxed is the middle |
+| `test_even_activity_stays_in_the_middle` | The same level on every channel cancels out, so squeezing everything evenly doesn't move the dot |
+| `test_rotation_mirror_and_limit` | Rotation turns the map, mirror reverses the channel order, and the dot never goes past `MAX_R` |
+| `test_hit_after_home_and_dwell` | A target only shows after `home_s` in the middle, counts as hit after `dwell_s` inside, and the trial keeps its path with the 8 levels per step |
+| `test_miss_on_timeout_and_every_target_once_per_block` | Doing nothing misses at `timeout_s`, and a block shows every target once |
+| `test_leaving_the_target_resets_the_dwell` | Leaving the target restarts the dwell time and counts a second entry |
 
 ## Found by the tests
 

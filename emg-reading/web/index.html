@@ -16,6 +16,7 @@
   <button data-tab="train">Train</button>
   <button data-tab="network">Deep learning</button>
   <button data-tab="control">Control</button>
+  <button data-tab="cursor">Cursor</button>
   <button data-tab="haptics">Haptics</button>
   <button data-tab="connection">Connection</button>
   <span id="battery-chip" hidden></span>
@@ -340,6 +341,42 @@
   </section>
 </main>
 
+<main id="tab-cursor" class="tab single" hidden>
+  <section>
+    <h1>Cursor</h1>
+    <p class="muted">A fixed map from muscle activity to a dot, nothing is trained: you learn the map. Each channel's
+      level (envelope between the rest and max levels of the chosen session, the haptics' levels) pulls the dot
+      towards that electrode's direction, so which side of the forearm works sets the direction and how hard sets the
+      distance. Relaxed sits in the middle. With targets on: hold the dot in the middle, a target lights up, get in and
+      stay for the dwell time. Every target run is logged to data/cursor/.</p>
+    <div class="row narrow">
+      <label>Levels from <select id="cur-session"></select></label>
+    </div>
+    <div class="controls">
+      <button id="cur-start" class="primary">Start</button>
+      <button id="cur-stop">Stop</button>
+      <button id="cur-targets">Targets on</button>
+    </div>
+    <p id="cur-status" class="muted"></p>
+    <p id="cur-error" class="error"></p>
+    <div class="ctl-layout">
+      <div class="ctl-live">
+        <canvas id="cur-canvas" width="520" height="520"></canvas>
+      </div>
+      <div class="ctl-plots">
+        <h2>Score</h2>
+        <div id="cur-readout" class="battery-detail"></div>
+        <h2>Per target</h2>
+        <table id="cur-table"></table>
+      </div>
+      <div class="ctl-settings">
+        <h2>Settings</h2>
+        <div id="cur-params"></div>
+      </div>
+    </div>
+  </section>
+</main>
+
 <main id="tab-haptics" class="tab single" hidden>
   <section>
     <h1>Haptics</h1>
@@ -397,5 +434,6 @@
 <script src="/web/app.js"></script>
 <script src="/web/tools.js"></script>
 <script src="/web/control.js"></script>
+<script src="/web/cursor.js"></script>
 </body>
 </html>

@@ -19,9 +19,11 @@ from pathlib import Path
 import calibrate
 import check_connection
 from control import DEFAULTS, Controller
+from cursor import DEFAULTS as CURSOR_DEFAULTS, LEVEL_SCALE as CURSOR_LEVEL_SCALE, Cursor
 from esp32_link import Esp32, self_test
 from gestures import GESTURE_SET, GESTURES
-from haptics import OUTPUTS, UPDATE_HZ, effort, output_duties
+from session import DATA_DIR
+from haptics import OUTPUTS, UPDATE_HZ, channel_levels, effort, output_duties
 
 # The ml package sits next to emg-reading/ in the repo
 REPO = Path(__file__).resolve().parent.parent
@@ -379,6 +381,80 @@ class Control:
             s[out["event"] + "s"] += 1
 
 
+class CursorTask(Tool):
+    """cursor.Cursor on the live channel levels, from a recorded session on the cursor's own scale (LEVEL_SCALE). Each target run is
+    logged to data/cursor/ (settings, then one line per trial with its path), so practice can be compared day to
+    day. Parameters can change while it runs."""
+
+    def __init__(self, recorder):
+        super().__init__()
+        self.recorder = recorder
+        self.params = dict(CURSOR_DEFAULTS)
+        self.state["params"] = self.params
+        self._stop = threading.Event()
+        self._cursor = None
+        self._log = None
+        self._trials = []
+
+    def start(self, session):
+        levels, _ = calibrate.from_session(session, scale=CURSOR_LEVEL_SCALE)
+        ranges = {ch: (v["rest"], v["max"]) for ch, v in levels.items()}
+        missing = [ch for ch in self.recorder.band.channels if ch not in ranges]
+        if missing:
+            raise ValueError(f"{Path(session).name} has no levels for channels {missing}")
+        self.stop()
+        self.join(2)
+        self._stop.clear()
+        self._launch(self._run, ranges, Path(session).name)
+
+    def stop(self):
+        self._stop.set()
+
+    def set_params(self, params):
+        self.params.update(params)
+
+    def targets(self, on):
+        if self._cursor is None or not self.state["running"]:
+            raise ValueError("start the cursor first")
+        self._cursor.reset_task()
+        self._cursor.targets_on = on
+        self._trials = []
+        self._log = None
+        if on:
+            folder = DATA_DIR / "cursor"
+            folder.mkdir(parents=True, exist_ok=True)
+            self._log = folder / f"{time.strftime('%Y-%m-%d_%H%M%S')}.jsonl"
+            self._log.write_text(json.dumps({"params": self.params, "levels_from": self.state["levels_from"],
+                                             "channels": self.recorder.band.channels}) + "\n")
+
+    def _run(self, ranges, levels_from):
+        band = self.recorder.band
+        self._cursor = Cursor(self.params)
+        self._trials = []
+        self.state.update(params=self.params, levels_from=levels_from)
+        dt = 1 / UPDATE_HZ
+        next_tick = time.perf_counter()
+        while not self._stop.is_set():
+            raw, filtered = self.recorder.window(self.recorder.env_len)
+            if raw.shape[1] == self.recorder.env_len:
+                levels, lost = channel_levels(raw, filtered, band.channels, ranges, True)
+                levels = [levels[ch] for ch in band.channels]
+                trial = self._cursor.step(levels, dt)
+                if trial is not None:
+                    trial["at"] = time.strftime("%H:%M:%S")
+                    self._trials.append({k: v for k, v in trial.items() if k != "path"})
+                    if self._log is not None:
+                        with self._log.open("a") as f:
+                            f.write(json.dumps(trial) + "\n")
+                c = self._cursor
+                self.state.update(x=round(c.x, 3), y=round(c.y, 3), levels=[round(v, 3) for v in levels],
+                                  lost=lost.tolist(), targets_on=c.targets_on, phase=c.phase, target=c.target,
+                                  angles=c.angles(), dwell=round(c.dwell, 2), t=round(c.t, 2),
+                                  trials=self._trials[-200:], log=self._log.name if self._log else None)
+            next_tick = max(next_tick + dt, time.perf_counter())
+            time.sleep(max(0.0, next_tick - time.perf_counter()))
+
+
 class Trainer(Tool):
     def __init__(self, predictor):
         super().__init__()
@@ -444,13 +520,15 @@ class Tools:
         self.test = OutputTest(esp_lock)
         self.predictor = Predictor(recorder)
         self.control = Control(recorder)
+        self.cursor = CursorTask(recorder)
         self.trainer = Trainer(self.predictor)
         self.network = NetworkJob()
 
     def snapshot(self):
         now = time.time()
         out = {}
-        for name in ("check", "wifi", "calibration", "haptics", "test", "predictor", "trainer", "network", "control"):
+        for name in ("check", "wifi", "calibration", "haptics", "test", "predictor", "trainer", "network", "control",
+                     "cursor"):
             state = dict(getattr(self, name).state)
             if state.get("until"):
                 state["left"] = max(0.0, state["until"] - now)
