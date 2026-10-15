@@ -14,7 +14,7 @@ const CONTROL_PARAMS = [
   { key: "release_n", label: "Release votes", min: 1, max: 10, step: 1, help: "steps in a row the open hand (or rest, in rest_or_class) has to win to release" },
   { key: "release_level", label: "Release level", min: 0, max: 0.5, step: 0.01, help: "effort below which the hand counts as at rest" },
   { key: "release_s", label: "Release s", min: 0, max: 3, step: 0.05, help: "time below the release level before the grip lets go" },
-  { key: "max_distance", label: "Max distance", min: 0, max: 15, step: 0.5, help: "windows farther than this from every trained grip count as rest, 0 turns it off. Needs a model trained since 2026-10-15" },
+  { key: "max_distance", label: "Max distance", min: 0, max: 15, step: 0.5, help: "lower is stricter: windows farther than this from the grip they won count as rest. 6 tested, 0 turns it off. Needs a model trained since 2026-10-15" },
   { key: "spring_w", label: "Spring", min: 0, max: 30, step: 0.5, help: "how fast the hand follows its target, 0 jumps straight there" },
 ];
 const TRACE_STEPS = 200;

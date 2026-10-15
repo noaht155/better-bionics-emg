@@ -303,13 +303,21 @@
     <p id="ctl-haptics" class="muted"></p>
     <p id="ctl-error" class="error"></p>
     <div class="ctl-layout">
-      <div>
+      <div class="ctl-live">
         <canvas id="ctl-hand" width="480" height="400"></canvas>
         <div id="ctl-label" class="big-label"></div>
         <div id="ctl-readout" class="battery-detail"></div>
         <div class="controls"><button id="ctl-reset">Reset counts</button></div>
       </div>
-      <div>
+      <div class="ctl-plots">
+        <h2>Last 10 s</h2>
+        <p class="muted">Blue: effort. White: closure. Dashed: start level (orange), hold level (grey), release level
+          (red). Green lines mark starts, red lines releases.</p>
+        <canvas id="ctl-trace" width="900" height="220"></canvas>
+        <h2>Grip probabilities</h2>
+        <canvas id="ctl-probs" width="900" height="260"></canvas>
+      </div>
+      <div class="ctl-settings">
         <h2>Settings</h2>
         <div id="ctl-params"></div>
         <h2>Presets</h2>
@@ -325,12 +333,6 @@
         <p id="ctl-preset-note" class="muted"></p>
       </div>
     </div>
-    <h2>Last 10 s</h2>
-    <p class="muted">Blue: effort. White: closure. Dashed: start level (orange), hold level (grey), release level
-      (red). Green lines mark starts, red lines releases.</p>
-    <canvas id="ctl-trace" width="900" height="220"></canvas>
-    <h2>Grip probabilities</h2>
-    <canvas id="ctl-probs" width="900" height="260"></canvas>
   </section>
 </main>
 
