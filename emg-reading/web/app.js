@@ -172,7 +172,6 @@ function showProtocolFields() {
   form.querySelectorAll("[data-protocol]").forEach((el) => { el.hidden = el.dataset.protocol !== form.protocol.value; });
 }
 
-// Matches gestures.session_plan, without the breaks that wait for Continue
 // The server works out the length from the real session plan
 async function updateDuration() {
   const s = readSettings();
@@ -203,6 +202,17 @@ async function post(path, body) {
     throw new Error(typeof detail === "string" ? detail : JSON.stringify(detail));
   }
   return res.json();
+}
+
+// post that shows a refusal in the error line errorId (cleared first). Returns the reply, or null when refused
+async function postShowing(path, body, errorId) {
+  $(errorId).textContent = "";
+  try {
+    return await post(path, body);
+  } catch (err) {
+    $(errorId).textContent = err.message;
+    return null;
+  }
 }
 
 $("setup").addEventListener("input", (e) => {
@@ -539,10 +549,6 @@ function cueFrame(cue, t) {
   return anglesByName(config.gestures[cue.label].angles);
 }
 
-function cueAngles(cue, s, elapsed) {
-  return cueFrame(cue, elapsed ?? s.cue_elapsed);
-}
-
 // Target pose of the current cue. During a rest the hand stays relaxed and the text names the next gesture
 // Returns {angles, title, text, upcoming}, upcoming is true when the text is the next gesture's
 function targetPose(elapsed) {
@@ -551,10 +557,13 @@ function targetPose(elapsed) {
   const cue = s.cue;
   if (cue.kind === "free" || cue.kind === "sync" || cue.kind === "break") return null;
   const upcoming = cue.label === "rest" && s.next && !!config.gestures[s.next.label];
-  const angles = cueAngles(cue, s, elapsed ?? s.cue_elapsed);
+  const angles = cueFrame(cue, elapsed ?? s.cue_elapsed);
   const [title, description] = (upcoming ? s.next : cue).text.split("\n");
   return angles ? { angles, title, text: `${title}\n${description ?? ""}`.trim(), upcoming } : null;
 }
+
+// Pose match in %, from the mean joint error in degrees: 2 % off per degree
+const matchScore = (meanError) => Math.max(0, Math.round(100 - 2 * meanError));
 
 function drawPose() {
   const ctx = $("pose").getContext("2d");
@@ -562,7 +571,7 @@ function drawPose() {
   const s = state.session;
   const cue = s?.cue;
   const g = cue && ["hold", "finger", "move", "custom"].includes(cue.kind) ? config.gestures[cue.label] : null;
-  const target = g ? cueAngles(cue, s) : null;
+  const target = g ? cueFrame(cue, s.cue_elapsed) : null;
   const tracked = state.hand ? anglesByName(state.hand.angles) : null;
   if (target) drawHand(ctx, target, { view, mirror: mirrored(), color: TARGET_COLOR, width: 9, alpha: 0.6 });
   if (tracked) drawHand(ctx, tracked, { view, mirror: mirrored(), color: TRACKED_COLOR, width: 5 });
@@ -572,7 +581,7 @@ function drawPose() {
   } else if (target) {
     const errors = config.reliable.map((j) => Math.abs(tracked[j] - target[j]));
     const mean = errors.reduce((a, b) => a + b, 0) / errors.length;
-    html = `${Math.max(0, Math.round(100 - 2 * mean))} %<small>mean error ${mean.toFixed(0)}° on the base and middle joints</small>`;
+    html = `${matchScore(mean)} %<small>mean error ${mean.toFixed(0)}° on the base and middle joints</small>`;
   } else {
     html = "<small>tracked hand</small>";
   }

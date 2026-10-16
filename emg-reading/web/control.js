@@ -36,19 +36,15 @@ function showControlParams() {
 }
 
 function sendControlParams() {
-  $("ctl-error").textContent = "";
-  post("/api/control/params", ctl.params).catch((err) => { $("ctl-error").textContent = err.message; });
+  postShowing("/api/control/params", ctl.params, "ctl-error");
 }
 
 async function loadControlLists() {
   const [lda, networks, presets] = await Promise.all([fetch("/api/models"), fetch("/api/networks"), fetch("/api/control/presets")].map((r) => r.then((x) => x.json())));
   // Only calibrated networks, the effort levels come from the session they were calibrated on
   const models = [...lda, ...networks.filter((n) => n.calibrated_on)];
-  fillSelect($("ctl-model"), models, (m) => {
-    if (m.calibrated_on) return `${m.name}, network calibrated on ${m.calibrated_on.slice(0, 17).replace("_", " ")}`;
-    const acc = m.balanced != null ? `, ${Math.round(100 * m.balanced)} % balanced on unseen sessions` : "";
-    return `${m.name}, trained on ${m.sessions.map((s) => s.slice(0, 17).replace("_", " ")).join(", ")}${acc}`;
-  });
+  fillSelect($("ctl-model"), models, (m) => (m.calibrated_on
+    ? `${m.name}, network calibrated on ${shortSession(m.calibrated_on)}` : ldaLabel(m)));
   const running = state?.tools?.predictor?.running && state.tools.predictor.control && state.tools.predictor.model;
   if (running && models.some((m) => m.name === running)) $("ctl-model").value = running;
   ctl.presets = presets;
@@ -59,14 +55,9 @@ async function loadControlLists() {
 }
 
 $("ctl-start").addEventListener("click", async () => {
-  $("ctl-error").textContent = "";
   $("ctl-haptics").textContent = "";
-  try {
-    const r = await post("/api/control/start", { name: $("ctl-model").value, ...linkBody() });
-    $("ctl-haptics").textContent = r.haptics || "";
-  } catch (err) {
-    $("ctl-error").textContent = err.message;
-  }
+  const r = await postShowing("/api/control/start", { name: $("ctl-model").value, ...linkBody() }, "ctl-error");
+  if (r) $("ctl-haptics").textContent = r.haptics || "";
 });
 $("ctl-stop").addEventListener("click", () => post("/api/model/stop").catch(() => {}));
 $("ctl-reset").addEventListener("click", () => post("/api/control/reset").catch(() => {}));

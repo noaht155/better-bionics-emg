@@ -18,8 +18,7 @@ const CURSOR_TRAIL = 20;
 const cur = { params: null, trail: [] };
 
 function sendCursorParams() {
-  $("cur-error").textContent = "";
-  post("/api/cursor/params", cur.params).catch((err) => { $("cur-error").textContent = err.message; });
+  postShowing("/api/cursor/params", cur.params, "cur-error");
 }
 
 async function loadCursorSessions() {
@@ -28,22 +27,10 @@ async function loadCursorSessions() {
   fillSelect($("cur-session"), usable, (s) => `${s.name}, protocol ${s.protocol}${s.placement ? `, ${s.placement}` : ""}`);
 }
 
-$("cur-start").addEventListener("click", async () => {
-  $("cur-error").textContent = "";
-  try {
-    await post("/api/cursor/start", { session: $("cur-session").value });
-  } catch (err) {
-    $("cur-error").textContent = err.message;
-  }
-});
+$("cur-start").addEventListener("click", () => postShowing("/api/cursor/start", { session: $("cur-session").value }, "cur-error"));
 $("cur-stop").addEventListener("click", () => post("/api/cursor/stop").catch(() => {}));
-$("cur-targets").addEventListener("click", async () => {
-  $("cur-error").textContent = "";
-  try {
-    await post("/api/cursor/targets", { on: !state.tools.cursor.targets_on });
-  } catch (err) {
-    $("cur-error").textContent = err.message;
-  }
+$("cur-targets").addEventListener("click", () => {
+  postShowing("/api/cursor/targets", { on: !state.tools.cursor.targets_on }, "cur-error");
 });
 
 function drawCursorCanvas(c) {

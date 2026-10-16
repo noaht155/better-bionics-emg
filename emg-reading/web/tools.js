@@ -196,13 +196,8 @@ function showCurrentCalibration() {
     `${ch}  ${v.rest.toFixed(1).padStart(6)}  ${v.max.toFixed(1).padStart(6)}  ${(v.max / v.rest).toFixed(1).padStart(5)}x`)).join("\n");
 }
 
-$("cal-start").addEventListener("click", async () => {
-  $("cal-error").textContent = "";
-  try {
-    await post("/api/calibrate", { seconds: Number($("cal-seconds").value), car: $("cal-car").checked });
-  } catch (err) {
-    $("cal-error").textContent = err.message;
-  }
+$("cal-start").addEventListener("click", () => {
+  postShowing("/api/calibrate", { seconds: Number($("cal-seconds").value), car: $("cal-car").checked }, "cal-error");
 });
 
 let calWasRunning = false;
@@ -238,18 +233,9 @@ function saveLink() {
 
 for (const id of ["esp-link", "esp-port", "esp-ip"]) $(id).addEventListener("input", saveLink);
 
-async function hapticsCommand(path, body) {
-  $("hap-error").textContent = "";
-  try {
-    await post(path, body);
-  } catch (err) {
-    $("hap-error").textContent = err.message;
-  }
-}
-
-$("hap-start").addEventListener("click", () => hapticsCommand("/api/haptics/start", linkBody()));
-$("hap-stop").addEventListener("click", () => hapticsCommand("/api/haptics/stop"));
-$("esp-test").addEventListener("click", () => hapticsCommand("/api/esp32/test", linkBody()));
+$("hap-start").addEventListener("click", () => postShowing("/api/haptics/start", linkBody(), "hap-error"));
+$("hap-stop").addEventListener("click", () => postShowing("/api/haptics/stop", undefined, "hap-error"));
+$("esp-test").addEventListener("click", () => postShowing("/api/esp32/test", linkBody(), "hap-error"));
 
 function drawOutputs(h) {
   const ctx = $("outputs").getContext("2d");
@@ -296,6 +282,14 @@ function drawHaptics(h, test) {
 
 // Gesture model: training and live test
 
+// Session folders start with date and time, that's enough to tell them apart
+const shortSession = (name) => name.slice(0, 17).replace("_", " ");
+
+function ldaLabel(m) {
+  const acc = m.balanced != null ? `, ${Math.round(100 * m.balanced)} % balanced on unseen sessions` : "";
+  return `${m.name}, trained on ${m.sessions.map(shortSession).join(", ")}${acc}`;
+}
+
 async function loadTrainLists() {
   const [sessions, models] = await Promise.all([fetch("/api/sessions"), fetch("/api/models")].map((r) => r.then((x) => x.json())));
   const table = $("train-sessions");
@@ -316,12 +310,8 @@ async function loadTrainLists() {
   if (!usable.length) table.innerHTML = "<tr><td>No sessions with gestures yet, record one on the Record tab.</td></tr>";
   const select = $("model-select");
   const current = select.value;
-  select.innerHTML = models.map((m) => {
-    const acc = m.balanced != null ? `, ${Math.round(100 * m.balanced)} % balanced on unseen sessions` : "";
-    // Session folders start with date and time, that's enough to tell them apart
-    const from = m.sessions.map((s) => s.slice(0, 17).replace("_", " ")).join(", ");
-    return `<option value="${m.name}">${m.name}, trained on ${from}${acc}</option>`;
-  }).join("") || "<option value=''>no models yet</option>";
+  select.innerHTML = models.map((m) => `<option value="${m.name}">${ldaLabel(m)}</option>`).join("")
+    || "<option value=''>no models yet</option>";
   // A model that was just trained is already running, show that one
   const running = state?.tools?.predictor?.running && state.tools.predictor.model;
   if (running && models.some((m) => m.name === running)) select.value = running;
@@ -336,29 +326,19 @@ $("train-none").addEventListener("click", () => {
   for (const c of $("train-sessions").querySelectorAll("input")) c.checked = false;
 });
 
-$("train-start").addEventListener("click", async () => {
-  $("train-error").textContent = "";
+$("train-start").addEventListener("click", () => {
   const sessions = [...$("train-sessions").querySelectorAll("input:checked")].map((c) => c.value);
-  try {
-    await post("/api/train", {
-      sessions, log: $("train-log").checked, accel: $("train-accel").checked, extended: $("train-extended").checked,
-      vote: Number($("train-vote").value),
-    });
-  } catch (err) {
-    $("train-error").textContent = err.message;
-  }
+  postShowing("/api/train", {
+    sessions, log: $("train-log").checked, accel: $("train-accel").checked, extended: $("train-extended").checked,
+    vote: Number($("train-vote").value),
+  }, "train-error");
 });
 
 // Haptics start with the model, on the ESP32 link set on the Haptics tab
 async function useModel(name, error, note) {
-  $(error).textContent = "";
   $(note).textContent = "";
-  try {
-    const r = await post("/api/model/use", { name, ...linkBody() });
-    $(note).textContent = r.haptics || "";
-  } catch (err) {
-    $(error).textContent = err.message;
-  }
+  const r = await postShowing("/api/model/use", { name, ...linkBody() }, error);
+  if (r) $(note).textContent = r.haptics || "";
 }
 
 $("model-use").addEventListener("click", () => useModel($("model-select").value, "model-error", "model-haptics"));
@@ -502,7 +482,6 @@ async function loadNetworkLists() {
   const ticked = new Set([...box.querySelectorAll("input:checked")].map((c) => c.value));
   box.innerHTML = "<legend>Sessions</legend>" + good.map((s) => `<label><input type="checkbox" value="${s.name}"
     ${!listed.has(s.name) || ticked.has(s.name) ? "checked" : ""}> ${s.name}</label>`).join("");
-  const short = (name) => name.slice(0, 17).replace("_", " ");
   fillSelect($("net-base"), networks.filter((n) => n.kind === "general"),
     (n) => `${n.name}, ${n.sessions.length} sessions, ${n.epochs} epochs`);
   fillSelect($("net-session"), sessions.filter((s) => s.gestures > 0),
@@ -510,15 +489,14 @@ async function loadNetworkLists() {
   fillSelect($("net-live"), networks.filter((n) => n.kind === "calibrated"), (n) => {
     const score = n.balanced != null ? `, ${pct(n.balanced)} balanced on its other repetitions` : "";
     const seen = n.seen_in_training ? " (session was in training, optimistic)" : "";
-    return `${n.name}, calibrated on ${short(n.calibrated_on)}${score}${seen}`;
+    return `${n.name}, calibrated on ${shortSession(n.calibrated_on)}${score}${seen}`;
   });
   // A network that was just saved is the one to use next
   const running = state?.tools?.predictor?.running && state.tools.predictor.model;
   if (running && networks.some((n) => n.name === running)) $("net-live").value = running;
 }
 
-async function runNetwork(job) {
-  $("net-error").textContent = "";
+function runNetwork(job) {
   const body = { job, epochs: Number($("net-epochs").value) };
   if (job === "train") body.sessions = [...$("net-train-sessions").querySelectorAll("input:checked")].map((c) => c.value);
   if (job === "calibrate") {
@@ -526,11 +504,7 @@ async function runNetwork(job) {
     body.session = $("net-session").value;
     body.reps = $("net-reps").value.split(/[\s,]+/).filter(Boolean).map(Number);
   }
-  try {
-    await post("/api/network/run", body);
-  } catch (err) {
-    $("net-error").textContent = err.message;
-  }
+  postShowing("/api/network/run", body, "net-error");
 }
 
 $("net-eval-newest").addEventListener("click", () => runNetwork("evaluate_newest"));
@@ -585,8 +559,7 @@ function drawHeadHand(canvas, match, p, predicted, color, missing, name) {
     // Same score as the Record tab's pose match
     const joints = Object.keys(predicted);
     const mean = joints.reduce((sum, j) => sum + Math.abs(predicted[j] - tracked[j]), 0) / joints.length;
-    const score = Math.max(0, Math.round(100 - 2 * mean));
-    html = `<span style="color:${color}">${score} %</span> match, ${name}<small>mean error ${mean.toFixed(0)}° on ${joints.length} joints</small>`;
+    html = `<span style="color:${color}">${matchScore(mean)} %</span> match, ${name}<small>mean error ${mean.toFixed(0)}° on ${joints.length} joints</small>`;
   }
   $(match).innerHTML = html;
 }
@@ -635,22 +608,9 @@ function drawNetwork(n, p) {
 
 // Connection check
 
-$("conn-start").addEventListener("click", async () => {
-  $("conn-error").textContent = "";
-  try {
-    await post("/api/check");
-  } catch (err) {
-    $("conn-error").textContent = err.message;
-  }
-});
-
-$("wifi-start").addEventListener("click", async () => {
-  $("wifi-error").textContent = "";
-  try {
-    await post("/api/armband/wifi", { dhcp_s: Number($("wifi-dhcp").value) || 0 });
-  } catch (err) {
-    $("wifi-error").textContent = err.message;
-  }
+$("conn-start").addEventListener("click", () => postShowing("/api/check", undefined, "conn-error"));
+$("wifi-start").addEventListener("click", () => {
+  postShowing("/api/armband/wifi", { dhcp_s: Number($("wifi-dhcp").value) || 0 }, "wifi-error");
 });
 
 function drawWifi(t) {
