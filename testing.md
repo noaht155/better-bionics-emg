@@ -34,7 +34,7 @@ The models are trained on sessions filtered all at once (`filter_block`), but li
 | Test | Checks |
 |---|---|
 | `test_whole_electrode_rotation_changes_nothing` | Rotating the input by 1 to 7 electrodes changes no output (grips, angles, effort head) by more than 1e-4. The rotation independence the design relies on |
-| `test_mirrored_band_does_change_the_output` | A mirrored band does change the output. Documents that mirroring is not covered (see the mirrored band entry in `devlog.md`); if it ever fails, the planned channel flip isn't needed |
+| `test_mirrored_band_does_change_the_output` | A mirrored band does change the output. Documents that the ring design doesn't cover mirroring, which is why mirrored sessions get their channel order reversed (`channels.mirrored`, tests in `test_mirror.py`); if it ever fails, the flip isn't needed |
 | `test_transform_starts_as_identity` | The per-person transform changes nothing until it is calibrated |
 | `test_live_matches_batch` | `NetPredictor` (live, one window) gives the same grip probabilities, predicted grip and angles of both heads as `train_ringnet.predict` (evaluation, batches) |
 | `test_save_and_load` | A saved network loads back with identical outputs and its info |
@@ -189,8 +189,8 @@ The Cursor tab's fixed map from channel levels to a dot (`emg-reading/cursor.py`
 
 - **Camera glitches in the angle labels** (2026-10-06): some frames have a trained joint bent backwards past -60
   degrees (index PIP down to -175), which a finger can't do. MediaPipe lost or flipped the hand. 0.02 to 0.8 % of
-  angle windows per session, 2.2 % in `2026-10-01_164337`. Planned fix: treat those frames as not tracked in
-  `ml/dataset.py`. The recordings themselves stay as they are.
+  angle windows per session, 2.2 % in `2026-10-01_164337`. Fixed: `ml/dataset.py` treats those frames as not
+  tracked (`IMPOSSIBLE_DEG`). The recordings themselves stay as they are.
 - Abduction angles wrap round +-180 degrees on bent fingers. Not a problem, abduction isn't trained.
 
 ## Validated by experiment, not by tests
@@ -205,8 +205,9 @@ Checks that need training runs, too slow for the test suite. Numbers in `devlog.
 
 ## Not checked yet
 
-- The recorder and the web app (cue plan, session writer, websocket). Exercised in every session, problems show up
-  there quickly.
+- The session writer, the websocket and the page. Cue plans, the hand warning and cues cut short by a pause are
+  covered in `test_protocols.py`. The page gets a headless load of every tab after web changes, by hand, not as a
+  test.
 - `sync.py` (camera delay from the taps).
 - The ESP32 firmware and `esp32_link.py`.
 - No automatic run on GitHub yet: the tests only run when started by hand.

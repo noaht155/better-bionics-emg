@@ -15,7 +15,8 @@
 - Joins the armband's access point at 192.168.4.10, TCP port 4211
 
 ## Driver
-- ULN2003APG on order, LEDs for now
+- Now: HG7881 modules (L9110S H-bridges) for the coin motors, inverted logic (`pinmap.md`)
+- End goal is still the ULN2003APG
 
 ## Computers
 - Windows desktop (Realtek 8852CE WiFi card, no antennas attached): never gets a DHCP address from the armband, needs the static IP 192.168.4.2. Streaming stopped on 2026-09-29 and came back after a reboot and two adapter settings, see `emg-reading/SETUP.md`

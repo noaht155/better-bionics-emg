@@ -48,7 +48,9 @@ Close the PlatformIO monitor first, only one program can use the ESP32's serial 
    .venv\Scripts\python calibrate.py
    ```
 
-   This writes `calibration.json`. Redo it whenever the armband is taken off or moved.
+   This writes `calibration.json`. Redo it whenever the armband is taken off or moved. In the app this short
+   calibration is only for troubleshooting: the haptics start with every prediction model, with levels from the
+   session the model was trained or calibrated on.
 
 2. Start the haptics. Ctrl+C stops it and turns the outputs off:
 
