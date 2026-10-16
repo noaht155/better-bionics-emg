@@ -17,31 +17,9 @@ const CURSOR_PARAMS = [
 const CURSOR_TRAIL = 20;
 const cur = { params: null, trail: [] };
 
-function buildCursorParams() {
-  $("cur-params").innerHTML = CURSOR_PARAMS.map((d) => {
-    const input = d.min == null ? `<input type="checkbox" id="cur-p-${d.key}">`
-      : `<input type="range" id="cur-p-${d.key}" min="${d.min}" max="${d.max}" step="${d.step}">`;
-    return `<label class="param"><span>${d.label}</span>${input}<output></output><small>${d.help}</small></label>`;
-  }).join("");
-  for (const d of CURSOR_PARAMS) {
-    $(`cur-p-${d.key}`).addEventListener("input", (e) => {
-      cur.params[d.key] = d.min == null ? e.target.checked : Number(e.target.value);
-      showCursorParams();
-      $("cur-error").textContent = "";
-      post("/api/cursor/params", cur.params).catch((err) => { $("cur-error").textContent = err.message; });
-    });
-  }
-}
-
-function showCursorParams() {
-  for (const d of CURSOR_PARAMS) {
-    const el = $(`cur-p-${d.key}`);
-    if (d.min == null) el.checked = cur.params[d.key];
-    else {
-      el.value = cur.params[d.key];
-      el.nextElementSibling.textContent = cur.params[d.key];
-    }
-  }
+function sendCursorParams() {
+  $("cur-error").textContent = "";
+  post("/api/cursor/params", cur.params).catch((err) => { $("cur-error").textContent = err.message; });
 }
 
 async function loadCursorSessions() {
@@ -142,8 +120,8 @@ function drawCursor(c) {
   if (!c) return;
   if (!cur.params) {
     cur.params = { ...c.params };
-    buildCursorParams();
-    showCursorParams();
+    buildParams($("cur-params"), CURSOR_PARAMS, "cur-p-", () => cur.params, sendCursorParams);
+    showParams(CURSOR_PARAMS, "cur-p-", cur.params);
   }
   const running = !!c.running;
   $("cur-stop").disabled = !running;

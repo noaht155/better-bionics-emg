@@ -462,6 +462,36 @@ function fillSelect(select, items, label) {
   if (items.some((m) => m.name === current)) select.value = current;
 }
 
+// Settings from a list of {key, label, help} plus options (a dropdown), min, max and step (a slider) or neither (a
+// checkbox). getParams returns the object the values live in, onChange runs after the user changes one
+function buildParams(box, defs, prefix, getParams, onChange) {
+  box.innerHTML = defs.map((d) => {
+    let input;
+    if (d.options) input = `<select id="${prefix}${d.key}">${d.options.map((o) => `<option>${o}</option>`).join("")}</select>`;
+    else if (d.min == null) input = `<input type="checkbox" id="${prefix}${d.key}">`;
+    else input = `<input type="range" id="${prefix}${d.key}" min="${d.min}" max="${d.max}" step="${d.step}">`;
+    return `<label class="param"><span>${d.label}</span>${input}<output></output><small>${d.help}</small></label>`;
+  }).join("");
+  for (const d of defs) {
+    $(`${prefix}${d.key}`).addEventListener("input", (e) => {
+      const el = e.target;
+      getParams()[d.key] = d.options ? el.value : d.min == null ? el.checked : Number(el.value);
+      showParams(defs, prefix, getParams());
+      onChange();
+    });
+  }
+}
+
+function showParams(defs, prefix, params) {
+  for (const d of defs) {
+    const el = $(`${prefix}${d.key}`);
+    const v = params[d.key];
+    if (d.min == null && !d.options) el.checked = v;
+    else el.value = v;
+    if (!d.options && d.min != null) el.nextElementSibling.textContent = v;
+  }
+}
+
 async function loadNetworkLists() {
   const [sessions, networks] = await Promise.all([fetch("/api/sessions"), fetch("/api/networks")].map((r) => r.then((x) => x.json())));
   const good = sessions.filter((s) => s.completed && s.gestures > 0);

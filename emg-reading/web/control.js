@@ -31,33 +31,8 @@ const TRACE_STEPS = 200;
 const ctlView = { yaw: 25, pitch: -20 };
 const ctl = { params: null, trace: [], lastStep: null, starts: 0, releases: 0 };
 
-function buildControlParams() {
-  const box = $("ctl-params");
-  box.innerHTML = CONTROL_PARAMS.map((d) => {
-    let input;
-    if (d.options) input = `<select id="ctl-${d.key}">${d.options.map((o) => `<option>${o}</option>`).join("")}</select><output></output>`;
-    else if (d.min == null) input = `<input type="checkbox" id="ctl-${d.key}"><output></output>`;
-    else input = `<input type="range" id="ctl-${d.key}" min="${d.min}" max="${d.max}" step="${d.step}"><output></output>`;
-    return `<label class="param"><span>${d.label}</span>${input}<small>${d.help}</small></label>`;
-  }).join("");
-  for (const d of CONTROL_PARAMS) {
-    $(`ctl-${d.key}`).addEventListener("input", (e) => {
-      const el = e.target;
-      ctl.params[d.key] = d.options ? el.value : d.min == null ? el.checked : Number(el.value);
-      showControlParams();
-      sendControlParams();
-    });
-  }
-}
-
 function showControlParams() {
-  for (const d of CONTROL_PARAMS) {
-    const el = $(`ctl-${d.key}`);
-    const v = ctl.params[d.key];
-    if (d.min == null && !d.options) el.checked = v;
-    else el.value = v;
-    if (!d.options && d.min != null) el.nextElementSibling.textContent = v;
-  }
+  showParams(CONTROL_PARAMS, "ctl-", ctl.params);
 }
 
 function sendControlParams() {
@@ -171,7 +146,7 @@ function drawControl(c, p) {
   if (!c) return;
   if (!ctl.params) {
     ctl.params = { ...c.params };
-    buildControlParams();
+    buildParams($("ctl-params"), CONTROL_PARAMS, "ctl-", () => ctl.params, sendControlParams);
     showControlParams();
   }
   const running = !!(p.running && p.control);
