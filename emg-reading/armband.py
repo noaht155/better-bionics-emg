@@ -171,9 +171,6 @@ class Replay(Armband):
         self._sent += len(idx)
         return out
 
-    def read(self):
-        return self.read_all()[self.emg_rows]
-
     def __enter__(self):
         self._start = time.time()
         return self

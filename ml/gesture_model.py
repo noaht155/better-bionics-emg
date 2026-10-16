@@ -43,7 +43,6 @@ UNSURE = "unsure"
 # Filtered EMG at rest is about 5 uV RMS
 COUNT_THRESHOLD_UV = 1.0
 
-FEATURES = ["rms", "mav", "wl", "zc", "ssc"]
 # Extended set: per channel the coefficients of an order 4 autoregressive model (the shape of the frequency
 # content), and the correlation of every pair of channels (the pattern across the band). On three sessions on
 # 2026-10-01 this raised balanced accuracy by 9 to 10 points, with or without recalibration

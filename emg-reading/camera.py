@@ -1,7 +1,7 @@
 """Webcam capture and hand tracking (MediaPipe hand landmarker) in a background thread.
 
 Each frame is stamped with time.time() as soon as it is read, the same clock as the EMG. What is left is the
-camera's own delay, measured afterwards from the sync taps in each session.
+camera's own delay, fixed in ml/dataset.py (CAMERA_DELAY_S, from an LED test and the armband round trip).
 """
 import os
 import threading

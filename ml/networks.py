@@ -17,7 +17,7 @@ import numpy as np
 from channels import mirrored
 from ml import NETWORK_DIR, dataset, gesture_model, low_priority
 from ml.ringnet import load, save
-from ml.train_ringnet import calibrate, grip_scores, predict, to_tensors, train
+from ml.train_ringnet import DEVICE, calibrate, grip_scores, predict, to_tensors, train
 
 STEP_MS = dataset.STEP * 1000 // dataset.RATE
 
@@ -44,7 +44,6 @@ def train_all(epochs, sessions=None):
 
 
 def calibrate_on(network, session, reps):
-    from ml.train_ringnet import DEVICE
     model, info = load(NETWORK_DIR / network, DEVICE)
     model.train(False)
     d = dataset.load(session)
