@@ -1185,19 +1185,81 @@ grip while 2, 3 and 5 sat at 1.0. The cursor now has its own scale (`cursor.LEVE
 of the grips, `calibrate.from_session(scale=...)`): every channel 0.69 to 0.85 in a grip, dot at rest still inside
 the home zone (95th percentile 0.09). Haptics unchanged.
 Practice logs (`data/cursor/2026-10-15_162815`, `162926`, 25 trials, 4 targets): 3 hits, none at 0 or 270 deg. Ch 6
-never passed 0.10 in any trial while the others reached 0.8 to 1.0, so nothing pulls towards 270, and pushing hard
+never passed 0.10 in any trial while the others reached 0.8 to 1.0 (not a dead pad: ch 6 is the extensor pad, see
+the open and close check below, and the practice was all squeezing), so nothing pulls towards 270, and pushing hard
 fires every channel, which cancels out near the middle (the dot averaged 0.14 to 0.28 from it). The ring map assumes
 working pads all round and one side firing alone; neither holds. A map fitted to natural grips instead (least squares
 from the 8 smoothed levels to one target per grip, no offset, fitted on repetition 1, tested on 2, 3 sessions): rest
 99 to 100 % in the home zone, open 40 to 72 %, point 0 to 64 %, fist 14 to 19 %, pinch 1 to 4 %; with 6 grips key and
 tripod 0 to 26 %. A linear map of the envelopes separates about the same few things the classifiers do (open, point,
-fist and effort). Planned test: 15 min a day for 3 days, hit rate and time to hit per day. If day 3 clearly
-beats the grip classifier's about 80 %, grips get assigned to target zones and the hand follows the dot.
+fist and effort). Cursor parked: a dead pad and co-contraction stop the ring map, and a fitted map doesn't separate more
+than the classifiers. Kept on its tab for later (a fixed pad or socket electrodes may change that).
+
+**Trigger mode** (`control.py` mode "trigger", Control tab, Noah's design). Since the band reliably gives effort, open
+hand and point and not the thumb grips, the classifier is only asked for open and point; the other grips are picked
+by clench pattern on effort alone, like the impulse triggers of commercial hands (i-Limb, bebionic). Hand open: one
+clench held past 0.7 s is fist and keeps closing, 1, 2 or 3 short clenches then a 0.6 s pause are pinch, tripod, key;
+point from the classifier (vote_n steps). Then effort above the hold level closes at a speed set by effort, the open
+hand opens, relaxing holds (any partial closure can be held). Two open flicks within 1 s go back to picking; a pulse
+during which the open hand wins never counts as a clench. Clench level 0.2, all timings settings on the tab. Not tried
+on the arm yet. The distance check still turns far windows into rest, which can hide an open flick: set max distance
+to 0 if opening doesn't register.
+First try on the arm (Noah): feels good, but opening part way and the double open flick shared the open hand, so
+opening a grip could drop out of it. Release is now two point flicks by default (`release_with`, open still
+selectable): point isn't used while a grip is held, and the open hand only opens. After a release the point still
+held can't pick point until it drops out. Watch for key read as point (seen live on 2026-10-15) firing a release.
+End of the day: hum rose on ch 4 and 5 (median line RMS 55 and 103 uV, a minute later 385 and 176, the rest 25 to 30
+from 7); ch 4 rested at 51 uV envelope against about 6. Floating pad level, so pad contact or the reference; signal
+code unchanged. Not checked yet.
+
+**Trigger mode against everyday arm use** (`diagnostics/trigger_replay.py`, `trigger_sweep.py`, `trigger_gates.py`;
+the 2 protocol D sessions, every 50 ms step through the real controller; effort levels from each session's
+calibration block, since its later rest cues follow arm activity and put rest far too high, fist then read 0.05
+effort instead of 0.6). Hand idle at the start of each activity, back to idle after every pick:
+- As built, clench level 0.2: 17.6 false grip picks per minute during the activities (arm raise, shake, talk, wrist
+  bends worst), 12.2 in the rest cues after them. Mostly pinch, a single clench. LDA and network gave about the same
+  counts: it is the clench detector, not the classifier. Deliberate fist holds reach effort 0.6 (10th percentile 0.36
+  to 0.40), pinch holds about 0.
+- Clench level alone: 14.9 / 11.8 per minute at 0.3 / 0.4.
+- New options (`still_gate`: clenches and point only count while the accelerometer is as still as in the model
+  session's holds, 99th percentile x 1.5; `pinch_clenches` 2: pinch, tripod, key at 2, 3, 4 clenches). At level 0.3:
+  gate 5.6, 2 clenches 6.1, both 1.0 per minute (0.9 in rests); at 0.4 both 0.4. The calibration holds (deliberate
+  clench, arm still) still pick a grip as often with the gate (16 of 24, the rest are light grips under the level).
+  Both options off by default (Noah's design), on the Control tab.
+- Holding a fist through the activities: double point releases 0 to 1.5 per minute with the network, up to 8.3 with
+  the LDA (shake). Closure drift while holding up to 0.4 (arm raise): squeezing while the arm works keeps closing.
+
+**Telling open from close while a grip is held** (8 newest sessions, levels on the cursor scale, grip holds only,
+trained on repetition 1, tested on repetition 2, windows with mean level 0.1 or more). Open minus closing grips per
+channel, mean: ch 0 +0.02, 1 +0.05, 2 +0.16, 3 +0.19, 4 +0.34, 5 +0.19, 6 +0.47, 7 +0.17. Ch 6 fires most on opening in
+every session: it is the extensor pad. Open vs close, balanced: fixed pads (4 and 6 against 0 and 1) 68 % (worst
+51 %), a linear split of the 8 levels 71 % (worst 52 %), the grip LDA (open against the summed closing grips) 84 %:
+87 to 97 % in 6 sessions, 96 % on `2026-10-15_140633`, but 50 % and 69 % on `2026-10-13_173556` and
+`2026-10-14_181042` (open almost never found). So trigger mode keeps the LDA's open hand for opening; a fresh
+calibration is the fix when it fails.
+
+**Which classifier for trigger mode** (`diagnostics/trigger_signals.py`, 15 sessions leave one out, network 3 seeds,
+grips grouped into open, point, rest, close, threshold 0.7). Calibrated = transform + head on the other repetitions,
+LDA = what the app runs live:
+
+| | open found | open during a close | point found | point during key |
+|---|---|---|---|---|
+| network, calibrated | 87.2 % | 1.1 % | 83.6 % | 4.2 % |
+| network, no calibration | 80.8 % | 0.9 % | 61.6 % | 5.2 % |
+| network on the 4 groups, calibrated | 87.8 % | 1.2 % | 86.5 % | 6.8 % |
+| LDA on the session's reps (live) | 78.1 % | 2.1 % | 84.4 % | 7.3 % |
+| LDA on other sessions, no calibration | 59.4 % | 1.8 % | 51.0 % | 8.8 % |
+
+The calibrated network finds the open hand 9 points more often than the live LDA, with half the false opens and fewer
+point during key (accidental releases). Without calibration it still finds open 81 % of the time, but point drops to
+62 %, so a general network with no calibration would open fine and release badly. Training on the 4 groups instead of
+7 grips gains nothing and fires point during key more often. Use the calibrated 7-grip network in trigger mode.
 
 ## Open
 
-- Cursor tab: 15 min practice a day for 3 days, compare hit rate and time to hit per day from `data/cursor/`. If it
-  learns well: grips as target zones, the hand driven from the dot, haptics following the dot.
+- Trigger mode on the arm: tune clench level and timings live, count wrong picks (short clench read as two, a grab
+  read as a clench), check opening still registers with the distance check on, haptic confirmation of the picked grip.
+- Cursor tab parked; if a pad fix or socket electrodes change the picture, rerun the practice (logs in `data/cursor/`).
 - Control tab: try it on the arm (grab, hold, release; count wrong grips and twitches), check the 0.9 s to lock
   against fewer votes, and whether pinch closes far enough at gain 1.5 (per-grip max levels or a higher gain).
   Try the distance check and rest_or_class release live (retrain the LDA first).

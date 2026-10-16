@@ -2,7 +2,14 @@
 // controller inside the model's loop and sends its state with the rest; the page draws it and posts setting changes.
 
 const CONTROL_PARAMS = [
-  { key: "mode", label: "Mode", options: ["lock", "blend"], help: "lock: votes pick a grip, then it locks. blend: the hand closes with effort straight away towards a mix of the likely grips, the shape settles as the model firms up" },
+  { key: "mode", label: "Mode", options: ["lock", "blend", "trigger"], help: "lock: votes pick a grip, then it locks. blend: the hand closes with effort straight away towards a mix of the likely grips, the shape settles as the model firms up. trigger: pick the grip by clenches (long: fist, 1 short: pinch, 2: tripod, 3: key, or point), then squeeze closes, open hand opens, relax holds, two flicks of the release gesture go back" },
+  { key: "pulse_level", label: "Clench level", min: 0.02, max: 0.8, step: 0.01, help: "trigger: effort that counts as a clench" },
+  { key: "long_s", label: "Long clench s", min: 0.2, max: 2, step: 0.05, help: "trigger: a clench held this long is fist, shorter ones are counted" },
+  { key: "gap_s", label: "Pause s", min: 0.2, max: 2, step: 0.05, help: "trigger: pause after the last short clench that ends the count" },
+  { key: "release_with", label: "Release with", options: ["point", "open"], help: "trigger: two flicks of this gesture go back to picking a grip. point keeps the open hand for opening only" },
+  { key: "still_gate", label: "Arm still only", help: "trigger: clenches and point only count while the arm is still (accelerometer, limit from the model's session). Cut false picks during arm activity by about 2.5x in the replay" },
+  { key: "pinch_clenches", label: "Pinch clenches", min: 1, max: 2, step: 1, help: "trigger: clenches for pinch, tripod and key are this, +1 and +2. 2 means a single clench picks nothing, most false picks were single clenches" },
+  { key: "double_s", label: "Double flick s", min: 0.3, max: 2, step: 0.05, help: "trigger: two flicks within this time go back to picking a grip" },
   { key: "smooth_s", label: "Smoothing s", min: 0, max: 1.5, step: 0.05, help: "blend: how long the grip probabilities are averaged over, longer is steadier but slower to change shape" },
   { key: "lock_s", label: "Lock after s", min: 0, max: 2, step: 0.05, help: "blend: one grip above the threshold this long locks the shape, 0 never locks" },
   { key: "threshold", label: "Threshold", min: 0, max: 0.99, step: 0.01, help: "grip probability that counts as a vote, also for the open-hand release" },
@@ -11,7 +18,7 @@ const CONTROL_PARAMS = [
   { key: "onset_s", label: "Onset s", min: 0.1, max: 5, step: 0.05, help: "time after crossing the start level in which a grip can still be picked" },
   { key: "closure_mode", label: "Closure", options: ["position", "speed"], help: "position: effort sets how far the hand is closed. speed: effort above the hold level closes, below opens" },
   { key: "gain", label: "Gain", min: 0, max: 10, step: 0.1, help: "closure per unit of effort (position) or per second (speed)" },
-  { key: "hold_level", label: "Hold level", min: 0, max: 0.6, step: 0.01, help: "speed mode: effort at which the closure stays still" },
+  { key: "hold_level", label: "Hold level", min: 0, max: 0.6, step: 0.01, help: "speed mode and trigger: effort above this closes, below it the hand holds" },
   { key: "hold_on_relax", label: "Hold on relax", help: "relaxing keeps the hand where it is instead of opening it" },
   { key: "release_mode", label: "Release", options: ["rest_or_class", "either", "open_class", "rest"], help: "rest_or_class: rest or the open hand wins, or effort stays low. open_class: the open hand gesture. rest: effort stays low. either: open hand or low effort" },
   { key: "release_n", label: "Release votes", min: 1, max: 10, step: 1, help: "steps in a row the open hand (or rest, in rest_or_class) has to win to release" },
@@ -142,8 +149,11 @@ function drawTrace() {
   });
   if (ctl.params) {
     ctx.setLineDash([6, 4]);
-    for (const [key, color] of [["start_level", "#e0a02a"], ["hold_level", "#8b919c"], ["release_level", "#e5484d"]]) {
-      if (key === "hold_level" && ctl.params.closure_mode !== "speed") continue;
+    const trigger = ctl.params.mode === "trigger";
+    const lines = trigger ? [["pulse_level", "#e0a02a"], ["hold_level", "#8b919c"]]
+      : [["start_level", "#e0a02a"], ["hold_level", "#8b919c"], ["release_level", "#e5484d"]];
+    for (const [key, color] of lines) {
+      if (key === "hold_level" && ctl.params.closure_mode !== "speed" && !trigger) continue;
       ctx.strokeStyle = color;
       ctx.beginPath(); ctx.moveTo(0, yOf(ctl.params[key])); ctx.lineTo(w, yOf(ctl.params[key])); ctx.stroke();
     }
@@ -184,6 +194,7 @@ function drawControl(c, p) {
   $("ctl-label").innerHTML = !running ? "<small>not running</small>"
     : c.state === "active" ? `${name(c.grip)} ${Math.round(100 * c.closure)} %<small>locked, closure</small>`
     : c.state === "blend" ? `${c.grip ? name(c.grip) : "relaxed"} ${Math.round(100 * c.closure)} %<small>blending, closest grip and closure</small>`
+    : ctl.params.mode === "trigger" ? `relaxed<small>${ctl.params.still_gate && c.moving ? "arm moving, clenches ignored" : c.pulses ? `${c.pulses} clench${c.pulses > 1 ? "es" : ""} so far` : "clench to pick a grip"}</small>`
     : "relaxed<small>waiting for a grip</small>";
   $("ctl-readout").innerHTML = running ? `<div>${Math.round(100 * c.effort)} %<small>effort</small></div>
     <div>${Math.round(100 * c.closure)} %<small>closure</small></div><div>${c.starts}<small>starts</small></div>

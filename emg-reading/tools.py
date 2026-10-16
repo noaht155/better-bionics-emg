@@ -18,11 +18,11 @@ from pathlib import Path
 
 import calibrate
 import check_connection
-from control import DEFAULTS, Controller
+from control import DEFAULTS, STILL_S, Controller, movement, still_limit
 from cursor import DEFAULTS as CURSOR_DEFAULTS, LEVEL_SCALE as CURSOR_LEVEL_SCALE, Cursor
 from esp32_link import Esp32, self_test
 from gestures import GESTURE_SET, GESTURES
-from session import DATA_DIR
+from session import DATA_DIR, load_session, segments
 from haptics import OUTPUTS, UPDATE_HZ, channel_levels, effort, output_duties
 
 # The ml package sits next to emg-reading/ in the repo
@@ -346,10 +346,16 @@ class Control:
         self.state = {"params": self.params}
         self._controller = None
         self._ranges = None
+        self._still = float("inf")
 
     def prepare(self, session):
-        """Effort levels from the session the model trained on, the same levels the haptics take."""
+        """Effort levels from the session the model trained on, the same levels the haptics take, and from its held
+        cues how much the accelerometer moves with the arm still (trigger mode's still_gate)."""
         levels, _ = calibrate.from_session(session)
+        data = load_session(session)
+        self._still = still_limit(data["accel"], [(s["sample0"], s["sample1"]) for s in segments(data["events"])
+                                                  if s["kind"] == "hold" and s["sample1"] and not s["bad"]],
+                                  data["meta"]["rate"])
         self._ranges = {ch: (v["rest"], v["max"]) for ch, v in levels.items()}
         missing = [ch for ch in self.recorder.band.channels if ch not in self._ranges]
         if missing:
@@ -372,11 +378,13 @@ class Control:
         n = self.recorder.env_len
         band = self.recorder.band
         e = effort(emg[:, -n:], filtered[:, -n:], band.channels, self._ranges, True)
-        out = self._controller.step(probs, e, dt, distance)
+        moving = movement(self.recorder.accel_window(int(STILL_S * band.rate))) > self._still
+        out = self._controller.step(probs, e, dt, distance, moving)
         s = self.state
         s.update(step=s["step"] + 1, state=out["state"], grip=out["grip"], closure=round(out["closure"], 3),
                  effort=round(e, 3), angles=[round(a, 1) for a in out["angles"]],
-                 distance=None if distance is None else round(distance, 2))
+                 distance=None if distance is None else round(distance, 2), pulses=out.get("pulses"),
+                 moving=moving)
         if out["event"]:
             s[out["event"] + "s"] += 1
 

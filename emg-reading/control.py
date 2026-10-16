@@ -11,6 +11,18 @@ the first window, with no votes to wait for, and the hand closes towards a mix o
 grip probabilities, smoothed over smooth_s, so the shape settles into the grip as the classifier firms up and a one
 window flicker only nudges it. When one grip keeps at least the threshold for lock_s, the shape locks to it (0 never
 locks) until the release mode lets go, the same releases as mode "lock", the vote and lock design above.
+
+mode "trigger" (Noah, 2026-10-15) only asks the classifier for what it does reliably (open hand and point) and picks
+the other grips by clench pattern on effort alone, like the triggers of commercial hands. With the hand open: one
+clench held past long_s is fist (and keeps closing), one short clench then a pause of gap_s is pinch, two are tripod,
+three are key; point wins vote_n steps is point. Then squeezing closes the hand at a speed set by effort, the open hand
+opens it, relaxing holds it. Two flicks of release_with (point by default) within double_s go back to choosing; with
+open, opening part way and releasing shared one signal (Noah, live). A pulse during which open or the release class
+wins is never a clench, and after a release point can't pick a grip until it has dropped out.
+Two options against grips picked during arm activity (both off by default): still_gate ignores clenches and point
+while the arm moves (accelerometer, see movement), and pinch_clenches 2 moves pinch, tripod and key to 2, 3 and 4
+clenches, since most false picks were a single clench. Replayed on the protocol D activities at clench level 0.3:
+14.9 false picks per minute, 5.4 with the gate, 6.1 with 2 clenches, 1.0 with both (diagnostics/trigger_gates.py).
 """
 import math
 
@@ -24,11 +36,36 @@ import numpy as np
 DEFAULTS = {"threshold": 0.7, "vote_n": 8, "start_level": 0.02, "onset_s": 3.0, "closure_mode": "position",
             "gain": 1.5, "hold_level": 0.1, "hold_on_relax": True, "release_mode": "rest_or_class", "release_n": 6,
             "release_level": 0.03, "release_s": 1.5, "max_distance": 6.0, "spring_w": 12,
-            "mode": "lock", "smooth_s": 0.25, "lock_s": 0.5}
+            "mode": "lock", "smooth_s": 0.25, "lock_s": 0.5,
+            "pulse_level": 0.2, "long_s": 0.7, "gap_s": 0.6, "double_s": 1.0, "release_with": "point",
+            "still_gate": False, "pinch_clenches": 1}
+# Trigger mode: grips by number of short clenches, from pinch_clenches up. Fist is the long clench, point comes from
+# the classifier
+TRIGGER_GRIPS = ["pinch", "tripod", "key"]
+# The arm counts as moving when the accelerometer's spread over the last STILL_S is above the limit taken from a
+# calibration session's holds (still_limit)
+STILL_S = 0.5
+STILL_MARGIN = 1.5
+# The release class has to drop out this long between two flicks, so a one window flicker isn't a second flick
+FLICK_GAP_S = 0.15
 # Same integration step as the drawn hands in web/app.js
 SPRING_STEP_S = 0.005
 # Sums of dt drift a little, 12 x 0.05 isn't exactly 0.6
 EPS = 1e-9
+
+
+def movement(accel):
+    """Spread of the accelerometer over a window: the three axes' standard deviations summed. accel: 3 x samples."""
+    return float(np.asarray(accel).std(axis=1).sum())
+
+
+def still_limit(accel, holds, rate):
+    """Movement above which the arm counts as moving: 99th percentile over the held cues of a calibration session,
+    times STILL_MARGIN. holds: (first, last) sample of each held cue."""
+    n = int(STILL_S * rate)
+    step = n // 5
+    values = [movement(accel[:, e - n:e]) for a, b in holds for e in range(a + n, b + 1, step)]
+    return float(np.percentile(values, 99)) * STILL_MARGIN if values else float("inf")
 
 
 class Controller:
@@ -52,10 +89,14 @@ class Controller:
         self.smooth = {g: 0.0 for g in self.grips}
         self.smooth["rest"] = 1.0
         self.leader, self.lead_time = None, 0.0
+        self.clock, self.flicks, self.flick_was_on, self.flick_off = 0.0, [], False, FLICK_GAP_S
+        self.pulse_time, self.pulse_open, self.pulses, self.gap, self.point_votes = 0.0, False, 0, 0.0, 0
+        self.point_blocked = False
         self.x = self.relaxed.copy()
         self.v = np.zeros_like(self.x)
 
-    def step(self, probs, effort, dt=0.05, distance=None):
+    def step(self, probs, effort, dt=0.05, distance=None, moving=False):
+        """moving: the arm moves (movement() above still_limit()), only used by trigger mode's still_gate."""
         p = self.params
         if not isinstance(probs, dict):
             probs = dict(zip(self.grips, np.asarray(probs, float)))
@@ -63,6 +104,8 @@ class Controller:
             probs = {"rest": 1.0}
         if p["mode"] == "blend":
             return self._blend(probs, effort, dt)
+        if p["mode"] == "trigger":
+            return self._trigger(probs, effort, dt, moving)
         prob = lambda g: float(probs.get(g, 0.0))
         event = None
 
@@ -144,6 +187,66 @@ class Controller:
         shown = self.grip or (leader if hand[leader] > self.smooth["rest"] else None)
         return {"state": self.state, "grip": shown, "closure": self.closure,
                 "angles": self._spring(dt, target), "event": event}
+
+    def _trigger(self, probs, effort, dt, moving=False):
+        p = self.params
+        open_on = float(probs.get("open", 0.0)) >= p["threshold"]
+        point_on = float(probs.get("point", 0.0)) >= p["threshold"]
+        flick_on = point_on if p["release_with"] == "point" else open_on
+        if flick_on and not self.flick_was_on and self.flick_off >= FLICK_GAP_S - EPS:
+            self.flicks = [t for t in self.flicks if self.clock - t <= p["double_s"] + EPS] + [self.clock]
+        self.flick_off = 0.0 if flick_on else self.flick_off + dt
+        self.flick_was_on = flick_on
+        self.clock += dt
+        event = None
+
+        if self.state == "active":
+            if len(self.flicks) >= 2:
+                self.state, self.grip, self.closure, event = "idle", None, 0.0, "release"
+                self.flicks, self.pulses, self.gap, self.point_votes = [], 0, 0.0, 0
+                # The flick still going on mustn't count as a clench or pick point
+                self.pulse_time, self.pulse_open = (dt, True) if effort >= p["pulse_level"] else (0.0, False)
+                self.point_blocked = point_on
+            elif open_on:
+                self.closure -= max(effort, p["hold_level"]) * p["gain"] * dt
+            elif flick_on:
+                pass
+            elif effort >= p["hold_level"]:
+                self.closure += (effort - p["hold_level"]) * p["gain"] * dt
+            self.closure = float(np.clip(self.closure, 0.0, 1.0))
+        else:
+            up = effort >= p["pulse_level"]
+            gated = p["still_gate"] and moving
+            self.point_blocked = self.point_blocked and point_on
+            point = point_on and up and not self.point_blocked and not gated
+            self.point_votes = self.point_votes + 1 if point else 0
+            if up:
+                self.pulse_time += dt
+                self.pulse_open |= open_on or flick_on or gated
+                if self.pulse_time >= p["long_s"] - EPS and not self.pulse_open:
+                    event = self._choose("fist")
+                elif self.point_votes >= p["vote_n"]:
+                    event = self._choose("point")
+            elif self.pulse_time > 0:
+                if not self.pulse_open:
+                    self.pulses += 1
+                self.pulse_time, self.pulse_open, self.gap = 0.0, False, 0.0
+            else:
+                self.gap += dt
+                if self.pulses and self.gap >= p["gap_s"] - EPS:
+                    i = self.pulses - int(p["pinch_clenches"])
+                    self.pulses = 0
+                    if 0 <= i < len(TRIGGER_GRIPS) and TRIGGER_GRIPS[i] in self.poses:
+                        event = self._choose(TRIGGER_GRIPS[i])
+
+        return {"state": self.state, "grip": self.grip, "closure": self.closure, "angles": self._spring(dt),
+                "event": event, "pulses": self.pulses}
+
+    def _choose(self, grip):
+        self.state, self.grip, self.closure = "active", grip, 0.0
+        self.flicks, self.pulses, self.point_votes = [], 0, 0
+        self.pulse_time, self.pulse_open = 0.0, False
+        return "start"
 
     def _released(self, probs, effort, dt):
         """Counts one step towards each release, true when the release mode's condition is met."""

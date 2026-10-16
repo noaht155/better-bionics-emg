@@ -3,7 +3,7 @@ import numpy as np
 import pytest
 
 import ml  # noqa: F401
-from control import Controller
+from control import Controller, movement, still_limit
 from gestures import GESTURE_SET, GESTURES
 from hand_angles import JOINTS
 
@@ -224,3 +224,119 @@ def test_blend_rest_keeps_the_hand_open():
     for _ in range(40):
         out = c.step(probs("fist"), 1.0, distance=3.0)
     assert out["closure"] > 0.9
+
+
+def run(c, *parts):
+    """parts: (grip winning, effort, steps). Returns the events in order."""
+    events = []
+    for grip, effort, steps in parts:
+        for _ in range(steps):
+            event = c.step(probs(grip), effort)["event"]
+            if event:
+                events.append(event)
+    return events
+
+
+SHORT = ("fist", 0.5, 4)
+PAUSE = ("rest", 0.0, 4)
+GAP = ("rest", 0.0, 14)
+
+
+def test_trigger_clench_patterns_pick_the_grip():
+    c = make(mode="trigger")
+    assert run(c, ("fist", 0.5, 13)) == [] and c.state == "idle"
+    assert run(c, ("fist", 0.5, 1)) == ["start"] and c.grip == "fist"
+    for count, grip in ((1, "pinch"), (2, "tripod"), (3, "key")):
+        c = make(mode="trigger")
+        assert run(c, *[SHORT, PAUSE] * count) == [] and c.pulses == count
+        assert run(c, GAP) == ["start"] and c.grip == grip and c.closure == 0
+    # Four clenches pick nothing
+    c = make(mode="trigger")
+    assert run(c, *[SHORT, PAUSE] * 4, GAP) == [] and c.state == "idle" and c.pulses == 0
+
+
+def test_trigger_point_comes_from_the_classifier():
+    c = make(mode="trigger", vote_n=3)
+    assert run(c, ("point", 0.5, 3)) == ["start"] and c.grip == "point"
+
+
+def test_trigger_squeeze_closes_relax_holds_open_opens():
+    c = make(mode="trigger")
+    run(c, ("fist", 0.5, 14))
+    closed = c.closure
+    run(c, ("fist", 0.5, 4))
+    assert c.closure > closed
+    closed = c.closure
+    run(c, ("rest", 0.05, 10))
+    assert c.closure == closed
+    run(c, ("open", 0.5, 2))
+    assert c.closure < closed and c.state == "active"
+
+
+def test_trigger_double_open_flick_goes_back():
+    c = make(mode="trigger", release_with="open")
+    run(c, ("fist", 0.5, 14))
+    # One flick only opens a little, a one window drop inside a flick isn't a second one
+    assert run(c, ("open", 0.5, 3), ("rest", 0.5, 1), ("open", 0.5, 2), ("rest", 0.0, 30)) == []
+    assert c.state == "active"
+    assert run(c, ("open", 0.5, 3), ("rest", 0.0, 4), ("open", 0.5, 3)) == ["release"]
+    assert c.state == "idle" and c.closure == 0
+    # The flicks didn't count as clenches
+    run(c, ("rest", 0.0, 20))
+    assert c.state == "idle" and c.pulses == 0
+
+
+def test_trigger_flicks_too_far_apart_do_nothing():
+    c = make(mode="trigger", double_s=0.5, release_with="open")
+    run(c, ("fist", 0.5, 14))
+    assert run(c, ("open", 0.5, 2), ("rest", 0.0, 12), ("open", 0.5, 2)) == []
+    assert c.state == "active"
+
+
+def test_trigger_double_point_goes_back_and_open_only_opens():
+    c = make(mode="trigger")
+    run(c, ("fist", 0.5, 14))
+    # With point as the release, opening twice only opens the hand
+    assert run(c, ("open", 0.5, 3), ("rest", 0.0, 4), ("open", 0.5, 3)) == [] and c.state == "active"
+    closed = c.closure
+    # A point flick neither closes nor opens
+    run(c, ("point", 0.5, 3), ("rest", 0.0, 30))
+    assert c.closure == closed and c.state == "active"
+    assert run(c, ("point", 0.5, 3), ("rest", 0.0, 4), ("point", 0.5, 3)) == ["release"]
+    # The point still held after the release doesn't pick point, it has to drop out first
+    assert run(c, ("point", 0.5, 10)) == [] and c.state == "idle" and c.pulses == 0
+    assert run(c, ("rest", 0.0, 2), ("point", 0.5, 3)) == ["start"] and c.grip == "point"
+
+
+def test_trigger_still_gate_ignores_clenches_while_moving():
+    for gate, expected in ((True, []), (False, ["start"])):
+        c = make(mode="trigger", still_gate=gate)
+        events = []
+        for grip, effort, steps in (SHORT, PAUSE, GAP):
+            for _ in range(steps):
+                event = c.step(probs(grip), effort, moving=True)["event"]
+                if event:
+                    events.append(event)
+        assert events == expected
+    c = make(mode="trigger", still_gate=True, vote_n=3)
+    for _ in range(5):
+        assert c.step(probs("point"), 0.5, moving=True)["event"] is None
+    # Still again, the same clench counts
+    assert run(c, ("rest", 0.0, 2), SHORT, PAUSE, GAP) == ["start"] and c.grip == "pinch"
+
+
+def test_trigger_pinch_clenches_moves_the_count():
+    for count, grip in ((1, None), (2, "pinch"), (3, "tripod"), (4, "key"), (5, None)):
+        c = make(mode="trigger", pinch_clenches=2)
+        run(c, *[SHORT, PAUSE] * count, GAP)
+        assert c.grip == grip
+
+
+def test_still_limit_and_movement():
+    rng = np.random.default_rng(0)
+    rate = 500
+    still = rng.normal(0, 0.01, (3, 20 * rate))
+    limit = still_limit(still, [(0, 10 * rate), (12 * rate, 20 * rate)], rate)
+    assert movement(still[:, :250]) < limit
+    assert movement(rng.normal(0, 0.1, (3, 250))) > limit
+    assert still_limit(still, [], rate) == float("inf")

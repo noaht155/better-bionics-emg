@@ -11,7 +11,7 @@ From the repo root, with the emg-reading venv:
 emg-reading/.venv/Scripts/python -m pytest tests
 ```
 
-95 tests, about 13 s. Run them before committing changes to `ml/`, the filter or the quality checks. Tests that need
+104 tests, about 11 s. Run them before committing changes to `ml/`, the filter or the quality checks. Tests that need
 recorded sessions (`emg-reading/data/`) or torch skip themselves where those are missing, so on the Mac or a fresh
 clone only the synthetic tests run.
 
@@ -146,6 +146,15 @@ These decide when the recorder marks a cue bad and redoes it.
 | `test_blend_locks_and_lets_go` | Blend mode: a grip leading long enough locks the shape, another grip winning doesn't change it, low effort for release_s lets go |
 | `test_blend_lock_releases_when_the_open_hand_wins` | Blend mode: a locked shape lets go when the open hand wins release_n steps under rest_or_class, even with effort up |
 | `test_blend_rest_keeps_the_hand_open` | Blend mode: effort while rest wins (or windows too far from every grip) doesn't close the hand |
+| `test_trigger_clench_patterns_pick_the_grip` | Trigger mode: a clench held to `long_s` picks fist, 1, 2 and 3 short clenches then a pause pick pinch, tripod and key, 4 pick nothing |
+| `test_trigger_point_comes_from_the_classifier` | Trigger mode: point winning `vote_n` steps with effort up picks point |
+| `test_trigger_squeeze_closes_relax_holds_open_opens` | Trigger mode: effort above the hold level closes, relaxing holds the closure, the open hand opens |
+| `test_trigger_double_open_flick_goes_back` | Trigger mode, release with open: two open flicks within `double_s` go back to picking a grip; one flick, or a one window drop inside a flick, doesn't; the flicks don't count as clenches afterwards |
+| `test_trigger_flicks_too_far_apart_do_nothing` | Trigger mode: two flicks further apart than `double_s` leave the grip on |
+| `test_trigger_still_gate_ignores_clenches_while_moving` | Trigger mode, `still_gate`: while the arm moves neither clenches nor point pick a grip; with the gate off moving changes nothing; once still the same clench counts |
+| `test_trigger_pinch_clenches_moves_the_count` | Trigger mode, `pinch_clenches` 2: one clench picks nothing, 2, 3 and 4 pick pinch, tripod and key, 5 nothing |
+| `test_still_limit_and_movement` | The still limit sits above a still accelerometer and below a moving one; no held cues means no limit (the gate never fires) |
+| `test_trigger_double_point_goes_back_and_open_only_opens` | Trigger mode, release with point (default): opening twice only opens, a point flick neither opens nor closes, two point flicks go back, and the point still held after that can't pick point until it drops out |
 
 ### Protocols (`tests/test_protocols.py`)
 

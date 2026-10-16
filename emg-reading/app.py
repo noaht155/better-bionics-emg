@@ -151,9 +151,16 @@ class ControlParams(BaseModel):
     release_s: float = Field(ge=0, le=5)
     # Presets saved before the distance check have no value, they get the default
     max_distance: float = Field(CONTROL_DEFAULTS["max_distance"], ge=0, le=50)
-    mode: Literal["lock", "blend"] = CONTROL_DEFAULTS["mode"]
+    mode: Literal["lock", "blend", "trigger"] = CONTROL_DEFAULTS["mode"]
     smooth_s: float = Field(CONTROL_DEFAULTS["smooth_s"], ge=0, le=3)
     lock_s: float = Field(CONTROL_DEFAULTS["lock_s"], ge=0, le=5)
+    pulse_level: float = Field(CONTROL_DEFAULTS["pulse_level"], ge=0, le=1)
+    long_s: float = Field(CONTROL_DEFAULTS["long_s"], ge=0.1, le=3)
+    gap_s: float = Field(CONTROL_DEFAULTS["gap_s"], ge=0.1, le=3)
+    double_s: float = Field(CONTROL_DEFAULTS["double_s"], ge=0.2, le=3)
+    release_with: Literal["point", "open"] = CONTROL_DEFAULTS["release_with"]
+    still_gate: bool = CONTROL_DEFAULTS["still_gate"]
+    pinch_clenches: int = Field(CONTROL_DEFAULTS["pinch_clenches"], ge=1, le=2)
     spring_w: float = Field(ge=0, le=50)
 
 
