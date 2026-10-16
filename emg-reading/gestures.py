@@ -377,6 +377,33 @@ def _cue(kind, label, text, seconds, posture):
     return {"kind": kind, "label": label, "text": text, "seconds": seconds, "posture": posture}
 
 
+def _rest(rest_s, posture):
+    return _cue("hold", "rest", GESTURES["rest"][0], rest_s, posture)
+
+
+def _setup(rest_s, posture):
+    """The break that waits for Continue at the start of a posture, then a rest."""
+    return [_cue("break", "setup", f"{POSTURES[posture]}.\nPress Continue when ready.", None, posture),
+            _rest(rest_s, posture)]
+
+
+def _grip_block(rng, grips, reps, hold_s, rest_s, posture):
+    """Every grip reps times, each round in a new shuffled order, with rest after each. Shuffles grips in place."""
+    cues = []
+    for _ in range(reps):
+        rng.shuffle(grips)
+        for g in grips:
+            cues += [_cue("hold", g, f"{GESTURES[g][0]}\n{HOLD_TEXT}", hold_s, posture), _rest(rest_s, posture)]
+    return cues
+
+
+def _finger_block(rest_s, posture):
+    cues = []
+    for f in FINGERS:
+        cues += [_cue("finger", f"flex_{f}", GESTURES[f"flex_{f}"][0], FINGER_S, posture), _rest(rest_s, posture)]
+    return cues
+
+
 def session_plan(postures, reps=3, hold_s=4.0, rest_s=3.0, free_s=0.0, seed=None):
     """Cue list: per posture every gesture of GESTURE_SET reps times in shuffled order with rest in between, then
     free movement if free_s is set. No sync taps since 2026-10-08: the camera delay is fixed (ml/dataset.py).
@@ -387,23 +414,14 @@ def session_plan(postures, reps=3, hold_s=4.0, rest_s=3.0, free_s=0.0, seed=None
     (continuous movement), "move" (protocol_b_plan), "sync" (a tap, older sessions) or "break" (waits for Continue). seconds is None
     for breaks. Free movement is off by default since 2026-10-08, protocol_b_plan records movement instead."""
     rng = random.Random(seed)
-    moves = [g for g in GESTURE_SET if g != "rest"]
-    rest = GESTURES["rest"][0]
+    grips = [g for g in GESTURE_SET if g != "rest"]
     cues = []
     for posture in postures:
-        cues.append(_cue("break", "setup", f"{POSTURES[posture]}.\nPress Continue when ready.", None, posture))
-        cues.append(_cue("hold", "rest", rest, rest_s, posture))
-        for _ in range(reps):
-            rng.shuffle(moves)
-            for g in moves:
-                cues += [_cue("hold", g, f"{GESTURES[g][0]}\n{HOLD_TEXT}", hold_s, posture),
-                         _cue("hold", "rest", rest, rest_s, posture)]
-        for f in FINGERS:
-            cues += [_cue("finger", f"flex_{f}", GESTURES[f"flex_{f}"][0], FINGER_S, posture),
-                     _cue("hold", "rest", rest, rest_s, posture)]
-        cues += [_cue("finger", "wave", WAVE_TEXT, WAVE_S, posture), _cue("hold", "rest", rest, rest_s, posture)]
+        cues += _setup(rest_s, posture) + _grip_block(rng, grips, reps, hold_s, rest_s, posture)
+        cues += _finger_block(rest_s, posture)
+        cues += [_cue("finger", "wave", WAVE_TEXT, WAVE_S, posture), _rest(rest_s, posture)]
         if free_s > 0:
-            cues += [_cue("free", "free", FREE_TEXT, free_s, posture), _cue("hold", "rest", rest, rest_s, posture)]
+            cues += [_cue("free", "free", FREE_TEXT, free_s, posture), _rest(rest_s, posture)]
     return cues
 
 
@@ -419,25 +437,15 @@ def protocol_b_plan(postures=("table",), rounds=MOVE_ROUNDS, move_s=MOVE_S, rest
     rng = random.Random(seed)
     grips = [g for g in GESTURE_SET if g != "rest"]
     moves = list(MOVEMENTS)
-    rest = GESTURES["rest"][0]
     cues = []
     for posture in postures:
-        cues.append(_cue("break", "setup", f"{POSTURES[posture]}.\nPress Continue when ready.", None, posture))
-        cues.append(_cue("hold", "rest", rest, rest_s, posture))
-        for _ in range(2):
-            rng.shuffle(grips)
-            for g in grips:
-                cues += [_cue("hold", g, f"{GESTURES[g][0]}\n{HOLD_TEXT}", hold_s, posture),
-                         _cue("hold", "rest", rest, rest_s, posture)]
-        for f in FINGERS:
-            cues += [_cue("finger", f"flex_{f}", GESTURES[f"flex_{f}"][0], FINGER_S, posture),
-                     _cue("hold", "rest", rest, rest_s, posture)]
+        cues += _setup(rest_s, posture) + _grip_block(rng, grips, 2, hold_s, rest_s, posture)
+        cues += _finger_block(rest_s, posture)
         for _ in range(rounds):
             rng.shuffle(moves)
             for m in moves:
                 title, how = MOVEMENTS[m][0].split("\n")
-                cues += [_cue("move", m, f"{title}\n{how}, {MOVE_FOLLOW}", move_s, posture),
-                         _cue("hold", "rest", rest, rest_s, posture)]
+                cues += [_cue("move", m, f"{title}\n{how}, {MOVE_FOLLOW}", move_s, posture), _rest(rest_s, posture)]
     return cues
 
 
@@ -463,23 +471,15 @@ def protocol_c_plan(moves, postures=("table",), rounds=C_ROUNDS, move_s=C_MOVE_S
         raise ValueError(f"unknown movements: {', '.join(unknown)}")
     rng = random.Random(seed)
     grips = [g for g in GESTURE_SET if g != "rest"]
-    rest = GESTURES["rest"][0]
     cues = []
     for posture in postures:
-        cues.append(_cue("break", "setup", f"{POSTURES[posture]}.\nPress Continue when ready.", None, posture))
-        cues.append(_cue("hold", "rest", rest, rest_s, posture))
-        for _ in range(2):
-            rng.shuffle(grips)
-            for g in grips:
-                cues += [_cue("hold", g, f"{GESTURES[g][0]}\n{HOLD_TEXT}", hold_s, posture),
-                         _cue("hold", "rest", rest, rest_s, posture)]
+        cues += _setup(rest_s, posture) + _grip_block(rng, grips, 2, hold_s, rest_s, posture)
         for _ in range(rounds):
             rng.shuffle(moves)
             for m in moves:
                 title, how = LIBRARY[m]["text"].split("\n")
                 follow = C_DYNAMIC_FOLLOW if "keys" in LIBRARY[m] else C_FOLLOW
-                cues += [_cue("custom", m, f"{title}\n{how}, {follow}", move_s, posture),
-                         _cue("hold", "rest", rest, rest_s, posture)]
+                cues += [_cue("custom", m, f"{title}\n{how}, {follow}", move_s, posture), _rest(rest_s, posture)]
     return cues
 
 
@@ -516,19 +516,11 @@ def protocol_d_plan(postures=("table",), rounds=D_ROUNDS, activity_s=D_ACTIVITY_
     posture = postures[0]
     grips = [g for g in GESTURE_SET if g != "rest"]
     activities = list(NO_GRIP)
-    rest = GESTURES["rest"][0]
-    cues = [_cue("break", "setup", f"{POSTURES[posture]}.\nPress Continue when ready.", None, posture),
-            _cue("hold", "rest", rest, rest_s, posture)]
-    for _ in range(2):
-        rng.shuffle(grips)
-        for g in grips:
-            cues += [_cue("hold", g, f"{GESTURES[g][0]}\n{HOLD_TEXT}", hold_s, posture),
-                     _cue("hold", "rest", rest, rest_s, posture)]
+    cues = _setup(rest_s, posture) + _grip_block(rng, grips, 2, hold_s, rest_s, posture)
     for _ in range(rounds):
         rng.shuffle(activities)
         for a in activities:
-            cues += [_cue("nogrip", a, f"{NO_GRIP[a]}, {NO_GRIP_FOLLOW}", activity_s, posture),
-                     _cue("hold", "rest", rest, rest_s, posture)]
+            cues += [_cue("nogrip", a, f"{NO_GRIP[a]}, {NO_GRIP_FOLLOW}", activity_s, posture), _rest(rest_s, posture)]
     return cues
 
 
