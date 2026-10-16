@@ -132,6 +132,17 @@ def from_session(folder, car=True, scale=None):
     return result, lines
 
 
+def session_ranges(folder, channels, scale=None):
+    """{channel: (rest, max)} from a recorded session (from_session, common average on) for the live channels.
+    Raises ValueError when the session has no levels for one of them."""
+    levels, _ = from_session(folder, scale=scale)
+    ranges = {ch: (v["rest"], v["max"]) for ch, v in levels.items()}
+    missing = [ch for ch in channels if ch not in ranges]
+    if missing:
+        raise ValueError(f"{Path(folder).name} has no levels for channels {missing}")
+    return ranges
+
+
 def save(result, car):
     CAL_FILE.write_text(json.dumps({"date": time.strftime("%Y-%m-%d %H:%M"), "filter_version": FILTER_VERSION,
                                     "common_average": car, "channels": result}, indent=2) + "\n")

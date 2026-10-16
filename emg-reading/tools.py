@@ -189,8 +189,7 @@ class Haptics(Tool):
         """With session, the levels come from that recorded session (calibrate.from_session), else from
         calibration.json."""
         if session is not None:
-            levels, _ = calibrate.from_session(session)
-            ranges, car = {ch: (v["rest"], v["max"]) for ch, v in levels.items()}, True
+            ranges, car = calibrate.session_ranges(session, self.recorder.band.channels), True
             source = f"levels from session {Path(session).name}"
         else:
             try:
@@ -201,9 +200,9 @@ class Haptics(Tool):
                 raise ValueError("no calibration yet, run the calibration first")
             ranges, car = loaded
             source = "levels from calibration.json"
-        missing = [ch for ch in self.recorder.band.channels if ch not in ranges]
-        if missing:
-            raise ValueError(f"calibration has no entry for channels {missing}, calibrate again")
+            missing = [ch for ch in self.recorder.band.channels if ch not in ranges]
+            if missing:
+                raise ValueError(f"calibration has no entry for channels {missing}, calibrate again")
         if not self.esp_lock.acquire(blocking=False):
             raise ValueError("the ESP32 is busy with the output test")
         self._stop.clear()
@@ -351,15 +350,11 @@ class Control:
     def prepare(self, session):
         """Effort levels from the session the model trained on, the same levels the haptics take, and from its held
         cues how much the accelerometer moves with the arm still (trigger mode's still_gate)."""
-        levels, _ = calibrate.from_session(session)
+        self._ranges = calibrate.session_ranges(session, self.recorder.band.channels)
         data = load_session(session)
         self._still = still_limit(data["accel"], [(s["sample0"], s["sample1"]) for s in segments(data["events"])
                                                   if s["kind"] == "hold" and s["sample1"] and not s["bad"]],
                                   data["meta"]["rate"])
-        self._ranges = {ch: (v["rest"], v["max"]) for ch, v in levels.items()}
-        missing = [ch for ch in self.recorder.band.channels if ch not in self._ranges]
-        if missing:
-            raise ValueError(f"{Path(session).name} has no levels for channels {missing}")
         poses = {g: GESTURES[g][1] for g in GESTURE_SET}
         self._controller = Controller(self.params, GESTURE_SET, poses)
         self.state = {"params": self.params, "levels_from": Path(session).name, "step": 0, "state": "idle",
@@ -405,11 +400,7 @@ class CursorTask(Tool):
         self._trials = []
 
     def start(self, session):
-        levels, _ = calibrate.from_session(session, scale=CURSOR_LEVEL_SCALE)
-        ranges = {ch: (v["rest"], v["max"]) for ch, v in levels.items()}
-        missing = [ch for ch in self.recorder.band.channels if ch not in ranges]
-        if missing:
-            raise ValueError(f"{Path(session).name} has no levels for channels {missing}")
+        ranges = calibrate.session_ranges(session, self.recorder.band.channels, CURSOR_LEVEL_SCALE)
         self.stop()
         self.join(2)
         self._stop.clear()
