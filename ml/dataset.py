@@ -147,10 +147,16 @@ def load(folder):
     return out
 
 
-def load_all(folders=None):
-    """{session name: windows} for the given folders, or for every good session."""
+def load_all(folders=None, verbose=False):
+    """{session name: windows} for the given folders, or for every good session. verbose prints each session as it
+    loads, a session that isn't cached yet takes a while."""
     folders = folders if folders is not None else good_sessions()
-    return {Path(f).name: load(f) for f in folders}
+    out = {}
+    for i, f in enumerate(folders, 1):
+        if verbose:
+            print(f"loading session {i}/{len(folders)}: {Path(f).name}", flush=True)
+        out[Path(f).name] = load(f)
+    return out
 
 
 if __name__ == "__main__":

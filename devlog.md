@@ -1280,6 +1280,19 @@ file formats and routes are unchanged; 104 tests pass. Two visible differences:
 continuous angle model. Code comments now say "finger angle model" for the second; older entries here use protocol B
 for both. `sync.py` stays for old sessions' taps, in case a tap check is needed again.
 
+**Calibrated network scores: only unseen sessions count.** `ringnet_2026-10-16_112322` (15 sessions) calibrated on
+reps 1 and 2 of `2026-10-16_110400` scored 79.1 % balanced on rep 3 (rest taken for a grip 1.7 %, wrong grip at 0.8
+6.1 %). It looked low next to the older calibrated networks (89.9 %, 92.9 %), but those were calibrated on sessions
+their network had trained on (`seen_in_training`), so their test reps weren't new. 79.1 % is the first honest one in
+the list and sits inside the held-out range of the evaluation log (network + transform + head 73.5 to 86.2 % over
+the 8 newest runs). One test rep only, so it is noisier than an evaluation run. No evaluation row exists for
+`110400`: the automatic evaluation after the session didn't run.
+
+**Network jobs show progress.** Training prints each session as it loads and each epoch with its loss and the time
+left; the evaluation also prints each fold. The Deep learning tab shows how long the job has run and how long since
+its last line, so a stalled job shows. A stopped job now says "stopped" instead of its last line as the error, and an
+old job's error no longer comes back after a click. Same weights with and without the progress output (checked).
+
 ## Open
 
 - Trigger mode on the arm: tune clench level and timings live, count wrong picks (short clench read as two, a grab

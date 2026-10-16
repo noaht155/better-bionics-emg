@@ -119,7 +119,8 @@ def to_tensors(d, keep):
     return x, y, a
 
 
-def train(sessions, epochs, seed):
+def train(sessions, epochs, seed, progress=None):
+    """progress: called after every epoch with (epoch, epochs, mean loss), for example epoch_printer()."""
     torch.manual_seed(seed)
     np.random.seed(seed)
     parts = [to_tensors(d, np.ones(len(d["grip"]), bool)) for d in sessions]
@@ -134,8 +135,10 @@ def train(sessions, epochs, seed):
     steps = epochs * int(np.ceil(len(x) / BATCH))
     sched = torch.optim.lr_scheduler.OneCycleLR(opt, max_lr=2e-3, total_steps=steps)
     model.train()
-    for _ in range(epochs):
+    for epoch in range(epochs):
         order = torch.randperm(len(x), device=DEVICE)
+        # Summed on the device and read once per epoch, reading it every batch would wait on the GPU each time
+        total, batches = 0.0, 0
         for i in range(0, len(x), BATCH):
             idx = order[i:i + BATCH]
             scaled, unscaled = augment(x[idx])
@@ -144,7 +147,21 @@ def train(sessions, epochs, seed):
             loss.backward()
             opt.step()
             sched.step()
+            total, batches = total + loss.detach(), batches + 1
+        if progress is not None:
+            progress(epoch + 1, epochs, float(total) / batches)
     return model
+
+
+def epoch_printer(prefix=""):
+    """A progress function for train() that prints each epoch with its loss and the time left at the pace so far."""
+    t0 = time.time()
+
+    def show(epoch, epochs, loss):
+        left = (time.time() - t0) / epoch * (epochs - epoch)
+        when = f"{left / 60:.0f} min" if left >= 90 else f"{left:.0f} s"
+        print(f"{prefix}epoch {epoch}/{epochs}, loss {loss:.3f}, about {when} left", flush=True)
+    return show
 
 
 def calibrate(model, x, y, a, head=False):
@@ -260,19 +277,22 @@ def main():
     folders = dataset.good_sessions()
     if args.sessions:
         folders = [f for f in folders if f.name in args.sessions]
-    data = dataset.load_all(folders)
+    data = dataset.load_all(folders, verbose=True)
     names = list(data)
     print(f"{len(names)} sessions on {DEVICE}: {', '.join(n[:17] for n in names)}")
-    feats = {n: gesture_model.window_features(d["x"].astype(np.float64), True, True) for n, d in data.items()}
+    print("LDA features for the comparison", flush=True)
+    feats ={n: gesture_model.window_features(d["x"].astype(np.float64), True, True) for n, d in data.items()}
 
     results = {k: [] for k in ("net none", "net transform", "net transform+head", "lda others", "lda cal",
                                "net train")}
     angles = {k: [] for k in ANGLE_ROWS}
     t0 = time.time()
-    for held in [n for n in names if not args.held or n in args.held]:
+    folds = [n for n in names if not args.held or n in args.held]
+    for fold, held in enumerate(folds, 1):
         before = {k: len(v) for k, v in results.items()}
         others = [data[n] for n in names if n != held]
-        model = train(others, args.epochs, args.seed)
+        print(f"  fold {fold}/{len(folds)}: training without {held[:17]}", flush=True)
+        model = train(others, args.epochs, args.seed, epoch_printer("    "))
         # The same network scored on the data it learned from. Far above the held-out score means it memorised
         # the training sessions (too many epochs), both low means it hasn't learned enough (too few)
         def add_angles(key, true, pred):

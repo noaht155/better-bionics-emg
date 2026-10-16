@@ -583,11 +583,18 @@ $("net-side").addEventListener("change", () => {
 });
 
 let networkWasRunning = false;
+let shownNetError = null;
 function drawNetwork(n, p) {
   for (const id of ["net-eval-newest", "net-eval", "net-train", "net-calibrate"]) $(id).disabled = n.running;
   $("net-stop").disabled = !n.running;
-  $("net-step").textContent = n.running ? `${n.job.replace("_", " ")} running...` : "";
-  if (n.error) $("net-error").textContent = n.error;
+  // Time since the last line tells a slow job from a stalled one, every finished epoch prints a line
+  $("net-step").textContent = n.running
+    ? `${n.job.replace("_", " ")} running for ${fmtTime(n.running_s ?? 0)}, last output ${fmtTime(n.quiet_s ?? 0)} ago`
+    : "";
+  // Only a new error from the server is shown. An update sent just before a click would otherwise put the last
+  // job's error back after the click cleared it
+  if (n.error && n.error !== shownNetError) $("net-error").textContent = n.error;
+  shownNetError = n.error;
   // Only the last lines matter while it runs, the table replaces them once there is a result
   const html = n.result ? networkTable(n.job, n.result) : "";
   if ($("net-table").innerHTML !== html) $("net-table").innerHTML = html;

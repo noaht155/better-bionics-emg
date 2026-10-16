@@ -17,7 +17,7 @@ import numpy as np
 from channels import mirrored
 from ml import NETWORK_DIR, dataset, gesture_model, low_priority
 from ml.ringnet import load, save
-from ml.train_ringnet import DEVICE, calibrate, grip_scores, predict, to_tensors, train
+from ml.train_ringnet import DEVICE, calibrate, epoch_printer, grip_scores, predict, to_tensors, train
 
 STEP_MS = dataset.STEP * 1000 // dataset.RATE
 
@@ -29,10 +29,10 @@ def train_all(epochs, sessions=None):
         folders = [f for f in folders if f.name in sessions]
     if not folders:
         raise SystemExit("none of the given sessions is a completed session with grips")
-    data = dataset.load_all(folders)
+    data = dataset.load_all(folders, verbose=True)
     print(f"training on {len(data)} sessions", flush=True)
     t0 = time.time()
-    model = train(list(data.values()), epochs, seed=0)
+    model = train(list(data.values()), epochs, seed=0, progress=epoch_printer())
     first = next(iter(data.values()))
     info = {"kind": "general", "sessions": list(data), "epochs": epochs, "created": time.strftime("%Y-%m-%d %H:%M"),
             "channels": [int(c) for c in first["channels"]], "rate": dataset.RATE, "window": dataset.WINDOW,

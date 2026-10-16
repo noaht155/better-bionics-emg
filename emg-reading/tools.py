@@ -480,19 +480,25 @@ class NetworkJob(Tool):
     def __init__(self):
         super().__init__()
         self._proc = None
+        self._stopping = False
 
     def start(self, job, args):
         self._launch(self._run, job, args)
 
     def stop(self):
         if self._proc is not None and self._proc.poll() is None:
+            self._stopping = True
             self._proc.terminate()
 
     def _run(self, job, args):
         fd, out = tempfile.mkstemp(suffix=".json")
         os.close(fd)
         lines = deque(maxlen=JOB_LINES)
-        self.state.update(job=job, lines=[], result=None)
+        self._stopping = False
+        # The page shows how long it has run and how long since the last line, so a stalled job can be told apart
+        # from a slow one
+        now = time.time()
+        self.state.update(job=job, lines=[], result=None, started=now, last_line=now)
         try:
             self._proc = subprocess.Popen([sys.executable, "-u", "-m", *args, "--json", out], cwd=REPO,
                                           stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
@@ -500,9 +506,12 @@ class NetworkJob(Tool):
                 # Library warnings would push the useful lines off the page
                 if line.strip() and "Warning" not in line:
                     lines.append(line.rstrip())
-                    self.state["lines"] = list(lines)
+                    self.state.update(lines=list(lines), last_line=time.time())
             if self._proc.wait() != 0:
-                raise RuntimeError(lines[-1] if lines else f"stopped (exit code {self._proc.returncode})")
+                # A stopped job's last line is just where it got to, not an error
+                if self._stopping:
+                    raise RuntimeError("stopped")
+                raise RuntimeError(lines[-1] if lines else f"failed (exit code {self._proc.returncode})")
             text = Path(out).read_text()
             self.state["result"] = json.loads(text) if text else None
         finally:
@@ -531,5 +540,9 @@ class Tools:
             state = dict(getattr(self, name).state)
             if state.get("until"):
                 state["left"] = max(0.0, state["until"] - now)
+            # Worked out here, a tablet's clock can differ from this computer's
+            if state.get("started"):
+                state["running_s"] = now - state["started"]
+                state["quiet_s"] = now - state["last_line"]
             out[name] = state
         return out
