@@ -1255,6 +1255,15 @@ point during key (accidental releases). Without calibration it still finds open 
 62 %, so a general network with no calibration would open fine and release badly. Training on the 4 groups instead of
 7 grips gains nothing and fires point during key more often. Use the calibrated 7-grip network in trigger mode.
 
+## 2026-10-16: channel layout
+
+**Channel order confirmed from the MindRove manual** (armband section, 8 + bias and ref, electrodes equidistant).
+Numbered 1 to 8 there: 1 to 6 are the pods, 7 and 8 sit on the main module either side of ref and bias, 8 next to
+pod 1 and 7 next to pod 6. Charging port towards the shoulder and looking from the shoulder, 1 to 6 count clockwise
+(Noah). So in code channels 0 to 7 run in order round the ring with 7 next to 0, as the ring network assumes. The
+2026-10-15 data check had 6 and 7 not fitting the ring: not an order problem, more likely the flat rigid module
+sitting differently on the arm than the pods (and ref and bias between them). Ch 6 is still the extensor pad.
+
 ## Open
 
 - Trigger mode on the arm: tune clench level and timings live, count wrong picks (short clench read as two, a grab
@@ -1300,9 +1309,10 @@ point during key (accidental releases). Without calibration it still finds open 
   flow tested with LDA first.
 - Measure the camera delay over the whole session (accelerometer against camera wrist movement) instead of 6 taps,
   which disagreed by up to 135 ms in session `164337`.
-- Tap test round the band to confirm channels 0 to 7 run in order round the arm, the ring assumes it. The data says
-  0 to 5 are in order, 6 and 7 unclear (2026-10-15). Then record
-  one mirrored session to check the channel flip on real data.
+- Record one mirrored session to check the channel flip on real data. (Channel order round the band confirmed from
+  the MindRove manual, 2026-10-16.)
+- Motor pickup: run `diagnostics/motor_pickup.py` with the motor band below the pads, relaxed and with a steady
+  clench.
 - Motors: firmware 0.2.1 is flashed and channels 0 and 1 follow the duty. When the ULN2003, MOSFETs or LEDs go
   back on, set `OUTPUTS_INVERTED` to false. Still to measure: lowest duty that starts a motor (the haptics floor),
   how many levels can be told apart, and EMG spectra with the motors off and on to see if they show up.
