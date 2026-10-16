@@ -46,7 +46,26 @@ SEND_HZ = 20
 PREVIEW_HZ = 15
 
 
-class SessionSettings(BaseModel):
+class PlanSettings(BaseModel):
+    postures: list[Literal[tuple(POSTURES)]]
+    # A: held grips and single fingers. B: the Ninapro-style movements (gestures.protocol_b_plan). C: movements
+    # picked from the library (gestures.protocol_c_plan). D: activities that shouldn't start a grip
+    # (gestures.protocol_d_plan)
+    protocol: Literal["A", "B", "C", "D"] = "A"
+    reps: int = Field(ge=1, le=20)
+    hold_s: float = Field(ge=1, le=30)
+    rest_s: float = Field(ge=1, le=30)
+    free_s: float = Field(0, ge=0, le=600)
+    rounds: int = Field(6, ge=1, le=20)
+    move_s: float = Field(5, ge=2, le=15)
+    moves: list[Literal[tuple(LIBRARY)]] = []
+    c_rounds: int = Field(C_ROUNDS, ge=1, le=20)
+    c_move_s: float = Field(C_MOVE_S, ge=3, le=15)
+    d_rounds: int = Field(D_ROUNDS, ge=1, le=5)
+    d_activity_s: float = Field(D_ACTIVITY_S, ge=10, le=120)
+
+
+class SessionSettings(PlanSettings):
     subject: str = Field(pattern=r"^[A-Za-z0-9_-]{1,32}$")
     band_arm: Literal["right", "left"]
     # Which way round the band is. Turned the other way the electrode order round the arm is mirrored
@@ -59,22 +78,8 @@ class SessionSettings(BaseModel):
     module_side: Literal["anterior", "posterior"]
     placement: str = ""
     notes: str = ""
+    # The plan preview can be asked for with nothing ticked, a session can't start that way
     postures: list[Literal[tuple(POSTURES)]] = Field(min_length=1)
-    # A: held grips and single fingers. B: the Ninapro-style movements (gestures.protocol_b_plan). C: movements
-    # picked from the library. D: activities that shouldn't start a grip (gestures.protocol_d_plan)
-    protocol: Literal["A", "B", "C", "D"] = "A"
-    reps: int = Field(ge=1, le=20)
-    hold_s: float = Field(ge=1, le=30)
-    rest_s: float = Field(ge=1, le=30)
-    free_s: float = Field(0, ge=0, le=600)
-    rounds: int = Field(6, ge=1, le=20)
-    move_s: float = Field(5, ge=2, le=15)
-    # C: movements picked from gestures.LIBRARY (gestures.protocol_c_plan)
-    moves: list[Literal[tuple(LIBRARY)]] = []
-    c_rounds: int = Field(C_ROUNDS, ge=1, le=20)
-    c_move_s: float = Field(C_MOVE_S, ge=3, le=15)
-    d_rounds: int = Field(D_ROUNDS, ge=1, le=5)
-    d_activity_s: float = Field(D_ACTIVITY_S, ge=10, le=120)
     # Same run, nothing saved, for trying out the setup
     practice: bool = False
 
@@ -96,24 +101,6 @@ class CalibrationSettings(BaseModel):
 class Esp32Link(BaseModel):
     port: str | None = None
     wifi: str | None = None
-
-
-class PlanSettings(BaseModel):
-    postures: list[Literal[tuple(POSTURES)]]
-    # A: held grips and single fingers. B: the Ninapro-style movements (gestures.protocol_b_plan). C: movements
-    # picked from the library. D: activities that shouldn't start a grip (gestures.protocol_d_plan)
-    protocol: Literal["A", "B", "C", "D"] = "A"
-    reps: int = Field(ge=1, le=20)
-    hold_s: float = Field(ge=1, le=30)
-    rest_s: float = Field(ge=1, le=30)
-    free_s: float = Field(0, ge=0, le=600)
-    rounds: int = Field(6, ge=1, le=20)
-    move_s: float = Field(5, ge=2, le=15)
-    moves: list[Literal[tuple(LIBRARY)]] = []
-    c_rounds: int = Field(C_ROUNDS, ge=1, le=20)
-    c_move_s: float = Field(C_MOVE_S, ge=3, le=15)
-    d_rounds: int = Field(D_ROUNDS, ge=1, le=5)
-    d_activity_s: float = Field(D_ACTIVITY_S, ge=10, le=120)
 
 
 class TrainSettings(BaseModel):
@@ -265,6 +252,23 @@ def refuse(e):
     raise HTTPException(409, str(e))
 
 
+def session_folder(name):
+    """A recorded session's folder by its name, refused unless it is one."""
+    folder = DATA_DIR / name
+    if Path(name).name != name or name in ("", ".", "..") or not (folder / "session.json").exists():
+        refuse("unknown session")
+    return folder
+
+
+def model_file(name):
+    """A saved LDA model (.joblib) or network (.pt) by its file name, refused unless it is one."""
+    folder = NETWORK_DIR if name.endswith(".pt") else gesture_model.MODEL_DIR
+    path = folder / name
+    if path.parent != folder or path.suffix not in (".joblib", ".pt") or not path.is_file():
+        refuse("unknown model")
+    return path
+
+
 # Epochs for the evaluation that runs by itself after every session, the default from the epoch sweep (devlog 2026-10-06)
 AUTO_EVALUATE_EPOCHS = 15
 
@@ -341,7 +345,7 @@ def make_app(recorder, band, camera, tools):
         try:
             recorder.command(action)
         except ValueError as e:
-            raise HTTPException(409, str(e))
+            refuse(e)
         return {"ok": True}
 
     @app.post("/api/check")
@@ -410,9 +414,7 @@ def make_app(recorder, band, camera, tools):
 
     @app.post("/api/train")
     def train(settings: TrainSettings):
-        folders = [DATA_DIR / name for name in settings.sessions]
-        if any(not (f / "session.json").exists() for f in folders):
-            refuse("unknown session")
+        folders = [session_folder(name) for name in settings.sessions]
         try:
             tools.trainer.start([str(f) for f in folders],
                                 {"log": settings.log, "accel": settings.accel, "vote": settings.vote,
@@ -450,10 +452,7 @@ def make_app(recorder, band, camera, tools):
             name = settings.network or ""
             if Path(name).name != name or not (NETWORK_DIR / name).is_file():
                 refuse("unknown network")
-            session = settings.session or ""
-            if Path(session).name != session or not (DATA_DIR / session / "session.json").exists():
-                refuse("unknown session")
-            args = ["ml.networks", "calibrate", name, str(DATA_DIR / session),
+            args = ["ml.networks", "calibrate", name, str(session_folder(settings.session or "")),
                     "--reps", *map(str, settings.reps)]
         try:
             tools.network.start(settings.job, args)
@@ -468,10 +467,7 @@ def make_app(recorder, band, camera, tools):
 
     @app.post("/api/model/use")
     def use_model(choice: ModelChoice):
-        folder = NETWORK_DIR if choice.name.endswith(".pt") else gesture_model.MODEL_DIR
-        path = folder / choice.name
-        if path.parent != folder or not path.exists():
-            refuse("unknown model")
+        path = model_file(choice.name)
         try:
             model = tools.predictor.use(path)
         except ValueError as e:
@@ -483,13 +479,9 @@ def make_app(recorder, band, camera, tools):
         """An LDA model or a calibrated network with the control layer on its output, effort levels from the
         model's newest training session (LDA) or its calibration session (network). Haptics start with it as with
         Use this model."""
-        network = choice.name.endswith(".pt")
-        folder = NETWORK_DIR if network else gesture_model.MODEL_DIR
-        path = folder / choice.name
-        if path.parent != folder or path.suffix not in (".joblib", ".pt") or not path.exists():
-            refuse("unknown model")
+        path = model_file(choice.name)
         try:
-            if network:
+            if path.suffix == ".pt":
                 info = next(n for n in network_list() if n["name"] == choice.name)
                 if not info.get("calibrated_on"):
                     refuse("calibrate the network on a session first, the effort levels come from it")
@@ -539,11 +531,8 @@ def make_app(recorder, band, camera, tools):
     @app.post("/api/cursor/start")
     def cursor_start(choice: CursorStart):
         """The cursor with channel levels from a recorded session (the haptics' levels)."""
-        folder = DATA_DIR / choice.session
-        if folder.parent != DATA_DIR or not (folder / "session.json").exists():
-            refuse("unknown session")
         try:
-            tools.cursor.start(folder)
+            tools.cursor.start(session_folder(choice.session))
         except ValueError as e:
             refuse(e)
         return {"ok": True}
