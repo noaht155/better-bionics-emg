@@ -1264,6 +1264,22 @@ pod 1 and 7 next to pod 6. Charging port towards the shoulder and looking from t
 2026-10-15 data check had 6 and 7 not fitting the ring: not an order problem, more likely the flat rigid module
 sitting differently on the arm than the pods (and ref and bias between them). Ch 6 is still the extensor pad.
 
+**Cleanup, no behaviour change** (branch `cleanup`). Duplicated code merged: session level ranges
+(`calibrate.session_ranges`, used by haptics, control and cursor), the live majority vote (`gesture_model.vote_winner`,
+LDA and network), the setup, grip and finger blocks of the four session plans (plans byte-identical before and
+after for every protocol over 5 seeds), request checks in `app.py`, the settings controls and small helpers in
+`web/`. Dead code removed (`gesture_model.FEATURES`, a duplicate `Replay.read`). Filter, model inputs and outputs,
+file formats and routes are unchanged; 104 tests pass. Two visible differences:
+- Session and model names in requests are checked the same way everywhere (`app.session_folder`, `app.model_file`):
+  a name with a path in it or the wrong file type now gets "unknown session" or "unknown model" instead of a
+  server error on `/api/train` and `/api/model/use`.
+- `session.json` of new sessions lists the plan settings before subject and band position (`SessionSettings` now
+  extends `PlanSettings`). Same keys and values, everything reads them by key.
+
+"Protocol B" meant two things: recording protocol B (the Ninapro movements, `gestures.protocol_b_plan`) and the
+continuous angle model. Code comments now say "finger angle model" for the second; older entries here use protocol B
+for both. `sync.py` stays for old sessions' taps, in case a tap check is needed again.
+
 ## Open
 
 - Trigger mode on the arm: tune clench level and timings live, count wrong picks (short clench read as two, a grab
@@ -1290,12 +1306,10 @@ sitting differently on the arm than the pods (and ref and bias between them). Ch
   split the remaining gap into protocol, sensors and labels; then a live control test, since offline r doesn't
   predict live control.
 
-- Next priority (Noah, 2026-10-05): finger angles. Moving-finger r is 0.34 (see 2026-10-05). Record about 10
-  sessions with the new cues and rerun the evaluation every 2 or 3 sessions: if the moving-finger r keeps rising it
-  is a data problem, if it flattens the model or the sensors are the limit. Then: weight moving windows, an angle
-  head with its own temporal part on the shared backbone, calibration that includes finger movement in every
-  posture, per-session open/fist normalisation of the labels, causal convolutions so the network can stream on an
-  ESP32-S3.
+- Finger angles (priority since 2026-10-05, the recording plan is in the angles item above). Moving windows are
+  weighted since 2026-10-05. Still to try: an angle head with its own temporal part on the shared backbone,
+  calibration that includes finger movement in every posture, per-session open/fist normalisation of the labels,
+  causal convolutions so the network can stream on an ESP32-S3.
 - More sessions with the 7 grips, firm holds and a marked band position.
 - Quick recalibration in the app: a short calibration-only recording (1 to 2 repetitions of the grips) after
   putting the band on. The Deep learning tab can calibrate on any session, but there is no short recording type yet.
@@ -1307,8 +1321,6 @@ sitting differently on the arm than the pods (and ref and bias between them). Ch
 - Bring latency under 200 ms: shorter windows and vote, at some cost in accuracy.
 - `ml/` foundations: session cache, dataset builder, shared evaluation harness, model registry, continual update
   flow tested with LDA first.
-- Measure the camera delay over the whole session (accelerometer against camera wrist movement) instead of 6 taps,
-  which disagreed by up to 135 ms in session `164337`.
 - Record one mirrored session to check the channel flip on real data. (Channel order round the band confirmed from
   the MindRove manual, 2026-10-16.)
 - Motor pickup: run `diagnostics/motor_pickup.py` with the motor band below the pads, relaxed and with a steady
