@@ -1,7 +1,7 @@
 """Gestures, arm postures and the cue sequence of a recording session.
 
 Target angles are rough poses for the on-screen skeleton and the pose match score, not labels.
-The labels for protocol B are the tracked angles.
+The labels for the finger angle model (the continuous angles, not recording protocol B) are the tracked angles.
 """
 import random
 
@@ -61,9 +61,10 @@ POSTURES = {
 HOLD_TEXT = "hold it firmly and steady, medium effort"
 FREE_TEXT = "MOVE YOUR FINGERS\nslowly, any way: open, close, one finger at a time"
 
-# Protocol B has to learn each finger on its own. The held grips are 7 fixed shapes, and in free movement the fingers
-# mostly moved together (middle and ring correlated 0.87, ring and pinky 0.93 on 2026-10-01). In every posture
-# The pause halfway is there because the grips are all end positions, so a half-bent finger was hardly ever recorded
+# The finger angle model has to learn each finger on its own. The held grips are 7 fixed shapes, and in free movement
+# the fingers mostly moved together (middle and ring correlated 0.87, ring and pinky 0.93 on 2026-10-01), so each
+# finger gets its own cue in every posture. The pause halfway is there because the grips are all end positions, so a
+# half-bent finger was hardly ever recorded
 FINGER_S = 12.0
 WAVE_S = 10.0
 FINGER_TEXT = ("FLEX YOUR {}\nbend it slowly, stop halfway for a second, bend it fully, then back. 3 times, keep the "
@@ -410,7 +411,7 @@ def session_plan(postures, reps=3, hold_s=4.0, rest_s=3.0, free_s=0.0, seed=None
 
     In every posture each finger is also bent on its own, then all of them one after another.
 
-    kind is "hold" (a held gesture or rest, protocol A), "finger" (one finger moving, protocol B), "free"
+    kind is "hold" (a held gesture or rest, protocol A), "finger" (one finger moving, for the angle model), "free"
     (continuous movement), "move" (protocol_b_plan), "sync" (a tap, older sessions) or "break" (waits for Continue). seconds is None
     for breaks. Free movement is off by default since 2026-10-08, protocol_b_plan records movement instead."""
     rng = random.Random(seed)

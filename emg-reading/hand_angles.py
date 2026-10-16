@@ -15,7 +15,7 @@ JOINTS = ["thumb_cmc_flex", "thumb_cmc_abd", "thumb_mcp", "thumb_ip"]
 for _f in FINGERS[1:]:
     JOINTS += [f"{_f}_mcp_flex", f"{_f}_mcp_abd", f"{_f}_pip", f"{_f}_dip"]
 
-# First stage of protocol B: the joints one webcam measures well
+# First stage of the finger angle model: the joints one webcam measures well
 RELIABLE = ["thumb_mcp"] + [f"{f}_{j}" for f in FINGERS[1:] for j in ("mcp_flex", "pip")]
 
 WRIST = 0
