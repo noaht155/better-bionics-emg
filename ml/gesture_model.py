@@ -138,15 +138,20 @@ def distance_space(feats, labels):
     return {"lda": lda, "centres": centres, "cov_inv": np.linalg.pinv(spread)}
 
 
+def vote_winner(recent):
+    """Most common of the recent predictions, ties go to the newest."""
+    counts = Counter(recent)
+    best = max(counts.values())
+    return next(q for q in reversed(recent) if counts[q] == best)
+
+
 def majority(predictions, vote):
     """Causal majority vote over the last vote predictions, ties go to the newest."""
     out = np.empty(len(predictions), dtype=object)
     recent = deque(maxlen=vote)
     for i, p in enumerate(predictions):
         recent.append(p)
-        counts = Counter(recent)
-        best = max(counts.values())
-        out[i] = next(q for q in reversed(recent) if counts[q] == best)
+        out[i] = vote_winner(recent)
     return out
 
 
@@ -319,10 +324,7 @@ class LivePredictor:
             self.distance = float(np.sqrt(z @ space["cov_inv"] @ z))
         raw = self.model["classes"][int(np.argmax(probs))] if probs.max() >= self.threshold else UNSURE
         self.recent.append(raw)
-        counts = Counter(self.recent)
-        best = max(counts.values())
-        label = next(q for q in reversed(self.recent) if counts[q] == best)
-        return label, raw, dict(zip(self.model["classes"], probs.round(3).tolist()))
+        return vote_winner(self.recent), raw, dict(zip(self.model["classes"], probs.round(3).tolist()))
 
 
 def report(result):

@@ -13,7 +13,7 @@ don't depend on effort. The angle head learns from those scaled windows too, the
 without the overall gain, so it can use how hard the muscles fire (a finger bent halfway against fully). Both run on
 every window and can be compared live.
 """
-from collections import Counter, deque
+from collections import deque
 
 import numpy as np
 import torch
@@ -21,6 +21,7 @@ from torch import nn
 import torch.nn.functional as F
 
 from hand_angles import RELIABLE, JOINTS
+from ml.gesture_model import vote_winner
 
 # Filtered EMG is a few uV at rest and a few hundred in a grip. Dividing by this brings it near unit scale
 INPUT_SCALE_UV = 50.0
@@ -168,10 +169,7 @@ class NetPredictor:
         classes = self.model["classes"]
         raw = classes[int(probs.argmax())] if probs.max() >= self.threshold else self.unsure
         self.recent.append(raw)
-        counts = Counter(self.recent)
-        best = max(counts.values())
-        label = next(q for q in reversed(self.recent) if counts[q] == best)
-        return label, raw, dict(zip(classes, probs.round(3).tolist()))
+        return vote_winner(self.recent), raw, dict(zip(classes, probs.round(3).tolist()))
 
 
 if __name__ == "__main__":
