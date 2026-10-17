@@ -92,9 +92,16 @@ def window_features(x, log=True, extended=False):
     return feats
 
 
+# Sign sessions (recording protocols E and F) label their held signs with the library key and the held wrist bends
+# as one class, which live counts as rest
+SIGN_PROTOCOLS = ("E", "F")
+NOT_SIGN = "notsign"
+
+
 def session_windows(data, rate, options):
     """Features of every window in a session, in time order. Returns (features, window end sample, label or
-    None, posture or None). Labels only for windows fully inside the trimmed part of a hold cue."""
+    None, posture or None). Labels only for windows fully inside the trimmed part of a hold cue, or with
+    options["signs"] of a sign cue (custom), a held wrist bend (nogrip, NOT_SIGN) and rest."""
     channels = data["meta"]["channels"]
     y = filter_block(data["emg"][channels], rate)
     if mirrored(data["meta"].get("settings", {})):
@@ -112,12 +119,21 @@ def session_windows(data, rate, options):
 
     labels = np.full(len(ends), None, dtype=object)
     postures = np.full(len(ends), None, dtype=object)
+    signs = options.get("signs", False)
     for seg in segments(data["events"]):
-        # Older sessions also cued gestures that were dropped from the set, those windows are left out
-        if seg["kind"] != "hold" or seg["bad"] or seg["sample1"] is None or seg["label"] not in GESTURE_SET:
+        if seg["bad"] or seg["sample1"] is None:
             continue
-        inside = (starts >= seg["sample0"] + int(settle_s(seg["kind"], seg["label"]) * rate)) & (ends <= seg["sample1"])
-        labels[inside] = seg["label"]
+        if signs and seg["kind"] in ("custom", "nogrip"):
+            # A wrist bend is held like a sign, so it is trimmed like one
+            trim = settle_s("custom", seg["label"] if seg["kind"] == "custom" else "fist")
+            label = seg["label"] if seg["kind"] == "custom" else NOT_SIGN
+        # Older sessions also cued gestures that were dropped from the set, those windows are left out
+        elif seg["kind"] == "hold" and seg["label"] in GESTURE_SET and (not signs or seg["label"] == "rest"):
+            trim, label = settle_s(seg["kind"], seg["label"]), seg["label"]
+        else:
+            continue
+        inside = (starts >= seg["sample0"] + int(trim * rate)) & (ends <= seg["sample1"])
+        labels[inside] = label
         postures[inside] = seg["posture"]
     return feats, ends, labels, postures
 
@@ -237,6 +253,15 @@ def decision_delay_ms(vote):
     return WINDOW_MS / 2 + (vote // 2) * STEP_MS
 
 
+def sign_sessions(folders):
+    """True if every session is a sign session (protocol E or F), False if none is; refuses a mix."""
+    kinds = {json.loads((Path(f) / "session.json").read_text()).get("settings", {}).get("protocol", "A")
+             in SIGN_PROTOCOLS for f in folders}
+    if len(kinds) > 1:
+        raise ValueError("sign sessions (protocols E and F) and grip sessions can't be trained together")
+    return kinds.pop()
+
+
 def load_sessions(folders, options):
     out = {}
     for folder in folders:
@@ -253,9 +278,16 @@ def load_sessions(folders, options):
 
 def train(folders, options, evaluate_it=True):
     """Trains on all the given sessions. Returns (model dict ready to save, evaluation or None)."""
+    options = dict(options, signs=sign_sessions(folders))
     sessions = load_sessions(folders, options)
     if not sessions:
         raise ValueError("none of these sessions has gesture cues")
+    if options["signs"]:
+        # Only the signs every chosen session has, so a screening session adds its windows of the set and not its
+        # other candidates
+        common = set.intersection(*({l for l in s[2] if l is not None} for s in sessions.values()))
+        for name, (f, e, l, p) in sessions.items():
+            sessions[name] = (f, e, np.array([x if x in common else None for x in l], dtype=object), p)
     metas = [json.loads((Path(f) / "session.json").read_text()) for f in folders]
     channels = {tuple(m["channels"]) for m in metas}
     if len(channels) > 1:

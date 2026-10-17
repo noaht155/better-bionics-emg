@@ -1293,6 +1293,104 @@ left; the evaluation also prints each fold. The Deep learning tab shows how long
 its last line, so a stalled job shows. A stopped job now says "stopped" instead of its last line as the error, and an
 old job's error no longer comes back after a click. Same weights with and without the progress output (checked).
 
+**Sign research: which hand signs the band tells apart every time it goes on** (Noah's idea: find distinct signs,
+however odd, and map them to useful outputs). Details, literature and the protocols to record in `sign-research.md`,
+scripts in `diagnostics/signs/`. LDA on each session's own calibration only, tested on its later repetitions:
+- Bar (90 % balanced on the worst session, under 1 false pick per minute on both D sessions): no set of today's signs
+  clears all of it. With 2 holds per sign in each of 3 postures (10 sessions): tripod + point 97 / 95 % (mean /
+  worst), open + pinch + point 95 / 90 % (89 % when chosen without that session), open + fist + pinch + point
+  94 / 88 %, all six grips 83 / 75 %.
+- False picks on the D sessions (`181042` / `105900`), lock mode defaults: 0.5 / 6.3 per minute for open, fist, point.
+  With 12 votes and the still gate in front of lock mode: 0.0 / 1.1; nearly all left are wrist flexion read as point.
+  On protocol A those two changes cost a few missed light signs (open, fist, point 96 % right first picks, 0 wrong,
+  4 % none, 1.05 s).
+- Effort and side of the forearm separate: point, open, fist are 3 to 4x rest; single finger bends (labelled from
+  the camera) are 1.4 to 1.8x, 35 to 43 % right and mostly called rest. The thumb grips only collide with each other
+  (one of them in a set is fine).
+- Calibration must cover the postures: 3 holds per sign at the table only score 71 to 77 % in the other postures,
+  one hold in each posture 88 to 92 %.
+- Blending the calibration's class means (80 %) with earlier sessions and the covariance half and half: +1 to 2
+  points mean, +4 to 9 on the worst session (13 sessions).
+- DB8 reduced to one ring of 8 at 500 Hz: 9 movements 35 to 63 %, the 2 amputees 49 and 43 %; the amputees' best
+  signs differ from the able-bodied group's (thumb abduction 96 %), so the set has to be chosen per person.
+Literature review on top (about 110 sources, `diagnostics/out/signs/literature.md`, local): held finger postures
+(thumb up, index and middle out, ring and little flexed, fist, point, fingers spread) beat grasps and wrist movements
+in Ninapro DB2 and DB3 (40 intact, 10 amputees, one session); the thumb grips are one family everywhere; the best set
+differs per amputee (2 to 11 movements above 90 %, Atzori 2016). No study tested horns, claw, held co-contraction or
+little finger alone. Protocol E list extended with ring and little flexed and wrist cues as "not a sign".
+Recommended for now: open = open / release, fist and point mapped to the two favourite grips, the rest cycled by
+clench count as in trigger mode. One person, 2 D sessions.
+
+**Protocol E, sign screening, in the app** (`gestures.protocol_e_plan`, Record form). 15 candidate signs (open, fist,
+point, pinch, thumbs up, thumb tucked with fingers straight, claw, hook, two finger point, little finger out, horns,
+fingers pushed back, rigid hand, thumb out, ring and little bent) and 2 held wrist bends as "not a sign", each 6 s
+following the drawn hand, 3 rounds at the table and 2 with the arm forward, about 13 min. Signs are `custom` cues,
+wrist bends `nogrip`, and an E session has no grip holds, so it stays out of grip and network training. 5 new
+library drawings (two finger point, little finger out, claw, fingers back, rigid hand), checked in the preview on a
+test copy. Analysis: `diagnostics/signs/screen_e.py <session>` (dry run on a fake session only). No eyes-closed
+round: the cue has to be read. 107 tests pass.
+
+**First protocol E session** (`2026-10-16_140854_noah`, table 5 rounds + forward 4, signs 3 s each, so about 1.3 s
+held per cue after the 1.67 s close-in is left out; `diagnostics/signs/screen_e.py`, output in
+`diagnostics/out/signs/screen_e_140854*.txt`). Calibrated on the early rounds, tested on the last table round and the
+later forward rounds, one session, so an upper bound:
+- Best sets: open + two finger point + thumb out 96.7 % balanced (table 100 %, forward 95.7 %); + little finger out
+  94.1 %; + pinch 90.4 %. Thumb out, little finger out and two finger point are in most of the top 20 sets for
+  N = 3 to 5. Thumb out is 95.6 % right even among all 15 signs, at only 2.0x rest; thumb abduction was also the
+  DB8 amputees' best.
+- Open + fist + point only 72.5 % here (protocol A sessions 94.5 %): fist was held at 2.2 to 8.9x rest from cue to
+  cue and read as point 68 % of the time. Point alone 100 %.
+- Held wrist bends: 92 % turned into rest by the distance check, 7 % read as claw. Weak candidates: thumb tucked
+  (mostly rest), horns and ring + little bent (read as point), rigid and fingers back (read as claw).
+Next: confirm across days (protocol F) with open, two finger point, thumb out, little finger out, with fist and point
+alongside for comparison.
+Live LDAs from that session for a feel test (`diagnostics/signs/train_sign_lda.py`, all rounds, extended features,
+vote 5): `noah_signs4_open-twopoint-thumbout-little_2026-10-16` and `noah_signs5_with-pinch_2026-10-16` in
+`models/gestures/`. Live prediction only: the Control tab's controller still knows only the 7 grips.
+Live on the arm (Noah, same band position): the 4-sign model feels really good despite the little data. How the signs
+were made, both as drawn: thumb out is the hand loose with only the thumb straight out (no fist); little finger out
+is a fist with the thumb over the index and only the little finger out.
+Live, thumb out and little finger out never get mixed up; the confusions are with two finger point and open (both
+mostly the finger extensor; offline open read as two finger point 3 %, the other way 2 of 25 replay windows).
+**Every combination vetted** (`diagnostics/signs/vet_sets.py`, all 16,263 sets of 3 to 7 of the 15 signs, each round
+of each posture held out in turn, 9 folds, best 25 per size refitted; logs `diagnostics/out/signs/vet_sets*.log`).
+With the wrist bends as a "not a sign" class, Noah's set (open, two finger point, little finger out, thumb out) is
+the best 4-sign set: 95.2 % balanced mean, 90.4 % worst fold, 95.2 % at the table and forward, held wrist bends read
+as a sign 25 % of the time (48 % without the class). Without the class it has the best mean (94.8 %) but a worst fold
+of 85.2 %. Best 3: two finger point, little finger out, thumb out 96.3 / 90.1 %. Best 5: 91.3 / 85.5 %, so 5 signs
+fall under the bar even within one session; pinch sets top out at 92.5 / 84.0 %. Little finger out and thumb out are
+in nearly every top set of every size. One session, each fold is one cue per sign, so close sets are ties.
+
+**Protocol F, the sign set, in the app** (`gestures.protocol_f_plan`, Record form; Noah: record more of these signs
+and see how training goes). The 4 chosen signs (`F_SIGNS`: open, two finger point, little finger out, thumb out) and
+the 2 held wrist bends of protocol E, once per round in every ticked posture, 6 s each with 3 s rest; 4 rounds at the
+table and forward is about 7 min. Same cue kinds as E, so F sessions pool with the E session and stay out of grip
+training. `diagnostics/signs/train_sign_lda.py` now takes several sessions (comma separated) and `--notsign` for the
+wrist bend class. Checked on a test copy (plan, form, page). 109 tests pass. Networks only train on grip labels so
+far; training one on the signs needs `ml/dataset.py` and `train_ringnet` to take sign labels.
+
+**First protocol F session** (`2026-10-16_153635_noah`, band moved since the E session: 6 cm from the crease against
+8, table and forward, 4 rounds, 6 s holds, 7.4 min). Calibrated on F's first round in each posture, tested on its
+other rounds (`diagnostics/signs/sign_net.py across`):
+
+| Model | Balanced | Wrist bends read as a sign |
+|---|---|---|
+| LDA on F's first round | 86.2 % | 7 % |
+| LDA on E + F's first round | 86.2 % | 15 % |
+| network (general grip backbone + new sign layer, fine-tuned on E only), no calibration | 86.3 % | 4 % |
+| same, transform + sign layer fitted on F's first round | 87.6 % | 0 % |
+
+The network trained only on the E session matches an LDA calibrated on the new band position, with fewer wrist false
+picks. LDA within F alone (early rounds to the last): 90.5 %. Through the app's LDA code, E and F leave one session
+out: 76 to 77 % balanced. Two sessions, one move, one day.
+
+**Train tab trains sign sessions.** `gesture_model.train` on protocol E or F sessions labels the held signs, rest and
+the wrist bends (`notsign`), keeping only the signs every chosen session has; grip sessions train as before, a mix is
+refused. The Train tab lists E and F sessions (unticked by default, "good" only ticks grip sessions). Live
+prediction works with these models; the Control tab still only knows the grips. 110 tests pass.
+Live (Noah): the `notsign` class, trained only on the held wrist bends, takes up most of the noise between and around
+the signs. To watch: whether it swallows the lightest sign (thumb out, about 2x rest).
+
 ## Open
 
 - Trigger mode on the arm: tune clench level and timings live, count wrong picks (short clench read as two, a grab
@@ -1306,6 +1404,10 @@ old job's error no longer comes back after a click. Same weights with and withou
 - Arm animation for cues: forearm, wrist and upper arm in the cue drawing, so D's activities and the wrist
   movements left out of protocol C can be shown. Later: a bigger build, not needed yet (Noah, 2026-10-15); D's cues
   are text with the relaxed hand until then.
+- Sign research (`sign-research.md`, tests and times in its section 7): "not a sign" class for wrist flexion on the
+  D sessions; calibrated ring network on the 2 to 4 sign sets (1 to 2 h GPU, ask first); still gate and 12 votes
+  live in lock mode with open, fist, point; record a protocol E session and run `screen_e.py`; then build protocol F
+  (confirmation on 3 days) from its best set; Ninapro DB3 check if downloaded.
 - Record and play: train the classifier on protocol C's `custom` labels and play back each movement's target
   (or its recorded camera trajectory) under the control layer.
 

@@ -11,7 +11,7 @@ From the repo root, with the emg-reading venv:
 emg-reading/.venv/Scripts/python -m pytest tests
 ```
 
-104 tests, about 11 s. Run them before committing changes to `ml/`, the filter or the quality checks. Tests that need
+110 tests, about 13 s. Run them before committing changes to `ml/`, the filter or the quality checks. Tests that need
 recorded sessions (`emg-reading/data/`) or torch skip themselves where those are missing, so on the Mac or a fresh
 clone only the synthetic tests run.
 
@@ -169,6 +169,11 @@ These decide when the recorder marks a cue bad and redoes it.
 | `test_c_session_trains_without_leaking_into_protocol_a` | A protocol C session counts as good, loads in `ml.dataset`, and its `custom` cues get no grip label in the network or LDA windows, even for fist and pinch; only the calibration holds do |
 | `test_d_plan_holds_every_activity_once_per_round` | Protocol D: every activity once per round, all in the first posture with the set length, rest after each, the grip calibration twice as plain holds, and `plan_for` uses `d_rounds` and `d_activity_s` |
 | `test_d_session_gets_no_grip_or_rest_labels` | `nogrip` cues get no label at all in the network or LDA windows, rest included, since the wrist and arm move there; only the calibration holds do |
+| `test_e_plan_holds_every_sign_once_per_round` | Protocol E has every screening sign and held wrist bend once per round, 3 rounds in the first posture and one fewer in the next, signs as `custom` and wrist bends as `nogrip` cues, rest after each, and `plan_for` passes its own fields |
+| `test_e_session_stays_out_of_grip_training` | An E session has no grip holds, so it is not a good session for grip and network training, and its signs (fist, open, point, pinch among them) never get a grip label |
+| `test_f_plan_holds_the_sign_set_once_per_round_in_every_posture` | Protocol F has each sign of the chosen set and both held wrist bends once per round in every ticked posture, as `custom` and `nogrip` cues with rest after each, and `plan_for` passes its own fields |
+| `test_sign_sessions_train_their_signs_and_refuse_a_mix` | The Train tab's LDA on E and F sessions learns the signs they share, rest and the wrist bends (`notsign`); grip sessions train the 7 grips as before; a mix of the two is refused |
+| `test_f_session_stays_out_of_grip_training` | An F session has no grip holds and its signs, open included, never get a protocol A grip label |
 | `test_hand_warning_only_where_the_camera_labels` | The hand-out-of-view warning only shows during cues the camera labels and the setup break before them; not between sessions, during protocol D's activities or the rest after one |
 | `test_cue_cut_short_by_a_pause_is_bad` | A cue interrupted by a pause is marked bad and left out of training; the redo after the resume counts |
 

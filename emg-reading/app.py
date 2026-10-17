@@ -213,10 +213,11 @@ def session_list():
         meta = json.loads(path.read_text())
         settings = meta.get("settings", {})
         gestures = sum(c["kind"] == "hold" and c["label"] != "rest" for c in meta.get("plan", []))
+        signs = sum(c["kind"] == "custom" for c in meta.get("plan", [])) if settings.get("protocol") in ("E", "F") else 0
         out.append({"name": path.parent.name, "subject": meta.get("subject"), "postures": settings.get("postures"),
                     "band_arm": settings.get("band_arm"), "port_facing": settings.get("port_facing"),
                     "placement": placement_text(settings),
-                    "gestures": gestures, "completed": meta.get("completed"),
+                    "gestures": gestures, "signs": signs, "completed": meta.get("completed"),
                     "seconds": round(meta["ended"] - meta["started"]) if meta.get("ended") else None,
                     "protocol": settings.get("protocol", "A")})
     return out

@@ -1,4 +1,4 @@
-"""Session plans of the recording protocols, and protocol C and D sessions going through the training code."""
+"""Session plans of the recording protocols, and protocol C, D, E and F sessions going through the training code."""
 import hashlib
 import json
 from collections import Counter
@@ -8,9 +8,10 @@ import pytest
 
 import ml  # noqa: F401
 import gestures
-from gestures import (GESTURE_SET, GESTURES, LIBRARY, NO_GRIP, plan_for, protocol_b_plan, protocol_c_plan,
-                      protocol_d_plan, session_plan)
+from gestures import (E_NOT_SIGNS, E_SIGNS, F_SIGNS, GESTURE_SET, GESTURES, LIBRARY, NO_GRIP, plan_for,
+                      protocol_b_plan, protocol_c_plan, protocol_d_plan, protocol_e_plan, protocol_f_plan, session_plan)
 from hand_angles import JOINTS
+from processing import FILTER_VERSION
 from ml import dataset, gesture_model
 from recorder import Recorder
 from session import CAMERA_COLUMNS, load_session, segments
@@ -181,6 +182,74 @@ def test_d_session_gets_no_grip_or_rest_labels(tmp_path):
             assert inside.any() and all(lab is None for lab in labels[inside])
 
 
+def test_e_plan_holds_every_sign_once_per_round():
+    plan = protocol_e_plan(["table", "forward"], rounds=3, sign_s=5, rest_s=2, seed=1)
+    items = [c for c in plan if c["kind"] in ("custom", "nogrip")]
+    every = set(E_SIGNS) | set(E_NOT_SIGNS)
+    # 3 rounds in the first posture, one fewer in the next
+    assert Counter((c["posture"], c["label"]) for c in items) == {
+        **{("table", k): 3 for k in every}, **{("forward", k): 2 for k in every}}
+    n = len(every)
+    table = [c["label"] for c in items if c["posture"] == "table"]
+    for r in range(3):
+        assert set(table[n * r:n * r + n]) == every
+    assert all(c["kind"] == "custom" for c in items if c["label"] in E_SIGNS)
+    assert all(c["kind"] == "nogrip" for c in items if c["label"] in E_NOT_SIGNS)
+    assert all(c["seconds"] == 5 for c in items)
+    assert {c["kind"] for c in plan} == {"break", "hold", "custom", "nogrip"}
+    for a, b in zip(plan, plan[1:]):
+        if a["kind"] in ("custom", "nogrip"):
+            assert (b["kind"], b["label"]) == ("hold", "rest")
+    assert all(s in LIBRARY for s in E_SIGNS)
+    settings = {"protocol": "E", "postures": ["table"], "reps": 3, "hold_s": 4, "rest_s": 2, "e_rounds": 2,
+                "e_sign_s": 7}
+    assert plan_for(settings, seed=0) == protocol_e_plan(["table"], 2, 7, 2, 0)
+
+
+def test_e_session_stays_out_of_grip_training(tmp_path):
+    """A screening session has no grip holds, so it isn't a good session for the grip and network training, and its
+    signs never get a grip label, even fist, open, point and pinch."""
+    folder = tmp_path / "2026-10-16_120000_test"
+    plan = protocol_e_plan(["table"], rounds=1, sign_s=3, rest_s=1.5, seed=0)
+    _fake_session(folder, plan, {"protocol": "E"})
+    assert dataset.good_sessions(tmp_path) == []
+    data = load_session(folder)
+    _, ends, labels, _ = gesture_model.session_windows(data, 500, {"log": True, "accel": False})
+    for seg in segments(data["events"]):
+        if seg["kind"] in ("custom", "nogrip"):
+            inside = (ends > seg["sample0"]) & (ends <= seg["sample1"])
+            assert inside.any() and all(lab is None for lab in labels[inside])
+
+
+def test_f_plan_holds_the_sign_set_once_per_round_in_every_posture():
+    plan = protocol_f_plan(["table", "forward", "raised"], rounds=2, sign_s=5, rest_s=2, seed=1)
+    items = [c for c in plan if c["kind"] in ("custom", "nogrip")]
+    every = set(F_SIGNS) | set(E_NOT_SIGNS)
+    assert Counter((c["posture"], c["label"]) for c in items) == {(p, k): 2 for p in ("table", "forward", "raised")
+                                                                    for k in every}
+    assert all(c["kind"] == "custom" for c in items if c["label"] in F_SIGNS)
+    assert all(c["kind"] == "nogrip" for c in items if c["label"] in E_NOT_SIGNS)
+    for a, b in zip(plan, plan[1:]):
+        if a["kind"] in ("custom", "nogrip"):
+            assert (b["kind"], b["label"]) == ("hold", "rest")
+    settings = {"protocol": "F", "postures": ["table"], "reps": 3, "hold_s": 4, "rest_s": 2, "f_rounds": 3,
+                "f_sign_s": 7}
+    assert plan_for(settings, seed=0) == protocol_f_plan(["table"], 3, 7, 2, 0)
+
+
+def test_f_session_stays_out_of_grip_training(tmp_path):
+    """The sign set's open hand is a sign here, not the protocol A open grip, and the session has no grip holds."""
+    folder = tmp_path / "2026-10-16_130000_test"
+    _fake_session(folder, protocol_f_plan(["table"], rounds=1, sign_s=3, rest_s=1.5, seed=0), {"protocol": "F"})
+    assert dataset.good_sessions(tmp_path) == []
+    data = load_session(folder)
+    _, ends, labels, _ = gesture_model.session_windows(data, 500, {"log": True, "accel": False})
+    for seg in segments(data["events"]):
+        if seg["kind"] in ("custom", "nogrip"):
+            inside = (ends > seg["sample0"]) & (ends <= seg["sample1"])
+            assert inside.any() and all(lab is None for lab in labels[inside])
+
+
 def test_hand_warning_only_where_the_camera_labels():
     """The hand-out-of-view warning applies to cues the camera labels and the setup break before them, not between
     sessions, not during protocol D's activities or the rest right after one."""
@@ -212,3 +281,28 @@ def test_cue_cut_short_by_a_pause_is_bad():
     first, redo = segments(events)
     assert first["bad"] and (first["sample0"], first["sample1"]) == (0, 750)
     assert not redo["bad"] and (redo["sample0"], redo["sample1"]) == (750, 2750)
+
+
+def test_sign_sessions_train_their_signs_and_refuse_a_mix(tmp_path):
+    """Train tab: E and F sessions train an LDA on the signs they share, rest and the wrist bends (notsign); grip
+    sessions train as before; a mix is refused."""
+    e = tmp_path / "2026-10-16_120000_test"
+    f = tmp_path / "2026-10-16_130000_test"
+    c = tmp_path / "2026-10-14_120000_test"
+    _fake_session(e, protocol_e_plan(["table"], rounds=2, sign_s=3, rest_s=1.5, seed=0), {"protocol": "E"})
+    _fake_session(f, protocol_f_plan(["table"], rounds=2, sign_s=3, rest_s=1.5, seed=0), {"protocol": "F"})
+    _fake_session(c, protocol_c_plan(["fist"], rounds=1, move_s=3, rest_s=1.5, hold_s=2.5, seed=0), {"protocol": "C"})
+    for folder in (e, f, c):
+        meta = json.loads((folder / "session.json").read_text())
+        meta.update(filter_version=FILTER_VERSION, started=1.7e9)
+        (folder / "session.json").write_text(json.dumps(meta))
+    options = {"log": True, "accel": False, "extended": False, "vote": 5}
+    model, _ = gesture_model.train([e, f], options, evaluate_it=False)
+    assert set(model["classes"]) == set(F_SIGNS) | {"rest", gesture_model.NOT_SIGN}
+    assert model["options"]["signs"]
+    model, _ = gesture_model.train([f], options, evaluate_it=False)
+    assert set(model["classes"]) == set(F_SIGNS) | {"rest", gesture_model.NOT_SIGN}
+    model, _ = gesture_model.train([c], options, evaluate_it=False)
+    assert set(model["classes"]) == set(GESTURE_SET) and not model["options"]["signs"]
+    with pytest.raises(ValueError):
+        gesture_model.train([c, f], options, evaluate_it=False)

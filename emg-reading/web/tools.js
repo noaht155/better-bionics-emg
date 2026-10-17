@@ -295,13 +295,16 @@ async function loadTrainLists() {
   const table = $("train-sessions");
   const checked = new Set([...table.querySelectorAll("input:checked")].map((c) => c.value));
   const listed = new Set([...table.querySelectorAll("input")].map((c) => c.value));
-  const usable = sessions.filter((s) => s.gestures > 0);
+  // Sign sessions (E, F) train a sign model, they can't be mixed with grip sessions (the server refuses)
+  const usable = sessions.filter((s) => s.gestures > 0 || s.signs > 0);
   table.innerHTML = "<tr><th></th><th>Session</th><th>Arm</th><th>Postures</th><th>Placement</th><th>Length</th><th>Protocol</th></tr>";
   for (const s of usable) {
     const tr = document.createElement("tr");
-    // Keep the choice for sessions already listed, a session recorded since then starts ticked if it finished
-    const on = listed.has(s.name) ? checked.has(s.name) : s.completed;
-    tr.innerHTML = `<td><input type="checkbox" value="${s.name}" data-good="${s.completed ? 1 : ""}" ${on ? "checked" : ""}></td><td>${s.name}</td>
+    // Keep the choice for sessions already listed, a grip session recorded since then starts ticked if it finished.
+    // Sign sessions start unticked and "good" only ticks grip sessions, a mix can't be trained
+    const good = s.completed && s.gestures > 0;
+    const on = listed.has(s.name) ? checked.has(s.name) : good;
+    tr.innerHTML = `<td><input type="checkbox" value="${s.name}" data-good="${good ? 1 : ""}" ${on ? "checked" : ""}></td><td>${s.name}</td>
       <td>${s.band_arm ?? ""}${s.port_facing ? `, port to ${s.port_facing}` : ""}</td><td>${(s.postures || []).join(", ")}</td><td>${s.placement || ""}</td>
       <td>${s.seconds ? fmtTime(s.seconds) : ""}${s.completed ? "" : " (stopped early)"}</td>
       <td>${s.protocol}</td>`;
