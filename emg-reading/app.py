@@ -27,8 +27,8 @@ from calibrate import load_calibration
 from camera import Camera
 from control import DEFAULTS as CONTROL_DEFAULTS
 from esp32_link import WIFI_IP
-from gestures import (C_CLOSE_S, C_MOVE_S, C_ROUNDS, CATEGORIES, D_ACTIVITY_S, D_ROUNDS, GESTURE_SET, GESTURES,
-                      GRIP_CLOSE_S, LIBRARY, POSTURES, plan_for)
+from gestures import (C_CLOSE_S, C_MOVE_S, C_ROUNDS, CATEGORIES, D_ACTIVITY_S, D_ROUNDS, E_ROUNDS, E_SIGN_S,
+                      F_ROUNDS, F_SIGN_S, GESTURE_SET, GESTURES, GRIP_CLOSE_S, LIBRARY, POSTURES, plan_for)
 from hand_angles import JOINTS, RELIABLE
 from processing import spectrum
 from recorder import Recorder
@@ -50,8 +50,9 @@ class PlanSettings(BaseModel):
     postures: list[Literal[tuple(POSTURES)]]
     # A: held grips and single fingers. B: the Ninapro-style movements (gestures.protocol_b_plan). C: movements
     # picked from the library (gestures.protocol_c_plan). D: activities that shouldn't start a grip
-    # (gestures.protocol_d_plan)
-    protocol: Literal["A", "B", "C", "D"] = "A"
+    # (gestures.protocol_d_plan). E: sign screening (gestures.protocol_e_plan). F: the chosen sign set
+    # (gestures.protocol_f_plan)
+    protocol: Literal["A", "B", "C", "D", "E", "F"] = "A"
     reps: int = Field(ge=1, le=20)
     hold_s: float = Field(ge=1, le=30)
     rest_s: float = Field(ge=1, le=30)
@@ -63,6 +64,10 @@ class PlanSettings(BaseModel):
     c_move_s: float = Field(C_MOVE_S, ge=3, le=15)
     d_rounds: int = Field(D_ROUNDS, ge=1, le=5)
     d_activity_s: float = Field(D_ACTIVITY_S, ge=10, le=120)
+    e_rounds: int = Field(E_ROUNDS, ge=1, le=10)
+    e_sign_s: float = Field(E_SIGN_S, ge=3, le=15)
+    f_rounds: int = Field(F_ROUNDS, ge=1, le=20)
+    f_sign_s: float = Field(F_SIGN_S, ge=3, le=15)
 
 
 class SessionSettings(PlanSettings):

@@ -296,6 +296,23 @@ _lib("finger_gun", "L shape", "sign", "common sign",
      "L SHAPE\nthumb up, index out, the others bent", _pose((-10, 15, 0, 0), (0, 0, 0, 8), CURLED, CURLED, CURLED))
 _lib("middle_finger", "Middle finger", "sign", "Ability Hand rude point",
      "MIDDLE FINGER\nmiddle out, the others bent", _pose((50, 25, 35, 35), CURLED, STRAIGHT, CURLED, CURLED))
+# Candidates for protocol E, chosen to load different extrinsic forearm muscles than the grips (sign-research.md)
+_lib("two_point", "Two finger point", "sign", "Ninapro B index and middle out, kept together",
+     "TWO FINGER POINT\nindex and middle straight and together, the others bent",
+     _pose((50, 25, 35, 35), STRAIGHT, STRAIGHT, CURLED, CURLED))
+_lib("little_out", "Little finger out", "sign", "extensor digiti minimi on its own",
+     "LITTLE FINGER OUT\nlittle finger straight, the others closed", _pose(THUMB_OVER, CURLED, CURLED, CURLED,
+                                                                           (0, 0, 0, -8)))
+_lib("claw", "Claw", "sign", "knuckles extended against curled fingertips",
+     "CLAW\nknuckles pushed back, fingertips curled hard", _pose((0, 30, 10, 20), (-20, 85, 70), (-20, 85, 70),
+                                                                 (-20, 85, 70), (-20, 85, 70)))
+_lib("fingers_back", "Fingers pushed back", "sign", "full finger extension, harder than the open hand",
+     "FINGERS BACK\nall fingers pushed back as far as they go, hard", _pose((-15, 20, 0, 0), (-25, 0, 0, 8),
+                                                                             (-25, 0, 0), (-25, 0, 0, -5),
+                                                                             (-25, 0, 0, -10)))
+_lib("rigid", "Rigid hand", "sign", "co-contraction, the bebionic and i-Limb trigger",
+     "RIGID HAND\nsqueeze open and closed at once so the hand stays still and stiff",
+     _pose((15, 20, 15, 15), (30, 35, 15), (30, 35, 15), (30, 35, 15), (30, 40, 15)))
 
 _lib("move_thumb_flex", "Thumb flex", "finger", "Ninapro A, DB8", "THUMB FLEX\nbend it across the palm",
      MOVEMENTS["move_thumb_flex"][1], partial=True)
@@ -525,8 +542,81 @@ def protocol_d_plan(postures=("table",), rounds=D_ROUNDS, activity_s=D_ACTIVITY_
     return cues
 
 
+E_ROUNDS = 3
+E_SIGN_S = 6.0
+# Protocol E, screening: the anchors the band already separates, then candidates for other extrinsic muscles
+# (sign-research.md section 6, diagnostics/out/signs/literature.md)
+E_SIGNS = ["open", "fist", "point", "pinch", "thumbs_up", "sleeve", "claw", "hook", "two_point", "little_out",
+           "horns", "fingers_back", "rigid", "move_thumb_abd", "three"]
+# Held wrist bends, the main false pick so far (wrist flexion read as point), recorded so every sign can be compared
+# with them. kind "nogrip", so they never get a sign label
+E_NOT_SIGNS = {
+    "hold_wrist_flex": "BEND YOUR WRIST DOWN\nand hold it, hand relaxed",
+    "hold_wrist_ext": "BEND YOUR WRIST UP\nand hold it, hand relaxed",
+}
+E_FOLLOW = "follow the hand in and hold, firmly"
+
+
+def protocol_e_plan(postures=("table", "forward"), rounds=E_ROUNDS, sign_s=E_SIGN_S, rest_s=3.0, seed=None):
+    """Sign screening: every E_SIGNS sign and the two held wrist bends once per round in shuffled order, with rest in
+    between. The first posture gets rounds rounds, later ones one fewer (at least 1), so most of the session is in
+    one posture and the others show which signs survive a posture change.
+
+    Signs are "custom" cues like protocol C's, so they never become protocol A grip labels. No grip block: open,
+    fist, point and pinch are among the signs."""
+    rng = random.Random(seed)
+    items = [("custom", s) for s in E_SIGNS] + [("nogrip", w) for w in E_NOT_SIGNS]
+    cues = []
+    for i, posture in enumerate(postures):
+        cues += _setup(rest_s, posture)
+        for _ in range(rounds if i == 0 else max(1, rounds - 1)):
+            rng.shuffle(items)
+            for kind, label in items:
+                if kind == "custom":
+                    title, how = LIBRARY[label]["text"].split("\n")
+                    text = f"{title}\n{how}, {E_FOLLOW}"
+                else:
+                    text = E_NOT_SIGNS[label]
+                cues += [_cue(kind, label, text, sign_s, posture), _rest(rest_s, posture)]
+    return cues
+
+
+F_ROUNDS = 4
+F_SIGN_S = 6.0
+# Protocol F, the sign set chosen from the first screening (2026-10-16_140854: best 4-sign set over all
+# combinations, diagnostics/signs/vet_sets.py), recorded for training like the grips of protocol A
+F_SIGNS = ["open", "two_point", "little_out", "move_thumb_abd"]
+
+
+def protocol_f_plan(postures=("table", "forward"), rounds=F_ROUNDS, sign_s=F_SIGN_S, rest_s=3.0, seed=None):
+    """Training data for the chosen sign set: in every posture each F_SIGNS sign and the two held wrist bends of
+    protocol E once per round, shuffled, with rest in between. Same cue kinds as protocol E (signs "custom", wrist
+    bends "nogrip"), so the sessions can be pooled with E sessions and stay out of grip training."""
+    rng = random.Random(seed)
+    items = [("custom", s) for s in F_SIGNS] + [("nogrip", w) for w in E_NOT_SIGNS]
+    cues = []
+    for posture in postures:
+        cues += _setup(rest_s, posture)
+        for _ in range(rounds):
+            rng.shuffle(items)
+            for kind, label in items:
+                if kind == "custom":
+                    title, how = LIBRARY[label]["text"].split("\n")
+                    text = f"{title}\n{how}, {E_FOLLOW}"
+                else:
+                    text = E_NOT_SIGNS[label]
+                cues += [_cue(kind, label, text, sign_s, posture), _rest(rest_s, posture)]
+    return cues
+
+
 def plan_for(settings, seed=None):
     """The cue list for a session's settings, any protocol."""
+    if settings.get("protocol", "A") == "F":
+        return protocol_f_plan(settings["postures"], settings.get("f_rounds", F_ROUNDS),
+                               settings.get("f_sign_s", F_SIGN_S), settings["rest_s"], seed)
+    if settings.get("protocol", "A") == "E":
+        return protocol_e_plan(settings["postures"], settings.get("e_rounds", E_ROUNDS),
+                               settings.get("e_sign_s", E_SIGN_S), settings["rest_s"], seed)
     if settings.get("protocol", "A") == "D":
         return protocol_d_plan(settings["postures"], settings.get("d_rounds", D_ROUNDS),
                                settings.get("d_activity_s", D_ACTIVITY_S), settings["rest_s"], settings["hold_s"], seed)

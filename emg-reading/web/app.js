@@ -85,14 +85,16 @@ function readSettings() {
     reps: num("reps"), hold_s: num("hold_s"), rest_s: num("rest_s"), rounds: num("rounds"), move_s: num("move_s"),
     moves: [...form.querySelectorAll("[name=move]:checked")].map((c) => c.value),
     c_rounds: num("c_rounds"), c_move_s: num("c_move_s"), d_rounds: num("d_rounds"), d_activity_s: num("d_activity_s"),
+    e_rounds: num("e_rounds"), e_sign_s: num("e_sign_s"), f_rounds: num("f_rounds"), f_sign_s: num("f_sign_s"),
     practice: form.practice.checked,
   };
 }
 
 function planBody() {
-  const { postures, protocol, reps, hold_s, rest_s, rounds, move_s, moves, c_rounds, c_move_s, d_rounds, d_activity_s } =
-    readSettings();
-  return { postures, protocol, reps, hold_s, rest_s, rounds, move_s, moves, c_rounds, c_move_s, d_rounds, d_activity_s };
+  const { postures, protocol, reps, hold_s, rest_s, rounds, move_s, moves, c_rounds, c_move_s, d_rounds, d_activity_s,
+    e_rounds, e_sign_s, f_rounds, f_sign_s } = readSettings();
+  return { postures, protocol, reps, hold_s, rest_s, rounds, move_s, moves, c_rounds, c_move_s, d_rounds, d_activity_s,
+    e_rounds, e_sign_s, f_rounds, f_sign_s };
 }
 
 // Protocol C movement picker: checkboxes grouped by category, the hand above plays the one under the pointer
@@ -220,6 +222,10 @@ $("setup").addEventListener("input", (e) => {
   // still be ticked
   if (e.target.name === "protocol" && ["B", "C", "D"].includes(e.target.value)) {
     $("setup").querySelectorAll("[name=posture]").forEach((c) => { c.checked = c.value === "table"; });
+  }
+  // Protocols E and F record at the table and with the arm held forward
+  if (e.target.name === "protocol" && ["E", "F"].includes(e.target.value)) {
+    $("setup").querySelectorAll("[name=posture]").forEach((c) => { c.checked = ["table", "forward"].includes(c.value); });
   }
   showProtocolFields();
   updateDuration();
