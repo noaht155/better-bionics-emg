@@ -279,8 +279,8 @@ What the machine updates, and when:
 1. **Every time the band goes on:** a short labelled calibration (the chosen signs, 2 holds each in each posture used,
    about 2 min). The LDA takes class means mostly from it and the covariance partly from the person's history
    (the `adapt.py` blend). Seconds to compute.
-2. **After each completed session:** the session joins the person's history (the LDA's running totals, as planned in
-   CLAUDE.md), and the network's per-person transform updates. Benchmark first, roll back if worse.
+2. **After each completed session:** the session joins the person's history (the LDA's running totals, the continual
+   update plan), and the network's per-person transform updates. Benchmark first, roll back if worse.
 3. **Every few sessions:** re-choose the sign set from the person's confirmation sessions (section 6). Changing the
    set or the mapping is a big change for the user, so do it rarely (Couraud: a fast machine fights the user's
    learning) and only with a clear gain on the worst session.
