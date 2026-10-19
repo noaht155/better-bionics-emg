@@ -169,7 +169,11 @@ These decide when the recorder marks a cue bad and redoes it.
 | `test_rules_close_action_closes_while_its_trigger_stays_on` | A close rule held 0 s acts on the first step and closes the hand while its trigger stays on, even below the hold level; it stops when the trigger goes off |
 | `test_rules_clench_with_a_rule_class_on_is_that_class` | Effort that comes with a rule's class (opening) is not counted as a clench |
 | `test_rules_still_gate` | With the still gate on, nothing is picked while the arm moves |
-| `test_rules_are_checked` | Mappings with an unknown action or how, a value out of range, a fractional count, two rules on the same pattern, two held rules on one trigger or no trigger are refused; the default mapping uses two finger point in place of point for a sign model and leaves out classes the model doesn't have |
+| `test_rules_are_checked` | Mappings with an unknown action or how, a value out of range, a fractional count, two rules on the same pattern, two held rules on one trigger in one list or no trigger are refused, either list takes poses and actions; grip models get the clench default, sign models the sign default without clench, and classes the model doesn't have are left out |
+| `test_rules_saved_as_one_list_split_by_action` | Mappings saved as one list before the split load with poses in the relaxed list and open, close, release in the holding list |
+| `test_rules_one_trigger_held_in_both_lists` | Open held 0 s while holding doesn't stop open held 0.7 s from picking a pose while relaxed, and still opens the hand once a grip is held |
+| `test_rules_pose_while_holding_switches_at_the_same_closure` | A pose rule in the holding list switches to that grip and keeps how far the hand is closed |
+| `test_rules_higher_in_the_list_wins` | Two rules firing on the same step: the one higher in the list picks, whatever the trigger names |
 | `test_trigger_double_point_goes_back_and_open_only_opens` | Trigger mode, release with point (default): opening twice only opens, a point flick neither opens nor closes, two point flicks go back, and the point still held after that can't pick point until it drops out |
 
 ### Protocols (`tests/test_protocols.py`)

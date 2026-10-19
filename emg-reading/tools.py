@@ -19,7 +19,7 @@ from pathlib import Path
 
 import calibrate
 import check_connection
-from control import DEFAULT_RULES, DEFAULTS, STILL_S, Controller, check_rules, movement, still_limit
+from control import DEFAULT_RULES, DEFAULTS, STILL_S, Controller, check_rules, movement, split_rules, still_limit
 from cursor import DEFAULTS as CURSOR_DEFAULTS, LEVEL_SCALE as CURSOR_LEVEL_SCALE, Cursor
 from esp32_link import Esp32, self_test
 from gestures import GESTURE_SET, GESTURES, LIBRARY
@@ -347,7 +347,9 @@ POSES = {**{k: e["angles"] for k, e in LIBRARY.items()}, **{g: GESTURES[g][1] fo
 def sign_map(rules, classes):
     """Grip per class for the modes that run on grip probabilities (lock, blend, trigger): a class held to pick a grip
     or to open stands for that grip, any other class not in the grip set counts as rest."""
-    picked = {r["trigger"]: r["action"] for r in rules if r["how"] == "held"
+    rules = split_rules(rules)
+    # The relaxed list last, so a trigger that picks a grip there stands for it even if it also opens while holding
+    picked = {r["trigger"]: r["action"] for r in rules["holding"] + rules["relaxed"] if r["how"] == "held"
               and (r["action"] in GESTURE_SET or r["action"] == "open")}
     return {c: picked.get(c, c if c in GESTURE_SET else "rest") for c in classes}
 
@@ -361,7 +363,7 @@ class Control:
     def __init__(self, recorder):
         self.recorder = recorder
         self.params = dict(DEFAULTS, mode="rules")
-        self.rules = [dict(r) for r in DEFAULT_RULES]
+        self.rules = split_rules(DEFAULT_RULES)
         self.state = {"params": self.params, "rules": self.rules}
         self._controller = None
         self._ranges = None
@@ -385,7 +387,7 @@ class Control:
 
     def set_rules(self, rules):
         check_rules(rules, POSES)
-        self.rules = [dict(r) for r in rules]
+        self.rules = split_rules(rules)
         self.state["rules"] = self.rules
         self._map = None
         if self._controller is not None:

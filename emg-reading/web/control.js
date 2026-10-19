@@ -95,9 +95,16 @@ async function loadControlLists() {
   fillSaved($("ctl-preset"), presets, "ctl-profile-filter", "default");
   fillSaved($("ctl-mapping-select"), mappings, "ctl-mapping-filter");
   if (ctl.params) showParamsForMode();
+  if ($("ctl-model").value !== protocolModel) {
+    protocolModel = $("ctl-model").value;
+    $("ctl-protocol").value = modelProtocol(selectedModel());
+  }
   drawRules();
   followModelDefault();
 }
+
+let protocolModel = null;
+$("ctl-protocol").addEventListener("change", drawRules);
 
 // A mapping nobody has touched (the default, never edited, loaded or saved) follows the chosen model's default, so a
 // sign model doesn't start with rules on classes it doesn't have
@@ -170,8 +177,13 @@ function showMappingPage(on) {
 $("ctl-mapping-open").addEventListener("click", () => showMappingPage(true));
 $("ctl-mapping-back").addEventListener("click", () => showMappingPage(false));
 
+// A mapping is two lists: the rules used while relaxed (no grip) and while holding a grip
+const SECTIONS = ["relaxed", "holding"];
+const copyRules = (rules) => Object.fromEntries(SECTIONS.map((s) => [s, rules[s].map((r) => ({ ...r }))]));
+const ruleAt = (cell) => ctl.rules[cell.closest("table").dataset.section][Number(cell.closest("tr").dataset.i)];
+
 async function setRules(rules, name) {
-  ctl.rules = rules.map((r) => ({ ...r }));
+  ctl.rules = copyRules(rules);
   ctl.mappingName = name;
   drawRules();
   return sendRules();
@@ -195,18 +207,30 @@ function changedRules() {
 }
 
 function showMappingName() {
-  const n = ctl.rules?.length ?? 0;
+  const n = ctl.rules ? ctl.rules.relaxed.length + ctl.rules.holding.length : 0;
   $("ctl-mapping-name").textContent = `${ctl.mappingName || "unsaved"}, ${n} rule${n === 1 ? "" : "s"}`;
 }
 
 const nice = (s) => s.replaceAll("_", " ");
 
-// Triggers: clench and the chosen model's classes; a trigger the model doesn't have stays listed, marked
+// The classes a protocol trains, without rest; notsign is only there to reject wrist bends, never a trigger
+function protocolClasses(protocol) {
+  return protocol === "grips" ? config.gesture_set.filter((c) => c !== "rest") : config.sign_sets[protocol];
+}
+
+// Grips for a grip model, F for any sign model
+function modelProtocol(model) {
+  const classes = (model?.classes || []).filter((c) => c !== "rest" && c !== "notsign");
+  return classes.every((c) => config.gesture_set.includes(c)) ? "grips" : "F";
+}
+
+// Triggers: the chosen protocol's classes only, plus clench for the grips (fist is one of them, E and F have no
+// clench). A loaded rule on a trigger outside the protocol keeps it in its own row, so the row still shows what it does
 function triggerOptions(current) {
-  const classes = (selectedModel()?.classes || []).filter((c) => c !== "rest");
-  const options = ["clench", ...classes];
+  const protocol = $("ctl-protocol").value;
+  const options = [...(protocol === "grips" ? ["clench"] : []), ...protocolClasses(protocol)];
   if (current && !options.includes(current)) options.push(current);
-  return options.map((t) => `<option value="${t}" ${t === current ? "selected" : ""}>${nice(t)}${t === "clench" || classes.includes(t) ? "" : " (not in this model)"}</option>`).join("");
+  return options.map((t) => `<option value="${t}" ${t === current ? "selected" : ""}>${config.library[t]?.name || nice(t)}</option>`).join("");
 }
 
 // Then: the actions, the grips, then the protocol C library by category. A list of our own instead of a dropdown,
@@ -214,8 +238,7 @@ function triggerOptions(current) {
 const ACTIONS = { close: "close grip (while it stays on)", open: "open grip (while it stays on)", release: "release (back to choosing)" };
 
 function actionGroups() {
-  const groups = [["Actions", Object.entries(ACTIONS)],
-    ["Grips", config.gesture_set.filter((g) => g !== "rest").map((g) => [g, nice(g)])]];
+  const groups = [["Actions", Object.entries(ACTIONS)], ["Grips", config.gesture_set.filter((g) => g !== "rest").map((g) => [g, nice(g)])]];
   for (const [cat, title] of Object.entries(config.categories)) {
     const items = Object.entries(config.library).filter(([, m]) => m.category === cat).map(([k, m]) => [k, m.name]);
     if (items.length) groups.push([title, items]);
@@ -242,10 +265,10 @@ function drawPosePreview(action) {
   else if (action) drawIdle(ctx, "an action, no pose of its own");
 }
 
-let pickerRow = null;
+let pickerRule = null;
 function openPicker(button) {
-  pickerRow = Number(button.closest("tr").dataset.i);
-  const current = ctl.rules[pickerRow].action;
+  pickerRule = ruleAt(button);
+  const current = pickerRule.action;
   $("ctl-pose-list").innerHTML = actionGroups().map(([title, items]) => `<div class="pick-group">${title}</div>`
     + items.map(([k, label]) => `<div class="pick-item${k === current ? " current" : ""}" data-action="${k}">${label}</div>`).join("")).join("");
   const box = $("ctl-pose-picker");
@@ -259,18 +282,18 @@ function openPicker(button) {
 
 function closePicker() {
   $("ctl-pose-picker").hidden = true;
-  pickerRow = null;
+  pickerRule = null;
 }
 
 $("ctl-pose-list").addEventListener("mouseover", (e) => {
   const item = e.target.closest(".pick-item");
   if (item) drawPosePreview(item.dataset.action);
 });
-$("ctl-pose-list").addEventListener("mouseleave", () => pickerRow != null && drawPosePreview(ctl.rules[pickerRow].action));
+$("ctl-pose-list").addEventListener("mouseleave", () => pickerRule != null && drawPosePreview(pickerRule.action));
 $("ctl-pose-list").addEventListener("click", (e) => {
   const item = e.target.closest(".pick-item");
-  if (!item || pickerRow == null) return;
-  ctl.rules[pickerRow].action = item.dataset.action;
+  if (!item || pickerRule == null) return;
+  pickerRule.action = item.dataset.action;
   closePicker();
   drawRules();
   changedRules();
@@ -284,57 +307,148 @@ function drawRules() {
   if (!ctl.rules) return;
   showMappingName();
   if ($("ctl-mapping-page").hidden) return;
-  $("ctl-rules").innerHTML = "<tr><th>If</th><th>How</th><th>Seconds or times</th><th>Then</th><th></th></tr>"
-    + ctl.rules.map((r, i) => `<tr data-i="${i}">
-      <td><select data-k="trigger">${triggerOptions(r.trigger)}</select></td>
-      <td><select data-k="how"><option ${r.how === "held" ? "selected" : ""}>held</option><option ${r.how === "repeated" ? "selected" : ""}>repeated</option></select></td>
-      <td><input data-k="value" type="number" min="${r.how === "held" ? 0 : 1}" max="${r.how === "held" ? 5 : 6}" step="${r.how === "held" ? 0.05 : 1}" value="${r.value}"></td>
-      <td><button class="pose-pick">${actionLabel(r.action)} &#9662;</button></td>
-      <td><button data-remove="${i}">Remove</button></td></tr>`).join("");
+  for (const table of document.querySelectorAll(".ctl-rules")) {
+    table.innerHTML = "<tr><th></th><th>If</th><th>How</th><th>Seconds or times</th><th>Then</th><th></th><th></th></tr>"
+      + ctl.rules[table.dataset.section].map((r, i) => `<tr data-i="${i}">
+        <td class="drag" draggable="true" title="drag to move">&#8801;</td>
+        <td><select data-k="trigger">${triggerOptions(r.trigger)}</select></td>
+        <td><select data-k="how"><option ${r.how === "held" ? "selected" : ""}>held</option><option ${r.how === "repeated" ? "selected" : ""}>repeated</option></select></td>
+        <td><input data-k="value" type="number" min="${r.how === "held" ? 0 : 1}" max="${r.how === "held" ? 5 : 6}" step="${r.how === "held" ? 0.05 : 1}" value="${r.value}"></td>
+        <td><button class="pose-pick">${actionLabel(r.action)} &#9662;</button></td>
+        <td class="order"><button data-move="-1" title="up" ${table.dataset.section === "relaxed" && i === 0 ? "disabled" : ""}>&#8593;</button><button data-move="1" title="down" ${table.dataset.section === "holding" && i === ctl.rules.holding.length - 1 ? "disabled" : ""}>&#8595;</button></td>
+        <td><button data-remove="${i}">Remove</button></td></tr>`).join("");
+    table.querySelectorAll("tr[data-i]").forEach((row) => rowRule.set(row, ctl.rules[table.dataset.section][Number(row.dataset.i)]));
+  }
 }
 
-$("ctl-rules").addEventListener("change", (e) => {
-  const row = e.target.closest("tr");
-  const key = e.target.dataset.k;
-  if (!row || !key) return;
-  const rule = ctl.rules[Number(row.dataset.i)];
-  rule[key] = key === "value" ? Number(e.target.value) : e.target.value;
-  // A count is a whole number of times, a time can be fractional
-  if (key === "how") rule.value = rule.how === "held" ? 0.5 : 2;
-  drawRules();
-  changedRules();
-});
+// Rules move by dragging the handle, the other rows making room as it passes, or with the arrows. Order is priority
+const rowRule = new WeakMap();
+let dragRow = null, dragStart = null, dropped = false;
 
-$("ctl-rules").addEventListener("click", (e) => {
-  const pick = e.target.closest(".pose-pick");
-  if (pick) {
-    if (pickerRow === Number(pick.closest("tr").dataset.i)) closePicker();
-    else openPicker(pick);
-    return;
+// Runs a change to the rows and slides every row that moved from where it was on screen to its new place
+function slideAfter(change) {
+  const rows = () => [...document.querySelectorAll(".ctl-rules tr[data-i]")];
+  const before = new Map(rows().map((row) => [rowRule.get(row), row.getBoundingClientRect().top]));
+  rows().forEach((row) => row.getAnimations().forEach((a) => a.cancel()));
+  change();
+  if (matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+  for (const row of rows()) {
+    const dy = before.get(rowRule.get(row)) - row.getBoundingClientRect().top;
+    if (row !== dragRow && dy) row.animate([{ transform: `translateY(${dy}px)` }, { transform: "none" }], { duration: 160, easing: "ease-out" });
   }
-  if (e.target.dataset.remove == null) return;
-  ctl.rules.splice(Number(e.target.dataset.remove), 1);
-  drawRules();
+}
+
+function moveRule(section, i, step) {
+  const list = ctl.rules[section];
+  slideAfter(() => {
+    const [rule] = list.splice(i, 1);
+    // Up from the top of holding goes to the end of relaxed, down from the end of relaxed to the top of holding
+    if (i + step < 0) ctl.rules.relaxed.push(rule);
+    else if (i + step > list.length) ctl.rules.holding.unshift(rule);
+    else list.splice(i + step, 0, rule);
+    drawRules();
+  });
   changedRules();
+}
+
+document.addEventListener("dragend", () => {
+  if (!dragRow) return;
+  dragRow.classList.remove("dragging");
+  dragRow = null;
+  const tables = [...document.querySelectorAll(".ctl-rules")];
+  if (dropped) tables.forEach((t) => { ctl.rules[t.dataset.section] = [...t.querySelectorAll("tr[data-i]")].map((row) => rowRule.get(row)); });
+  const moved = SECTIONS.some((s) => ctl.rules[s].length !== dragStart[s].length || ctl.rules[s].some((r, i) => r !== dragStart[s][i]));
+  dropped = false;
+  // Dropped: the rows are already in place. Cancelled: they slide back to where they were
+  slideAfter(drawRules);
+  if (moved) changedRules();
 });
 
-$("ctl-rule-add").addEventListener("click", () => {
-  ctl.rules.push({ trigger: "clench", how: "repeated", value: 4, action: "release" });
-  drawRules();
-  changedRules();
-});
+for (const table of document.querySelectorAll(".ctl-rules")) {
+  table.addEventListener("dragstart", (e) => {
+    const handle = e.target.closest(".drag");
+    if (!handle) return;
+    closePicker();
+    dragRow = handle.closest("tr");
+    dragStart = Object.fromEntries(SECTIONS.map((s) => [s, [...ctl.rules[s]]]));
+    e.dataTransfer.effectAllowed = "move";
+    e.dataTransfer.setData("text/plain", "");
+    // The drag image held where the row was grabbed, so it lines up with the gap the rows open for it
+    const grab = dragRow.getBoundingClientRect();
+    e.dataTransfer.setDragImage(dragRow, e.clientX - grab.left, e.clientY - grab.top);
+    // After the drag image is taken, so the image isn't faded too
+    requestAnimationFrame(() => dragRow?.classList.add("dragging"));
+  });
+  table.addEventListener("dragover", (e) => {
+    if (!dragRow) return;
+    e.preventDefault();
+    // No new move while rows are still sliding from the last one, or a row passing the pointer can send it back
+    if ([...document.querySelectorAll(".ctl-rules tr[data-i]")].some((row) => row.getAnimations().length)) return;
+    // Layout positions (offsetTop), not the sliding ones
+    const top = table.getBoundingClientRect().top;
+    const next = [...table.querySelectorAll("tr[data-i]")].filter((row) => row !== dragRow)
+      .find((row) => top + row.offsetTop + row.offsetHeight / 2 > e.clientY) || null;
+    const parent = next ? next.parentNode : table.tBodies[0];
+    if (dragRow.parentNode === parent && dragRow.nextElementSibling === next) return;
+    slideAfter(() => parent.insertBefore(dragRow, next));
+  });
+  table.addEventListener("drop", (e) => {
+    if (!dragRow) return;
+    e.preventDefault();
+    dropped = true;
+  });
+  table.addEventListener("change", (e) => {
+    const key = e.target.dataset.k;
+    if (!e.target.closest("tr") || !key) return;
+    const rule = ruleAt(e.target);
+    rule[key] = key === "value" ? Number(e.target.value) : e.target.value;
+    // A count is a whole number of times, a time can be fractional
+    if (key === "how") rule.value = rule.how === "held" ? 0.5 : 2;
+    drawRules();
+    changedRules();
+  });
+
+  table.addEventListener("click", (e) => {
+    const pick = e.target.closest(".pose-pick");
+    if (pick) {
+      if (pickerRule === ruleAt(pick)) closePicker();
+      else openPicker(pick);
+      return;
+    }
+    if (e.target.dataset.move) {
+      moveRule(table.dataset.section, Number(e.target.closest("tr").dataset.i), Number(e.target.dataset.move));
+      return;
+    }
+    if (e.target.dataset.remove == null) return;
+    ctl.rules[table.dataset.section].splice(Number(e.target.dataset.remove), 1);
+    drawRules();
+    changedRules();
+  });
+}
+
+for (const button of document.querySelectorAll(".ctl-rule-add")) {
+  button.addEventListener("click", () => {
+    const protocol = $("ctl-protocol").value;
+    const trigger = protocol === "grips" ? "clench" : protocolClasses(protocol)[0];
+    const holding = button.dataset.section === "holding";
+    ctl.rules[button.dataset.section].push({ trigger, how: holding ? "repeated" : "held", value: holding ? 2 : 0.5, action: holding ? "release" : "fist" });
+    drawRules();
+    changedRules();
+  });
+}
 
 $("ctl-mapping-load").addEventListener("click", async () => {
   const name = $("ctl-mapping-select").value;
   const m = ctl.mappings[name];
   if (!m) return;
+  if (m.protocol) $("ctl-protocol").value = m.protocol;
   if (await setRules(m.rules, name)) $("ctl-mapping-note").textContent = `loaded ${name}`;
 });
 
 $("ctl-mapping-save").addEventListener("click", async () => {
   const name = $("ctl-mapping-save-name").value.trim();
   try {
-    await post("/api/control/mappings", { name, rules: ctl.rules, model: $("ctl-model").value || null });
+    await post("/api/control/mappings", { name, rules: ctl.rules, model: $("ctl-model").value || null, protocol: $("ctl-protocol").value });
     ctl.mappingName = name;
     showMappingName();
     $("ctl-mapping-note").textContent = `saved ${name}`;
@@ -410,7 +524,7 @@ function drawControl(c, p) {
     showControlParams();
   }
   if (!ctl.rules && c.rules) {
-    ctl.rules = c.rules.map((r) => ({ ...r }));
+    ctl.rules = copyRules(c.rules);
     drawRules();
     followModelDefault();
   }

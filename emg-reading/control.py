@@ -24,14 +24,16 @@ while the arm moves (accelerometer, see movement), and pinch_clenches 2 moves pi
 clenches, since most false picks were a single clench. Replayed on the protocol D activities at clench level 0.3:
 14.9 false picks per minute, 5.4 with the gate, 6.1 with 2 clenches, 1.0 with both (diagnostics/trigger_gates.py).
 
-mode "rules" (Noah, 2026-10-19) is trigger mode with the wiring as a list the user edits (the mapping): each rule is
+mode "rules" (Noah, 2026-10-19) is trigger mode with the wiring as lists the user edits (the mapping): each rule is
 {"trigger": "clench" or one of the model's classes, "how": "held" or "repeated", "value": seconds or count,
 "action": "close", "open", "release" or a pose}. A clench is effort above pulse_level; a class is on while its probability is
 at least the threshold. Held fires once the trigger has been on that long; repeated counts short episodes (shorter
 than the trigger's held rule) and fires after gap_s without a new one, or straight away at the highest count any rule
-of that trigger asks for. Poses are only picked while choosing, release only works while holding, and close and
-open move the hand for as long as their trigger stays on (speed set by effort), so nothing switches grips with an
-object in the hand. Held 0 s acts on the first step the trigger is on. While holding, effort above hold_level also
+of that trigger asks for. The mapping has one list used while relaxed (no grip) and one while holding a grip, and
+either can hold any rule: a pose picks it (while holding it switches to it at the same closure), release goes back
+to relaxed, close and open move the hand for as long as their trigger stays on (speed set by effort), and do nothing
+while relaxed. Only the list of the current state runs, so a trigger can have a held rule in each, and the higher
+rule in a list wins when two fire on one step. Held 0 s acts on the first step the trigger is on. While holding, effort above hold_level also
 closes the hand as in trigger mode. A clench during which a rule's class is on belongs to
 that class, not to the clench count.
 """
@@ -50,15 +52,23 @@ DEFAULTS = {"threshold": 0.7, "vote_n": 8, "start_level": 0.02, "onset_s": 3.0, 
             "mode": "lock", "smooth_s": 0.25, "lock_s": 0.5,
             "pulse_level": 0.2, "long_s": 0.7, "gap_s": 0.6, "double_s": 1.0, "release_with": "point",
             "still_gate": False, "pinch_clenches": 1}
-# Rules mode: the default mapping is trigger mode's defaults written as rules. A sign model without point uses two
-# finger point in its place (rules_for)
-DEFAULT_RULES = [{"trigger": "clench", "how": "held", "value": 0.7, "action": "fist"},
-                 {"trigger": "clench", "how": "repeated", "value": 1, "action": "pinch"},
-                 {"trigger": "clench", "how": "repeated", "value": 2, "action": "tripod"},
-                 {"trigger": "clench", "how": "repeated", "value": 3, "action": "key"},
-                 {"trigger": "point", "how": "held", "value": 0.4, "action": "point"},
-                 {"trigger": "point", "how": "repeated", "value": 2, "action": "release"},
-                 {"trigger": "open", "how": "held", "value": 0.0, "action": "open"}]
+# Rules mode: a mapping is two lists, the rules used while relaxed (no grip) and while holding one. The grip default is trigger mode's defaults written as rules; sign models get their own (Noah,
+# 2026-10-19), since E and F have no clench (rules_for)
+DEFAULT_RULES = {"relaxed": [{"trigger": "clench", "how": "held", "value": 0.7, "action": "fist"},
+                             {"trigger": "clench", "how": "repeated", "value": 1, "action": "pinch"},
+                             {"trigger": "clench", "how": "repeated", "value": 2, "action": "tripod"},
+                             {"trigger": "clench", "how": "repeated", "value": 3, "action": "key"},
+                             {"trigger": "point", "how": "held", "value": 0.4, "action": "point"}],
+                 "holding": [{"trigger": "open", "how": "held", "value": 0.0, "action": "open"},
+                             {"trigger": "point", "how": "repeated", "value": 2, "action": "release"}]}
+SIGN_RULES = {"relaxed": [{"trigger": "two_point", "how": "held", "value": 0.4, "action": "point"},
+                          {"trigger": "little_out", "how": "held", "value": 0.5, "action": "fist"},
+                          {"trigger": "move_thumb_abd", "how": "held", "value": 0.5, "action": "pinch"},
+                          {"trigger": "move_thumb_abd", "how": "repeated", "value": 2, "action": "tripod"},
+                          {"trigger": "little_out", "how": "repeated", "value": 2, "action": "key"}],
+              "holding": [{"trigger": "open", "how": "held", "value": 0.0, "action": "open"},
+                          {"trigger": "two_point", "how": "repeated", "value": 2, "action": "release"}]}
+SECTIONS = ("relaxed", "holding")
 RULE_ACTIONS = ("close", "open", "release")
 MAX_REPEATS = 6
 MAX_HELD_S = 5.0
@@ -77,16 +87,31 @@ SPRING_STEP_S = 0.005
 EPS = 1e-9
 
 
+def split_rules(rules):
+    """A copy of a mapping as its two lists. Mappings saved as one list (before 2026-10-19) split by their action:
+    poses were only picked while relaxed, open, close and release only acted while holding."""
+    if isinstance(rules, dict):
+        return {s: [dict(r) for r in rules.get(s, [])] for s in SECTIONS}
+    return {"relaxed": [dict(r) for r in rules if r["action"] not in RULE_ACTIONS],
+            "holding": [dict(r) for r in rules if r["action"] in RULE_ACTIONS]}
+
+
 def rules_for(classes):
     """The default mapping for a model with these classes, without the rules of classes it doesn't have."""
-    stand_in = "point" if "point" in classes or "two_point" not in classes else "two_point"
-    rules = [dict(r, trigger=stand_in if r["trigger"] == "point" else r["trigger"]) for r in DEFAULT_RULES]
-    return [r for r in rules if r["trigger"] == "clench" or r["trigger"] in classes]
+    signs = {r["trigger"] for s in SECTIONS for r in SIGN_RULES[s]} - {"open"} & set(classes)
+    rules = split_rules(SIGN_RULES if signs else DEFAULT_RULES)
+    return {s: [r for r in rules[s] if r["trigger"] == "clench" or r["trigger"] in classes] for s in SECTIONS}
 
 
 def check_rules(rules, poses):
-    """Raises ValueError for a rule that can't work: unknown how or action, a value out of range, or two rules on the
-    same trigger and pattern (a trigger can have one held rule)."""
+    """Raises ValueError for a rule that can't work: unknown how or action, a value out of range, or two rules in one
+    list on the same trigger and pattern (a trigger can have one held rule per list)."""
+    rules = split_rules(rules)
+    for section in SECTIONS:
+        _check_list(rules[section], poses)
+
+
+def _check_list(rules, poses):
     seen = set()
     for r in rules:
         if not r["trigger"]:
@@ -126,12 +151,12 @@ class Controller:
         self.grips = list(grips)
         self.poses = {g: np.asarray(a, float) for g, a in poses.items()}
         self.relaxed = self.poses["rest"]
-        self.rules = [dict(r) for r in DEFAULT_RULES]
+        self.rules = split_rules(DEFAULT_RULES)
         self.reset()
 
     def set_rules(self, rules):
         check_rules(rules, self.poses)
-        self.rules = [dict(r) for r in rules]
+        self.rules = split_rules(rules)
         self._reset_rules()
 
     def _reset_rules(self):
@@ -307,17 +332,22 @@ class Controller:
         return {"state": self.state, "grip": self.grip, "closure": self.closure, "angles": self._spring(dt),
                 "event": event, "pulses": self.pulses}
 
-    def _repeats(self, t, count):
-        return [r for r in self.rules if r["trigger"] == t and r["how"] == "repeated" and r["value"] == count]
+    @staticmethod
+    def _repeats(rules, t, count):
+        return [r for r in rules if r["trigger"] == t and r["how"] == "repeated" and r["value"] == count]
 
     def _rules(self, probs, effort, dt, moving=False):
         p = self.params
-        triggers = sorted({r["trigger"] for r in self.rules})
-        on = {t: float(probs.get(t, 0.0)) >= p["threshold"] for t in triggers if t != "clench"}
+        # Only the list of the state the hand is in counts and times; a class counts as on over both lists, so a
+        # sign held while holding still isn't taken for squeezing
+        rules = self.rules["relaxed" if self.state == "idle" else "holding"]
+        triggers = sorted({r["trigger"] for r in rules})
+        on = {t: float(probs.get(t, 0.0)) >= p["threshold"]
+              for t in {r["trigger"] for s in SECTIONS for r in self.rules[s]} if t != "clench"}
         class_on = any(on.values())
         on["clench"] = effort >= p["pulse_level"]
         gated = p["still_gate"] and moving and self.state == "idle"
-        held = {r["trigger"]: r for r in self.rules if r["how"] == "held"}
+        held = {r["trigger"]: r for r in rules if r["how"] == "held"}
         events = []
 
         for t in triggers:
@@ -331,9 +361,9 @@ class Controller:
                 if run == 0:
                     # Counted as it starts, so the last of a repeat acts straight away; a hold takes it back
                     self.counts[t] = self.counts.get(t, 0) + 1
-                    counts = [r["value"] for r in self.rules if r["trigger"] == t and r["how"] == "repeated"]
+                    counts = [r["value"] for r in rules if r["trigger"] == t and r["how"] == "repeated"]
                     if counts and self.counts[t] >= max(counts):
-                        events += self._repeats(t, self.counts[t])
+                        events += self._repeats(rules, t, self.counts[t])
                         self.counts[t] = 0
                         used = True
                 run += dt
@@ -350,26 +380,30 @@ class Controller:
                 if run > 0 and (t == "clench" or self.off_t[t] >= FLICK_GAP_S - EPS):
                     run, used = 0.0, False
                 elif run == 0 and self.counts.get(t) and self.off_t[t] >= p["gap_s"] - EPS:
-                    events += self._repeats(t, self.counts[t])
+                    events += self._repeats(rules, t, self.counts[t])
                     self.counts[t] = 0
             self.run_t[t], self.used[t] = run, used
 
         event = None
+        # Two rules firing on the same step: the higher one in the list wins
+        events.sort(key=lambda r: next(i for i, x in enumerate(rules) if x is r))
         for r in events:
             if r["action"] == "release" and self.state == "active":
                 self.state, self.grip, self.closure, event = "idle", None, 0.0, "release"
-            elif r["action"] not in RULE_ACTIONS and self.state == "idle" and r["action"] in self.poses:
+            elif r["action"] not in RULE_ACTIONS and r["action"] in self.poses:
+                # A pose while holding switches to it at the closure the hand has
+                closure = self.closure if self.state == "active" else 0.0
                 self._choose(r["action"])
-                event = "start"
+                self.closure, event = closure, "start"
             else:
                 continue
             # Whatever is still on carried the pick or release, it has to go off before it counts again
-            self.stuck = {t for t in triggers if on[t]}
+            self.stuck = {t for t in on if on[t]}
             self.run_t, self.off_t, self.counts, self.used = {}, {}, {}, {}
             break
 
         if self.state == "active" and event is None:
-            moving_to = {r["action"] for r in self.rules if r["action"] in ("open", "close") and on[r["trigger"]]
+            moving_to = {r["action"] for r in rules if r["action"] in ("open", "close") and on[r["trigger"]]
                          and self.run_t.get(r["trigger"], 0.0) >= r["value"] - EPS}
             speed = max(effort, p["hold_level"]) * p["gain"] * dt
             if "open" in moving_to:

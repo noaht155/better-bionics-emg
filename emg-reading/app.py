@@ -25,10 +25,10 @@ from pydantic import BaseModel, Field
 from armband import Armband, Replay
 from calibrate import load_calibration
 from camera import Camera
-from control import DEFAULTS as CONTROL_DEFAULTS, check_rules, rules_for
+from control import DEFAULTS as CONTROL_DEFAULTS, check_rules, rules_for, split_rules
 from esp32_link import WIFI_IP
 from gestures import (C_CLOSE_S, C_MOVE_S, C_ROUNDS, CATEGORIES, D_ACTIVITY_S, D_ROUNDS, E_ROUNDS, E_SIGN_S,
-                      F_ROUNDS, F_SIGN_S, GESTURE_SET, GESTURES, GRIP_CLOSE_S, LIBRARY, POSTURES, plan_for)
+                      F_ROUNDS, F_SIGN_S, F_SIGNS, GESTURE_SET, GESTURES, GRIP_CLOSE_S, LIBRARY, POSTURES, plan_for)
 from hand_angles import JOINTS, RELIABLE
 from processing import spectrum
 from recorder import Recorder
@@ -191,18 +191,25 @@ class Rule(BaseModel):
     action: str = Field(max_length=60)
 
 
+class RuleLists(BaseModel):
+    """A mapping: the rules while relaxed (no grip) and while holding one."""
+    relaxed: list[Rule]
+    holding: list[Rule]
+
+
 class ControlPreset(BaseModel):
     """A profile: settings, the mapping in use when it was saved and the model it was built on."""
     name: str = Field(pattern=r"^[A-Za-z0-9 _-]{1,40}$")
     params: ControlParams
-    rules: list[Rule] | None = None
+    rules: RuleLists | None = None
     model: str | None = None
 
 
 class ControlMapping(BaseModel):
     name: str = Field(pattern=r"^[A-Za-z0-9 _-]{1,40}$")
-    rules: list[Rule]
+    rules: RuleLists
     model: str | None = None
+    protocol: Literal["grips", "F"] | None = None
 
 
 class NetworkJobSettings(BaseModel):
@@ -286,11 +293,14 @@ def network_list():
 def saved_presets():
     """{name: {"params", "rules", "model"}}. Presets saved before profiles were only the params."""
     presets = json.loads(PRESET_FILE.read_text()) if PRESET_FILE.exists() else {}
-    return {k: v if "params" in v else {"params": v, "rules": None, "model": None} for k, v in presets.items()}
+    presets = {k: v if "params" in v else {"params": v, "rules": None, "model": None} for k, v in presets.items()}
+    return {k: dict(v, rules=v["rules"] and split_rules(v["rules"])) for k, v in presets.items()}
 
 
 def saved_mappings():
-    return json.loads(MAPPING_FILE.read_text()) if MAPPING_FILE.exists() else {}
+    """{name: {"rules", "model", "protocol"}}, rules as the two lists also for mappings saved as one."""
+    mappings = json.loads(MAPPING_FILE.read_text()) if MAPPING_FILE.exists() else {}
+    return {k: dict(v, rules=split_rules(v["rules"])) for k, v in mappings.items()}
 
 
 def refuse(e):
@@ -361,7 +371,7 @@ def make_app(recorder, band, camera, tools):
         return {"joints": JOINTS, "reliable": RELIABLE, "channels": band.channels, "rate": band.rate,
                 "source": band.source, "calibration": calibration,
                 "gestures": {name: {"text": text, "angles": angles} for name, (text, angles) in GESTURES.items()},
-                "gesture_set": GESTURE_SET, "library": LIBRARY, "categories": CATEGORIES,
+                "gesture_set": GESTURE_SET, "sign_sets": {"F": F_SIGNS}, "library": LIBRARY, "categories": CATEGORIES,
                 "cue_timing": {"grip_close_s": GRIP_CLOSE_S, "c_close_s": C_CLOSE_S},
                 "postures": POSTURES, "camera": camera is not None,
                 "tracked_hand": camera.hand if camera else None, "esp32_wifi_ip": WIFI_IP}
@@ -563,9 +573,9 @@ def make_app(recorder, band, camera, tools):
         return {"ok": True}
 
     @app.post("/api/control/rules")
-    def control_rules(rules: list[Rule]):
+    def control_rules(rules: RuleLists):
         try:
-            tools.control.set_rules([r.model_dump() for r in rules])
+            tools.control.set_rules(rules.model_dump())
         except ValueError as e:
             refuse(e)
         return {"ok": True}
@@ -582,11 +592,12 @@ def make_app(recorder, band, camera, tools):
     @app.post("/api/control/mappings")
     def save_control_mapping(mapping: ControlMapping):
         try:
-            check_rules([r.model_dump() for r in mapping.rules], POSES)
+            check_rules(mapping.rules.model_dump(), POSES)
         except ValueError as e:
             refuse(e)
         mappings = saved_mappings()
-        mappings[mapping.name] = {"rules": [r.model_dump() for r in mapping.rules], "model": mapping.model}
+        mappings[mapping.name] = {"rules": mapping.rules.model_dump(), "model": mapping.model,
+                                 "protocol": mapping.protocol}
         MAPPING_FILE.parent.mkdir(parents=True, exist_ok=True)
         MAPPING_FILE.write_text(json.dumps(mappings, indent=2) + "\n")
         return {"ok": True}
@@ -610,7 +621,7 @@ def make_app(recorder, band, camera, tools):
             refuse("default is fixed, pick another name")
         presets = saved_presets()
         presets[preset.name] = {"params": preset.params.model_dump(), "model": preset.model,
-                                "rules": None if preset.rules is None else [r.model_dump() for r in preset.rules]}
+                                "rules": None if preset.rules is None else preset.rules.model_dump()}
         PRESET_FILE.parent.mkdir(parents=True, exist_ok=True)
         PRESET_FILE.write_text(json.dumps(presets, indent=2) + "\n")
         return {"ok": True}

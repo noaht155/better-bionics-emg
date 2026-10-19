@@ -389,8 +389,8 @@ def test_rules_on_sign_classes_and_library_poses():
     from gestures import LIBRARY
     poses = dict(POSES, cylinder=LIBRARY["cylinder"]["angles"])
     c = Controller({**BASE, "mode": "rules"}, GESTURE_SET, poses)
-    c.set_rules([{"trigger": "little_out", "how": "held", "value": 0.2, "action": "cylinder"},
-                 {"trigger": "two_point", "how": "repeated", "value": 2, "action": "release"}])
+    c.set_rules({"relaxed": [{"trigger": "little_out", "how": "held", "value": 0.2, "action": "cylinder"}],
+                 "holding": [{"trigger": "two_point", "how": "repeated", "value": 2, "action": "release"}]})
     sign = lambda name: {name: 0.9, "rest": 0.1}
     events = [c.step(sign("little_out"), 0.3)["event"] for _ in range(4)]
     assert events.count("start") == 1 and c.grip == "cylinder"
@@ -401,8 +401,8 @@ def test_rules_on_sign_classes_and_library_poses():
 
 def test_rules_close_action_closes_while_its_trigger_stays_on():
     c = rules()
-    c.set_rules([{"trigger": "clench", "how": "held", "value": 0.7, "action": "fist"},
-                 {"trigger": "point", "how": "held", "value": 0.0, "action": "close"}])
+    c.set_rules({"relaxed": [{"trigger": "clench", "how": "held", "value": 0.7, "action": "fist"}],
+                 "holding": [{"trigger": "point", "how": "held", "value": 0.0, "action": "close"}]})
     run(c, ("fist", 0.5, 14), ("rest", 0.0, 4))
     closed = c.closure
     # Held 0 s acts on the first step: the hand closes while point stays on, even with no effort above the hold level
@@ -439,7 +439,55 @@ def test_rules_are_checked():
                 [dict(good[0], trigger="")]):
         with pytest.raises(ValueError):
             check_rules(bad, POSES)
-    assert {r["trigger"] for r in rules_for(["open", "two_point", "rest"])} == {"clench", "two_point", "open"}
-    assert {r["trigger"] for r in rules_for(list(GESTURE_SET))} == {"clench", "point", "open"}
-    # A model without open gets no open rule
-    assert {r["trigger"] for r in rules_for(["two_point", "little_out", "rest"])} == {"clench", "two_point"}
+    # Either list takes any rule
+    check_rules({"relaxed": [dict(good[0], action="release")], "holding": good}, POSES)
+    triggers = lambda rules: {s: {r["trigger"] for r in rules[s]} for s in rules}
+    assert triggers(rules_for(list(GESTURE_SET))) == {"relaxed": {"clench", "point"}, "holding": {"open", "point"}}
+    # Sign models get the sign default, no clench; a model without open gets no open rule
+    assert triggers(rules_for(["open", "two_point", "little_out", "move_thumb_abd", "notsign", "rest"])) == {
+        "relaxed": {"two_point", "little_out", "move_thumb_abd"}, "holding": {"open", "two_point"}}
+    assert triggers(rules_for(["two_point", "little_out", "rest"])) == {"relaxed": {"two_point", "little_out"},
+                                                                        "holding": {"two_point"}}
+
+
+def test_rules_saved_as_one_list_split_by_action():
+    from control import split_rules
+    old = [{"trigger": "point", "how": "held", "value": 0.4, "action": "point"},
+           {"trigger": "point", "how": "repeated", "value": 2, "action": "release"},
+           {"trigger": "open", "how": "held", "value": 0.0, "action": "open"}]
+    rules = split_rules(old)
+    assert [r["action"] for r in rules["relaxed"]] == ["point"]
+    assert [r["action"] for r in rules["holding"]] == ["release", "open"]
+
+
+def test_rules_one_trigger_held_in_both_lists():
+    c = rules()
+    # Open held 0 s while holding must not stop a longer open hold from picking a pose while relaxed
+    c.set_rules({"relaxed": [{"trigger": "open", "how": "held", "value": 0.7, "action": "fist"}],
+                 "holding": [{"trigger": "open", "how": "held", "value": 0.0, "action": "open"}]})
+    assert run(c, ("open", 0.05, 10)) == [] and c.state == "idle"
+    assert run(c, ("open", 0.05, 5)) == ["start"] and c.grip == "fist"
+    run(c, ("rest", 0.5, 10))
+    closed = c.closure
+    run(c, ("open", 0.05, 1))
+    assert c.closure < closed and c.state == "active"
+
+
+def test_rules_pose_while_holding_switches_at_the_same_closure():
+    c = rules()
+    c.set_rules({"relaxed": [{"trigger": "point", "how": "held", "value": 0.4, "action": "point"}],
+                 "holding": [{"trigger": "pinch", "how": "held", "value": 0.2, "action": "tripod"}]})
+    run(c, ("point", 0.5, 8), ("rest", 0.5, 10))
+    closed = c.closure
+    assert c.grip == "point" and closed > 0
+    assert run(c, ("pinch", 0.0, 4)) == ["start"] and c.grip == "tripod" and c.closure == closed
+
+
+def test_rules_higher_in_the_list_wins():
+    for first, second in (("pinch", "key"), ("key", "pinch")):
+        c = rules()
+        c.set_rules({"relaxed": [{"trigger": "point", "how": "held", "value": 0.0, "action": first},
+                                 {"trigger": "open", "how": "held", "value": 0.0, "action": second}],
+                     "holding": []})
+        c.step({"open": 0.9, "point": 0.9}, 0.0)
+        assert c.grip == first

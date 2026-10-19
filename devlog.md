@@ -1600,6 +1600,36 @@ balanced / wrist bends read as a sign:
   against +10 on `095340`. One seed, so not yet a reason to make calibration optional.
 - `095340` stays the worst session. Without open every F session is over 90 % calibrated (worst 91.9 %).
 
+**Mapping page: protocol choice for the If list** (Noah: the list offered fist and pinch while building an F
+mapping). A Protocol select above the rules (grips A to D, or signs F) sets the If options: only the classes that
+protocol trains (`sign_sets` in `/api/config`), by their pose names; clench only for grips (Noah: F has no clench
+cue); notsign is never offered. It follows the model when the model changes, and saved mappings keep their
+protocol. A loaded rule on a class outside the protocol keeps that class in its own row only.
+
+**Clench with a sign model** is effort only, so it fires with any model, but it isn't reliable there: F has no
+clench, its effort max comes from the held signs (on `095340` at the 2x rest floor on 7 of 8 channels), and the sign
+model has never seen a clench, so it may read one as a sign at the same time. Not measured.
+
+**Mapping in two lists** (Noah: a held-0 s open while holding mustn't get in the way of a 0.7 s rule from relaxed,
+and a visible split helps). A mapping is now `{"relaxed": [...], "holding": [...]}`, shown as two tables on the
+mapping page, "From relaxed" and "From holding a grip". Only the current state's list runs, and either list takes any
+rule (Noah: define them freely): a pose while holding switches to it at the same closure (until now nothing could
+switch grips with an object in the hand), close, open and release do nothing while relaxed. A trigger can have a held
+rule in each list, and when two rules fire on one step the higher one in the list wins (it was the trigger name's
+alphabetical order). Mappings and profiles saved as one list load split by action. Rules drag by a handle on the
+left, within a list or into the other one: the other rows slide out of the way while dragging (160 ms, off with
+reduced motion), a cancelled drag slides back. No new move while rows are still sliding: without it downward drags
+jittered on Noah's desktop, fixed with it (headless drags never showed it, every move happened once). Mouse only,
+HTML drag and drop doesn't work on a touch screen, so each rule also has up and down arrows (up from the top of
+holding goes to the end of relaxed and back).
+One change in behaviour: a trigger with no held rule in the current list counts every episode as a repeat, however
+long (with the old single list, point's held rule while relaxed also kept long points from counting while holding).
+
+**Sign default mapping** (Noah's table): relaxed, two finger point held 0.4 s point, little finger out held 0.5 s
+fist, thumb out held 0.5 s pinch, thumb out twice tripod, little finger out twice key; holding, open hand held 0 s
+opens, two finger point twice releases. No clench. Grip models keep the clench default. The repeat counts for tripod
+and key are guesses, not tested live. 127 tests pass; checked headless on a test copy.
+
 ## Open
 
 - Trigger mode on the arm: tune clench level and timings live, count wrong picks (short clench read as two, a grab

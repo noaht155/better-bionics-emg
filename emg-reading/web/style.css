@@ -448,7 +448,13 @@ th { color: var(--muted); font: 400 11px var(--font-mono); letter-spacing: 0.12e
 }
 .row.filters input { position: absolute; opacity: 0; pointer-events: none; }
 .row.filters label:has(input:focus-visible) { outline: 1px solid var(--text); }
-#ctl-rules input { width: 6em; }
+.ctl-rules input { width: 100%; min-width: 6em; }
+.ctl-rules .drag { cursor: grab; color: var(--muted); user-select: none; padding-right: 0; font-size: 18px; }
+.ctl-rules tr.dragging { opacity: 0.35; }
+.ctl-rules .order { white-space: nowrap; padding-right: 0; }
+.ctl-rules .order button { padding: 4px 9px; }
+.ctl-rules .order button + button { margin-left: 4px; }
+.rules-title { margin: 22px 0 6px; color: var(--muted); font: 400 12px var(--font-mono); letter-spacing: 0.12em; text-transform: uppercase; }
 .pose-pick { min-width: 14em; text-align: left; }
 #ctl-pose-picker { position: fixed; z-index: 20; display: flex; gap: 12px; padding: 8px; background: var(--panel); border: 1px solid var(--line-strong); border-radius: 2px; box-shadow: 0 8px 24px rgba(0, 0, 0, 0.7); }
 #ctl-pose-picker[hidden] { display: none; }

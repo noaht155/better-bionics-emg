@@ -378,9 +378,10 @@
     <p class="muted">Each line: if a trigger happens in a pattern, then do this. Clench is effort above the clench level,
       in any hand shape; the other triggers are the model's classes, on while their probability is at least the
       threshold. Held: on for at least this long. Repeated: this many short times with pauses under the pause time
-      in between; held 0 s acts on the first step the trigger is on. Poses are only picked while the hand is open
-      and empty; close, open and release only work while holding, so nothing switches grips with an object in the
-      hand. Hover a pose in the Then list to see it. Changes apply straight away.</p>
+      in between; held 0 s acts on the first step the trigger is on. The first list runs while relaxed (no grip),
+      the second while holding a grip. A pose picks it (while holding it switches at the same closure), release goes
+      back to relaxed, close and open move the hand while their trigger stays on. The higher rule wins when two fire
+      together. Hover a pose in the Then list to see it. Changes apply straight away.</p>
     <h2>Saved mappings</h2>
     <div class="row filters">
       <label class="check"><input type="radio" name="ctl-mapping-filter" value="model" checked> Built on this model</label>
@@ -399,12 +400,23 @@
     <p id="ctl-mapping-note" class="muted"></p>
     <p id="ctl-mapping-error" class="error"></p>
     <h2>Rules</h2>
-    <table id="ctl-rules"></table>
+    <div class="row narrow">
+      <label>Protocol <select id="ctl-protocol">
+        <option value="grips">Grips (A to D)</option>
+        <option value="F">Signs (F)</option>
+      </select></label>
+    </div>
+    <p class="muted">The If list offers the classes this protocol trains (and clench for grips); follows the model when it changes.</p>
+    <h3 class="rules-title">From relaxed</h3>
+    <table class="ctl-rules" data-section="relaxed"></table>
+    <div class="controls"><button class="ctl-rule-add" data-section="relaxed">Add rule</button></div>
+    <h3 class="rules-title">From holding a grip</h3>
+    <table class="ctl-rules" data-section="holding"></table>
+    <div class="controls"><button class="ctl-rule-add" data-section="holding">Add rule</button></div>
     <div id="ctl-pose-picker" hidden>
       <div id="ctl-pose-list"></div>
       <div><canvas id="ctl-pose-preview" width="260" height="260"></canvas><div id="ctl-pose-name"></div></div>
     </div>
-    <div class="controls"><button id="ctl-rule-add">Add rule</button></div>
   </section>
 </main>
 
