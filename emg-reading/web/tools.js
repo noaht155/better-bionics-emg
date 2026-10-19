@@ -75,7 +75,9 @@ moveTabInk();
 document.fonts.ready.then(moveTabInk);
 window.addEventListener("resize", moveTabInk);
 
+// The bar only shows while its job runs, an empty track looked like something stuck at 0
 function progress(bar, tool) {
+  $(bar).parentElement.hidden = !tool.running;
   $(bar).style.width = tool.running && tool.total && tool.left != null ? `${100 * (1 - tool.left / tool.total)}%` : "0";
 }
 
@@ -725,6 +727,8 @@ function drawNetwork(n, p) {
   for (const id of ["net-eval-newest", "net-eval", "net-calibrate"]) $(id).disabled = n.running;
   $("train-start").disabled = n.running || state.tools.trainer.running;
   $("net-stop").disabled = !n.running;
+  // Only there while a network job runs, next to Train it read as part of LDA training
+  $("net-stop").hidden = !n.running;
   // Time since the last line tells a slow job from a stalled one, every finished epoch prints a line
   const pr = n.progress || {};
   const where = [pr.fold && `fold ${pr.fold[0]} of ${pr.fold[1]}`, pr.epoch && `epoch ${pr.epoch[0]} of ${pr.epoch[1]}`,

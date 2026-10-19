@@ -1,5 +1,7 @@
 /* Better Bionics look (betterbionics.ai, dark). Canvases read these too (COLORS in app.js), keep colours here */
 :root {
+  /* Scrollbars, dropdown lists and number spinners in the browser's dark style too */
+  color-scheme: dark;
   --bg: #000000;
   --panel: #0a0a0b;
   --raised: #151517;
@@ -25,6 +27,7 @@
 }
 
 * { box-sizing: border-box; }
+::selection { background: color-mix(in srgb, var(--accent) 45%, transparent); }
 
 /* Elements with their own display (main is a grid) would otherwise ignore the hidden attribute */
 [hidden] { display: none !important; }
@@ -74,7 +77,9 @@ section {
   counter-reset: label;
 }
 
-.controls + h1 { margin-top: 20px; }
+.controls + h1, .back + h1 { margin-top: 20px; }
+button.back { padding: 4px 0; border: none; color: var(--muted); font: 12px var(--font-mono); letter-spacing: 0.12em; text-transform: uppercase; }
+button.back:hover:not(:disabled) { color: var(--text); }
 h1 { font-size: 30px; font-weight: 600; letter-spacing: -0.03em; line-height: 1.1; margin: 0 0 12px; }
 
 label { display: block; margin: 8px 0; color: var(--muted); }
@@ -399,6 +404,8 @@ th { color: var(--muted); font: 400 11px var(--font-mono); letter-spacing: 0.12e
 .ctl-plots { grid-area: plots; }
 .ctl-settings { grid-area: settings; }
 .ctl-layout h2:first-child { margin-top: 0; }
+/* Numbered per column, so a section that only shows while running doesn't renumber the others */
+.ctl-layout > div { counter-reset: label; }
 #ctl-output h2 { margin-top: 20px; }
 @media (orientation: landscape) and (min-width: 900px) {
   .ctl-layout { grid-template-columns: 1.3fr 1fr; grid-template-areas: "live settings" "plots settings"; align-items: start; }

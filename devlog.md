@@ -1563,6 +1563,14 @@ today. Page ids and code unchanged.
 **Sharp canvases**: every plot and hand was drawn at its fixed width and height attributes and stretched to the panel
 by the browser, so the EMG bars were blurry (Noah), worse on a high-dpi screen. `sharpen()` in `app.js` sizes each
 bitmap to its size on screen times the pixel density; plots draw in screen pixels, labels now a fixed 12 to 13 px.
+
+**Final sweep**: the browser's own parts (scrollbars, dropdown lists, number spinners) follow the dark theme
+(`color-scheme`); a gradient-dot favicon (the page's last console error was its 404) and the title Better Bionics
+recorder; progress bars on Calibrate and Connection only show while their job runs; Stop network job only shows while
+a network job runs (next to Train it read as part of LDA training); Control's section numbers count per column, so
+Model output appearing while running no longer renumbers Profile and Basic; the mapping page's back button is a small
+"Grip control" link above the heading; the pose picker says when a hovered entry is an action with no pose; "Connection
+check" is now "Connection" (the page also holds WiFi and battery), the Train type select is labelled Type.
 **Keyboard shortcuts ignored caps lock**: Mark bad checked `e.key === "b"`, and with caps lock on the key is "B", so
 `b` did nothing while the button worked (Noah). Same for `f` and `s` on Signals. Now case-insensitive, and a shortcut
 shows on its button like a click.

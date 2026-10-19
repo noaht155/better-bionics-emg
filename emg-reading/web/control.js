@@ -239,6 +239,7 @@ function drawPosePreview(action) {
   const angles = poseAngles(action);
   $("ctl-pose-name").textContent = action ? actionLabel(action) : "";
   if (angles) drawSolidHand(ctx, anglesByName(angles), { view: ctlView, mirror: mirrored(), color: TRACKED_COLOR });
+  else if (action) drawIdle(ctx, "an action, no pose of its own");
 }
 
 let pickerRow = null;
