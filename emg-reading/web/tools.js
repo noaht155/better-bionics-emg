@@ -75,6 +75,23 @@ moveTabInk();
 document.fonts.ready.then(moveTabInk);
 window.addEventListener("resize", moveTabInk);
 
+// Pill switches: the gradient piece moves to the chosen label. Labels differ in width, so they are measured; a
+// switch on a hidden page measures 0 and is placed again when it shows (the observer sees its size change)
+function placePill(pill) {
+  const label = pill.querySelector("input:checked")?.closest("label");
+  if (!label || !label.offsetWidth) return;
+  pill.style.setProperty("--pill-x", `${label.offsetLeft}px`);
+  pill.style.setProperty("--pill-w", `${label.offsetWidth}px`);
+  // The first placement jumps there, only later changes slide
+  if (!pill.classList.contains("measured")) requestAnimationFrame(() => pill.classList.add("measured"));
+}
+
+const pillObserver = new ResizeObserver((entries) => entries.forEach((e) => placePill(e.target)));
+document.querySelectorAll(".row.filters").forEach((pill) => {
+  pill.addEventListener("change", () => placePill(pill));
+  pillObserver.observe(pill);
+});
+
 // The bar only shows while its job runs, an empty track looked like something stuck at 0
 function progress(bar, tool) {
   $(bar).parentElement.hidden = !tool.running;

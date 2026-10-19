@@ -427,9 +427,25 @@ th { color: var(--muted); font: 400 11px var(--font-mono); letter-spacing: 0.12e
   border: 1px solid transparent;
   border-radius: 999px;
   background: linear-gradient(var(--bg), var(--bg)) padding-box, var(--gradient) border-box;
+  position: relative;
+  isolation: isolate;
 }
-.row.filters label { flex: 0 1 auto; white-space: nowrap; margin: 0; min-width: 0; padding: 5px 14px; border-radius: 999px; cursor: pointer; color: var(--muted); font: 12px var(--font-mono); letter-spacing: 0.08em; text-transform: uppercase; }
+.row.filters label { flex: 0 1 auto; white-space: nowrap; margin: 0; min-width: 0; padding: 5px 14px; border-radius: 999px; cursor: pointer; color: var(--muted); font: 12px var(--font-mono); letter-spacing: 0.08em; text-transform: uppercase; transition: color 200ms ease-out; }
 .row.filters label:has(input:checked) { background: var(--gradient); color: #fff; }
+/* Once placePills has measured the labels, one gradient piece slides between them instead of each label lighting up */
+.row.filters.measured label:has(input:checked) { background: none; }
+.row.filters.measured::before {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  top: 3px;
+  bottom: 3px;
+  left: var(--pill-x);
+  width: var(--pill-w);
+  border-radius: 999px;
+  background: var(--gradient);
+  transition: left 200ms ease-out, width 200ms ease-out;
+}
 .row.filters input { position: absolute; opacity: 0; pointer-events: none; }
 .row.filters label:has(input:focus-visible) { outline: 1px solid var(--text); }
 #ctl-rules input { width: 6em; }

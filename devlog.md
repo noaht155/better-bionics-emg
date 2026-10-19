@@ -1576,6 +1576,8 @@ check" is now "Connection" (the page also holds WiFi and battery), the Train typ
 next one when it was in the gesture list, so the held wrist bends of E and F and 13 of D's 14 activities never
 showed under Next. Now every "nogrip" cue is named too; the hand stays relaxed during that rest (Noah: the text
 matters more than the picture matching). Display only, recordings and labels unchanged.
+The pill switches on Control and Mapping slide their gradient piece to the chosen side (200 ms) instead of
+snapping (`placePill` in `tools.js` measures the labels, which differ in width).
 **Keyboard shortcuts ignored caps lock**: Mark bad checked `e.key === "b"`, and with caps lock on the key is "B", so
 `b` did nothing while the button worked (Noah). Same for `f` and `s` on Signals. Now case-insensitive, and a shortcut
 shows on its button like a click.
