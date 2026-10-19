@@ -306,3 +306,53 @@ def test_sign_sessions_train_their_signs_and_refuse_a_mix(tmp_path):
     assert set(model["classes"]) == set(GESTURE_SET) and not model["options"]["signs"]
     with pytest.raises(ValueError):
         gesture_model.train([c, f], options, evaluate_it=False)
+    # Positions left out on the Train tab get no label, in sign and grip sessions alike; rest stays
+    model, _ = gesture_model.train([e, f], dict(options, exclude=["open"]), evaluate_it=False)
+    assert set(model["classes"]) == set(F_SIGNS) - {"open"} | {"rest", gesture_model.NOT_SIGN}
+    model, _ = gesture_model.train([c], dict(options, exclude=["fist"]), evaluate_it=False)
+    assert set(model["classes"]) == set(GESTURE_SET) - {"fist"}
+    with pytest.raises(ValueError):
+        gesture_model.train([f], dict(options, exclude=["rest"]), evaluate_it=False)
+
+
+def test_haptic_levels_from_a_sign_session(tmp_path):
+    """A sign session has no grip holds, so its held signs give the max level (Control tab and haptics with a sign
+    model); grip sessions keep taking it from the grips."""
+    import calibrate
+    f = tmp_path / "2026-10-16_130000_test"
+    # Real F lengths, the filter settle time is cut from the start of every cue
+    _fake_session(f, protocol_f_plan(["table"], rounds=2, sign_s=6, rest_s=3, seed=0), {"protocol": "F"})
+    levels, lines = calibrate.from_session(f)
+    assert set(levels) == set(range(8))
+    assert f"{2 * len(F_SIGNS)} grips" in lines[0]
+
+
+def test_sign_network_learns_the_signs_and_loads_safely(tmp_path, monkeypatch):
+    """Train tab: a general network fine-tuned on E and F sessions gets the signs they share, rest and the
+    wrist bends as its classes, is saved as kind signs and loads back without unpickling code."""
+    torch = pytest.importorskip("torch")
+    from ml import networks, ringnet
+    e = tmp_path / "2026-10-16_120000_test"
+    f = tmp_path / "2026-10-16_130000_test"
+    _fake_session(e, protocol_e_plan(["table"], rounds=2, sign_s=3, rest_s=1.5, seed=0), {"protocol": "E"})
+    _fake_session(f, protocol_f_plan(["table"], rounds=2, sign_s=3, rest_s=1.5, seed=0), {"protocol": "F"})
+    monkeypatch.setattr(networks, "NETWORK_DIR", tmp_path)
+    info = {"kind": "general", "sessions": [], "epochs": 1, "channels": list(range(8)), "rate": 500, "window": 100,
+            "step_ms": 50, "vote": 3}
+    ringnet.save(ringnet.RingNet(sorted(GESTURE_SET)), info, tmp_path / "general.pt")
+    left_out = networks.train_signs("general.pt", [e, f], epochs=1, exclude=["open"])
+    assert ringnet.load(tmp_path / left_out["saved"])[0].classes == sorted(
+        set(F_SIGNS) - {"open"} | {"rest", gesture_model.NOT_SIGN})
+    result = networks.train_signs("general.pt", [e, f], epochs=2)
+    model, saved = ringnet.load(tmp_path / result["saved"])
+    assert model.classes == sorted(F_SIGNS + ["rest", gesture_model.NOT_SIGN])
+    assert saved["kind"] == "signs" and saved["sessions"] == [e.name, f.name] and saved["base"] == "general.pt"
+    assert model(torch.zeros(1, 8, 100))[0].shape == (1, len(model.classes))
+    # Calibrated on round 1 of the F session, scored on round 2, still a sign network
+    _, _, rounds = networks.sign_windows(f)
+    assert set(rounds) == {1, 2}
+    cal = networks.calibrate_on(result["saved"], f, [1])
+    assert set(cal["scores"]) >= {"balanced", "rest_false", "wrong", "wrist_as_sign"}
+    model, saved = ringnet.load(tmp_path / cal["saved"])
+    assert model.classes == sorted(F_SIGNS + ["rest", gesture_model.NOT_SIGN])
+    assert saved["kind"] == "calibrated" and saved["signs"] and saved["calibrated_on"] == f.name

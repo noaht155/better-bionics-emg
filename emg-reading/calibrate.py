@@ -103,9 +103,9 @@ def levels(ch, rest_env, active_env, low_note="barely changed, check the pad", s
 
 
 def from_session(folder, car=True, scale=None):
-    """Levels from a recorded session: rest from every rest cue, max from every held grip, each without its first
-    settle time (gestures.settle_s) and without cues marked bad. scale as in levels(). Returns ({channel: {"rest",
-    "max"}}, report lines)."""
+    """Levels from a recorded session: rest from every rest cue, max from every held grip (from every held sign in a
+    sign session, which has no grips), each without its first settle time (gestures.settle_s) and without cues marked
+    bad. scale as in levels(). Returns ({channel: {"rest", "max"}}, report lines)."""
     data = load_session(folder)
     channels = data["meta"]["channels"]
     rate = data["meta"]["rate"]
@@ -119,6 +119,9 @@ def from_session(folder, car=True, scale=None):
              and s["sample1"] - s["sample0"] > settle(s)]
     rest = [s for s in holds if s["label"] == "rest"]
     grips = [s for s in holds if s["label"] != "rest"]
+    if not grips:
+        grips = [s for s in segments(data["events"]) if s["kind"] == "custom" and s["sample1"] and not s["bad"]
+                 and s["sample1"] - s["sample0"] > settle(s)]
     if not rest or not grips:
         raise ValueError(f"{Path(folder).name} has no rest or grip cues to take haptic levels from")
     lines = [f"from {Path(folder).name}: {len(rest)} rest cues, {len(grips)} grips", "ch    rest     max   ratio"]

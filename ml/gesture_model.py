@@ -277,7 +277,8 @@ def load_sessions(folders, options):
 
 
 def train(folders, options, evaluate_it=True):
-    """Trains on all the given sessions. Returns (model dict ready to save, evaluation or None)."""
+    """Trains on all the given sessions. options["exclude"]: positions left out, their windows get no label.
+    Returns (model dict ready to save, evaluation or None)."""
     options = dict(options, signs=sign_sessions(folders))
     sessions = load_sessions(folders, options)
     if not sessions:
@@ -288,6 +289,11 @@ def train(folders, options, evaluate_it=True):
         common = set.intersection(*({l for l in s[2] if l is not None} for s in sessions.values()))
         for name, (f, e, l, p) in sessions.items():
             sessions[name] = (f, e, np.array([x if x in common else None for x in l], dtype=object), p)
+    exclude = set(options.get("exclude") or [])
+    if "rest" in exclude:
+        raise ValueError("rest can't be left out")
+    for name, (f, e, l, p) in sessions.items():
+        sessions[name] = (f, e, np.array([None if x in exclude else x for x in l], dtype=object), p)
     metas = [json.loads((Path(f) / "session.json").read_text()) for f in folders]
     channels = {tuple(m["channels"]) for m in metas}
     if len(channels) > 1:
