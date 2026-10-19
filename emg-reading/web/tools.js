@@ -19,9 +19,23 @@ function showTab(name) {
   if (name === "train") loadTrainLists();
   if (name === "control") loadControlLists();
   if (name === "cursor") loadCursorSessions();
+  moveTabInk();
 }
 
 document.querySelectorAll("#tabs button").forEach((b) => b.addEventListener("click", () => showTab(b.dataset.tab)));
+
+function moveTabInk() {
+  const b = document.querySelector("#tabs button.active");
+  const ink = $("tab-ink");
+  ink.style.left = `${b.offsetLeft}px`;
+  ink.style.top = `${b.offsetTop + b.offsetHeight - 2}px`;
+  ink.style.width = `${b.offsetWidth}px`;
+}
+
+// Tab widths change once the web font has loaded and when the bar wraps
+moveTabInk();
+document.fonts.ready.then(moveTabInk);
+window.addEventListener("resize", moveTabInk);
 
 function progress(bar, tool) {
   $(bar).style.width = tool.running && tool.total && tool.left != null ? `${100 * (1 - tool.left / tool.total)}%` : "0";
@@ -179,8 +193,8 @@ $("sig-spectrum").addEventListener("change", () => { if ($("sig-spectrum").check
 
 document.addEventListener("keydown", (e) => {
   if (currentTab !== "signals" || e.target.tagName === "INPUT") return;
-  if (e.key === "f") toggleSignal("sig-filtered");
-  if (e.key === "s") toggleSignal("sig-spectrum");
+  if (e.key.toLowerCase() === "f") toggleSignal("sig-filtered");
+  if (e.key.toLowerCase() === "s") toggleSignal("sig-spectrum");
 });
 
 // Calibration
@@ -241,7 +255,10 @@ function drawOutputs(h) {
   const { width: w, height: hgt } = ctx.canvas;
   ctx.clearRect(0, 0, w, hgt);
   const outputs = h.outputs || [];
-  if (!outputs.length) return;
+  if (!outputs.length) {
+    drawIdle(ctx, "start haptics or the output test to see the outputs");
+    return;
+  }
   const slot = w / outputs.length;
   const top = 10, bottom = 44;
   const plotH = hgt - top - bottom;
@@ -466,7 +483,10 @@ function drawProbs(p, canvas = "live-probs") {
   const ctx = $(canvas).getContext("2d");
   const { width: w, height: h } = ctx.canvas;
   ctx.clearRect(0, 0, w, h);
-  if (!p.running || !p.probs) return;
+  if (!p.running || !p.probs) {
+    drawIdle(ctx, "start a model to see its class probabilities");
+    return;
+  }
   const classes = p.classes;
   const rowH = h / classes.length;
   const left = 110;
@@ -498,6 +518,7 @@ function drawModelView() {
     return;
   }
   $("model-label").innerHTML = predictionLabel(p);
+  flashOnChange($("model-label"), String(p.label));
   const g = p.label && config.gestures[p.label];
   if (g) drawSolidHand(ctx, anglesByName(g.angles), { view: solidView, mirror: mirrored(), color: TRACKED_COLOR });
 }
@@ -509,6 +530,7 @@ function drawPredictor(p) {
   $("model-status").textContent = p.running ? `Running ${p.model}` : "No model running";
   if (p.error) $("model-error").textContent = p.error;
   $("live-label").innerHTML = predictionLabel(p);
+  flashOnChange($("live-label"), p.running ? String(p.label) : "");
   drawProbs(p);
   // Rewriting an option redraws an open dropdown, so only touch it when the model starts or stops
   const option = $("model-option");

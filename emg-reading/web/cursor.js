@@ -116,6 +116,7 @@ function drawCursor(c) {
   $("cur-targets").textContent = c.targets_on ? "Targets off" : "Targets on";
   $("cur-status").textContent = running ? `Running, levels from ${c.levels_from}${c.log ? `, logging to data/cursor/${c.log}` : ""}` : "Stopped";
   if (c.error) $("cur-error").textContent = c.error;
+  if (currentTab === "cursor" && !running) drawIdle($("cur-canvas").getContext("2d"), "start to see the dot");
   if (currentTab !== "cursor" || !running || c.x == null) return;
   cur.trail.push([c.x, c.y]);
   cur.trail = cur.trail.slice(-CURSOR_TRAIL);

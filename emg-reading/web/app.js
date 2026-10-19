@@ -18,6 +18,38 @@ const TRACKED_COLOR = cssVar("--hand-tracked");
 // #rrggbb plus an opacity, for canvas fills
 const withAlpha = (hex, a) => hex + Math.round(a * 255).toString(16).padStart(2, "0");
 
+// Shown on a canvas with nothing to draw yet, so an idle plot doesn't look broken
+function drawIdle(ctx, text) {
+  const { width: w, height: h } = ctx.canvas;
+  // The canvases are drawn larger than shown, keep the text at about 12 px on screen
+  const scale = w / (ctx.canvas.clientWidth || w);
+  ctx.save();
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.clearRect(0, 0, w, h);
+  ctx.font = `${Math.round(12 * scale)}px ${MONO}`;
+  ctx.fillStyle = COLORS.muted;
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillText(text.toUpperCase(), w / 2, h / 2);
+  ctx.restore();
+}
+
+// Restarts a short CSS animation when key changes. The labels are rewritten 20 times a second, so the animation
+// has to follow the key, not the redraw
+function flashOnChange(el, key) {
+  if (el.dataset.key === key) return;
+  const first = el.dataset.key === undefined;
+  el.dataset.key = key;
+  if (first) return;
+  el.classList.remove("changed");
+  void el.offsetWidth;
+  el.classList.add("changed");
+}
+
+// The button the last click landed on, so the post it starts can mark it busy until the reply
+let clicked = null;
+document.addEventListener("click", (e) => { clicked = { button: e.target.closest("button"), at: performance.now() }; }, true);
+
 let config = null;
 let state = null;
 let currentTab = "record";
@@ -205,16 +237,22 @@ async function updateDuration() {
 }
 
 async function post(path, body) {
-  const res = await fetch(path, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: body ? JSON.stringify(body) : undefined,
-  });
-  if (!res.ok) {
-    const detail = (await res.json().catch(() => ({}))).detail;
-    throw new Error(typeof detail === "string" ? detail : JSON.stringify(detail));
+  const button = clicked && performance.now() - clicked.at < 100 ? clicked.button : null;
+  button?.classList.add("busy");
+  try {
+    const res = await fetch(path, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: body ? JSON.stringify(body) : undefined,
+    });
+    if (!res.ok) {
+      const detail = (await res.json().catch(() => ({}))).detail;
+      throw new Error(typeof detail === "string" ? detail : JSON.stringify(detail));
+    }
+    return res.json();
+  } finally {
+    button?.classList.remove("busy");
   }
-  return res.json();
 }
 
 // post that shows a refusal in the error line errorId (cleared first). Returns the reply, or null when refused
@@ -367,10 +405,20 @@ $("btn-stop").addEventListener("click", () => {
   }, 3000);
 });
 
+// A shortcut shows on its button like a click, and marks it busy until the reply the same way
+function pressKey(id, action) {
+  const button = $(id);
+  clicked = { button, at: performance.now() };
+  button.classList.add("pressed");
+  setTimeout(() => button.classList.remove("pressed"), 150);
+  action();
+}
+
 document.addEventListener("keydown", (e) => {
   if (!state?.session || currentTab !== "record" || e.target.tagName === "INPUT") return;
-  if (e.code === "Space") { e.preventDefault(); mainAction(); }
-  if (e.key === "b") command("bad");
+  if (e.code === "Space") { e.preventDefault(); pressKey("btn-main", mainAction); }
+  // Caps lock sends "B"
+  if (e.key.toLowerCase() === "b") pressKey("btn-bad", () => command("bad"));
 });
 
 // Drawing
@@ -385,15 +433,32 @@ function cueTitle(text) {
   return rest.length ? `${first}<small>${rest.join("<br>")}</small>` : first;
 }
 
+let warningKey = null;
+let warningCodes = new Set();
+
+// Rebuilt only when a warning changes, and only a new warning slides in (hum text changes with every update)
 function drawWarnings() {
+  const key = state.warnings.map((w) => `${w.code}:${w.text}`).join("|");
+  if (key === warningKey) return;
+  warningKey = key;
   const box = $("warnings");
   box.innerHTML = "";
   for (const w of state.warnings) {
     const div = document.createElement("div");
     div.textContent = w.text;
-    if (SERIOUS.has(w.code)) div.className = "serious";
+    if (SERIOUS.has(w.code)) div.classList.add("serious");
+    if (!warningCodes.has(w.code)) div.classList.add("new");
     box.append(div);
   }
+  warningCodes = new Set(state.warnings.map((w) => w.code));
+}
+
+function drawLive(now) {
+  const stale = !state || now - stateAt > 1000 || state.warnings.some((w) => w.code === "no_data");
+  const dot = $("live-dot");
+  if (dot.classList.contains("stale") === stale && dot.textContent) return;
+  dot.classList.toggle("stale", stale);
+  dot.textContent = stale ? "no data" : "live";
 }
 
 function drawSession() {
@@ -412,23 +477,23 @@ function drawSession() {
   const hum = s.hum_pause;
   const pausedText = hum
     ? `HUM ON CH ${hum.channels.join(", ")}<small>${hum.uv.map((v) => `${v} uV`).join(", ")}, that part is marked bad.
-      Press ${hum.channels.length > 1 ? "those pads" : "that pad"} down firmly, then Continue (space) to redo it</small>`
-    : "PAUSED<small>press Continue (space) to redo this cue</small>";
+      Press ${hum.channels.length > 1 ? "those pads" : "that pad"} down firmly, then Continue (␣) to redo it</small>`
+    : "PAUSED<small>press Continue (␣) to redo this cue</small>";
   $("cue-text").innerHTML = s.paused ? pausedText : cueTitle(cue.text);
   $("cue-text").classList.toggle("paused", s.paused);
-  if (cue.seconds) {
-    const left = Math.max(0, cue.seconds - s.cue_elapsed);
-    $("cue-bar").style.width = `${Math.min(100, (100 * s.cue_elapsed) / cue.seconds)}%`;
-    $("cue-time").textContent = s.paused ? "" : `${left.toFixed(1)} s`;
-  } else {
-    $("cue-bar").style.width = "0";
-    $("cue-time").textContent = "";
-  }
+  flashOnChange($("cue-text"), `${s.index} ${s.paused}`);
+  const mark = s.marked_bad ? "marked bad, left out of training"
+    : s.bad_mark?.index === s.index - 1 ? `cue ${s.index} marked bad, the one before this rest` : "";
+  $("bad-mark").hidden = !mark;
+  $("bad-mark").textContent = mark;
+  $("btn-bad").classList.toggle("armed", !!s.marked_bad);
+  $("cue-time").textContent = cue.seconds && !s.paused ? `${Math.max(0, cue.seconds - s.cue_elapsed).toFixed(1)} s` : "";
   // Only when the hand below shows the next gesture, so the text and the picture always agree. Name and
   // description, without the reminder line every gesture shares
   const target = targetPose();
   $("next").innerHTML = target?.upcoming ? `<span>Next</span>${cueTitle(target.text)}` : "";
-  $("btn-main").textContent = s.paused || cue.kind === "break" ? "Continue (space)" : "Pause (space)";
+  flashOnChange($("next"), target?.upcoming ? target.text : "");
+  $("btn-main").textContent = s.paused || cue.kind === "break" ? "Continue (␣)" : "Pause (␣)";
   $("session-info").textContent = `${s.folder}   ${s.samples} EMG samples, ${s.frames} camera frames`;
 
   const caption = $("target-label");
@@ -475,13 +540,30 @@ function drawTarget(dt) {
   if (angles) drawSolidHand(ctx, angles, { view: solidView, mirror: mirrored(), color: SOLID_COLOR });
 }
 
+// Every screen frame like the target hand, the server's 20 updates a second made the bar step
+function drawCueBar(now) {
+  const s = state?.session;
+  const bar = $("cue-bar");
+  if (!s?.cue.seconds) {
+    bar.style.width = "0";
+    bar.classList.remove("ending");
+    return;
+  }
+  const elapsed = s.cue_elapsed + (s.paused ? 0 : (now - stateAt) / 1000);
+  bar.style.width = `${Math.min(100, (100 * elapsed) / s.cue.seconds)}%`;
+  // Pulses in the last second so the change can be seen without looking at it
+  bar.classList.toggle("ending", !s.paused && s.cue.seconds - elapsed < 1);
+}
+
 function frameLoop(now) {
   const dt = Math.min((now - lastFrame) / 1000, 0.1);
   lastFrame = now;
   try {
     drawTarget(dt);
+    drawCueBar(now);
     if (preview) drawPreview(dt);
     drawPick(dt);
+    drawLive(now);
   } catch (err) {
     console.error("frameLoop", err);
   }
@@ -539,7 +621,7 @@ function keyFrame(keys, x) {
 // the relaxed hand and then holds. A held protocol C movement closes the same way, more slowly, and holds to the end
 // of the cue, or a moving one follows its keyframes. Held poses relax in the rest cue after them. Close times come
 // from gestures.py (config.cue_timing), the same numbers that decide how much of each cue training leaves out
-function cueFrame(cue, t) {
+function handFrame(cue, t) {
   const T = cue.seconds || 4;
   // Protocol D: the hand stays relaxed while the wrist and arm move
   if (cue.kind === "nogrip") return anglesByName(config.gestures.rest.angles);
@@ -564,6 +646,32 @@ function cueFrame(cue, t) {
     return blendPoses([[cue.label, ease(t / config.cue_timing.grip_close_s)]], true);
   }
   return anglesByName(config.gestures[cue.label].angles);
+}
+
+// Wrist and forearm for the cues that move them (NO_GRIP and E_NOT_SIGNS in gestures.py), the rest keep them still.
+// Degrees: flexion towards the palm, deviation towards the thumb, forearm rotation. arm 1 draws the forearm, and
+// view_yaw turns the view to the side so a bend towards the palm can be seen. All of them follow the spring too
+const NO_WRIST = { wrist_flex: 0, wrist_dev: 0, forearm_rot: 0, arm: 0, view_yaw: 0 };
+
+function wristFrame(label, t) {
+  const swing = (period) => Math.sin((2 * Math.PI * t) / period);
+  // Training trims a held wrist bend like a sign (gesture_model.session_windows), so it bends in the sign's time
+  const hold = ease(t / config.cue_timing.c_close_s);
+  switch (label) {
+    case "hold_wrist_flex": return { wrist_flex: 60 * hold, arm: 1, view_yaw: 70 };
+    case "hold_wrist_ext": return { wrist_flex: -55 * hold, arm: 1, view_yaw: 70 };
+    case "wrist_flex": return { wrist_flex: 50 * swing(4), arm: 1, view_yaw: 70 };
+    // Ulnar deviation reaches further than radial
+    case "wrist_side": return { wrist_dev: (swing(4) > 0 ? 20 : 30) * swing(4), arm: 1 };
+    case "wrist_turn": return { forearm_rot: 80 * swing(5), arm: 1 };
+    case "wave_hello": return { wrist_dev: 25 * swing(1.2), arm: 1 };
+    default: return {};
+  }
+}
+
+function cueFrame(cue, t) {
+  const angles = handFrame(cue, t);
+  return angles && { ...NO_WRIST, ...angles, ...(cue.kind === "nogrip" ? wristFrame(cue.label, t) : {}) };
 }
 
 // Target pose of the current cue. During a rest the hand stays relaxed and the text names the next gesture
@@ -711,6 +819,7 @@ function connect() {
   };
   ws.onclose = () => {
     $("warnings").innerHTML = '<div class="serious">Lost the connection to the recorder, retrying</div>';
+    warningKey = null;
     setTimeout(connect, 1000);
   };
 }

@@ -25,6 +25,8 @@ CAMERA_KINDS = ("hold", "finger", "free", "move", "custom")
 CAMERA_SLOW_FPS = 25
 # Mark bad within this long of a rest cue starting still means the gesture before it
 BAD_GRACE_S = 1.5
+# How long the page names the cue a mark went to when it wasn't the current one
+BAD_NOTE_S = 3.0
 # Cues whose data is used for training. Hum on any channel during one marks it bad and pauses for a redo
 HUM_REDO_KINDS = ("hold", "finger", "free", "move", "custom", "nogrip")
 # EMG history kept for the signal view and the haptics
@@ -66,6 +68,8 @@ class Recorder:
         self.paused = False
         # Set when hum paused the session: which channels, and the first cue to redo
         self.hum_pause = None
+        # Last Mark bad press: which cue and when, so the page can show it
+        self.bad_mark = None
         self.last_summary = None
         self.loop_error = None
         self._lock = threading.Lock()
@@ -208,6 +212,7 @@ class Recorder:
                         and time.time() - self.cue_start < BAD_GRACE_S):
                     target = self.index - 1
                 self.session.add_event("bad", index=target)
+                self.bad_mark = {"index": target, "at": time.time()}
             elif action == "stop":
                 self._finish(completed=False)
             else:
@@ -355,6 +360,11 @@ class Recorder:
                     "index": self.index, "count": len(self.plan), "cue": cue,
                     "elapsed": time.time() - self.session.meta["started"], "paused": self.paused,
                     "hum_pause": self.hum_pause,
+                    # A mark only covers the run of the cue it was made in, a redo after a pause starts clean
+                    "marked_bad": (self.bad_mark is not None and self.bad_mark["index"] == self.index
+                                   and self.bad_mark["at"] >= self.cue_start),
+                    "bad_mark": (None if self.bad_mark is None or time.time() - self.bad_mark["at"] > BAD_NOTE_S
+                                 else {"index": self.bad_mark["index"]}),
                     "cue_elapsed": time.time() - self.cue_start, "next": upcoming,
                     "samples": self.session.samples, "frames": self.session.frames}
             return state

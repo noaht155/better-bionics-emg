@@ -1514,6 +1514,33 @@ JetBrains Mono for labels, tabs and table headers. Warnings keep solid yellow `#
 only filled colour on the page. Canvases read the same tokens (`COLORS` in `app.js`). The tracked hand and live
 signals went white instead of blue so a lost channel (red) can't be mistaken for the pink accent; the colour notes on
 Train and Control were updated to match. Rules for new UI in CLAUDE.md "Visual style".
+Then motion where it shows a change of state, never on the data: a live dot in the tab bar (pulses while state
+arrives, "no data" after 1 s without it or with the no_data warning), the cue text slides in on a new cue and the cue
+bar pulses in its last second, new warnings slide in (the bar is now rebuilt only when a warning changes, not 20 times
+a second), buttons ignore clicks while their post is waiting and show a sweep after 150 ms, idle probability, output
+and cursor canvases say what to start, the predicted label gets a fading underline when the class changes, the tab
+underline slides, and touch screens get 44 px targets. All off with reduced motion.
+Layout: tabs split into workflow (Record, Train, Control) and tools (Signals, Connection, Haptics, Calibrate,
+Cursor); Train puts the session list (scrolls under a fixed header) beside the model, calibrate and evaluate jobs on
+screens 1300 px and wider, so Train stays in view; the Record form has section labels (subject and placement,
+protocol, timing).
+
+**Cue screen** (Noah's live check): the cue bar now moves every screen frame from the local cue clock like the target
+hand, at 20 updates a second it stepped. Mark bad shows: the recorder reports `marked_bad` (the current run of the cue
+was marked, a redo after a pause starts clean, matching `segments()`) and `bad_mark` for 3 s (`BAD_NOTE_S`), so a mark
+in the first 1.5 s of a rest names the grip before it. The page shows a red "marked bad" box and the button goes red.
+**Wrist cues drawn**: the target hand gets a forearm and bends at the wrist for D's wrist_flex, wrist_side,
+wrist_turn and wave_hello and the held wrist bends of E and F (`wristFrame` in `app.js`, `turnAtWrist` in `hand.js`);
+flexion cues turn the view 70 degrees to the side so the bend can be seen. The palm is drawn as a 10 mm slab and the
+forearm as a tapered solid, 32 by 20 mm at the wrist (outlines of their 3D points), so neither goes flat seen from the
+side. A first try at 24 mm and 54 mm looked far too thick at the wrist (Noah).
+Timing check (Noah asked whether transitions got slower): the spring (SPRING_W 12) and close times (grip 0.5 s,
+sign 1.0 s) are unchanged, so grips still match their 1.17 s training trim (`settle_s`). The new held wrist bends first
+bent in the grip's 0.5 s, but training trims them like signs (1.67 s), so they now bend in `C_CLOSE_S` too. D's moving
+wrist cues have no trim and no pose to reach.
+**Keyboard shortcuts ignored caps lock**: Mark bad checked `e.key === "b"`, and with caps lock on the key is "B", so
+`b` did nothing while the button worked (Noah). Same for `f` and `s` on Signals. Now case-insensitive, and a shortcut
+shows on its button like a click.
 
 ## Open
 
@@ -1525,11 +1552,9 @@ Train and Control were updated to match. Rules for new UI in CLAUDE.md "Visual s
   Try the distance check and rest_or_class release live (retrain the LDA first).
 - Blend mode live: calibrate with a short protocol A session first, tune with the live loop (set settings over
   the API, Noah tests). Then log Control runs to a file and a cued live test with scores.
-- Arm animation for cues: forearm, wrist and upper arm in the cue drawing, so D's activities and the wrist
-  movements left out of protocol C can be shown. Later: a bigger build, not needed yet (Noah, 2026-10-15); D's cues
-  are text with the relaxed hand until then.
-- App look, next: motion only where it shows state (live data dot, cue change, warning bar without layout jump, busy
-  buttons, idle canvas placeholders, grip change flash), under 200 ms, never on the data itself.
+- Arm animation for cues: the forearm and wrist are drawn for the wrist cues since 2026-10-19. Still missing: the
+  upper arm (D's arm raise, reach, lean), the forearm lying along the table in the table posture, and the wrist
+  movements left out of protocol C.
 - Sign network (in `ml/` with calibration since 2026-10-19): try it live against the sign LDA, and trigger mode with
   it on the Control tab (sign map, clench level against the sign session's levels); decide whether open stays in the
   set (93 to 97 % without it, 86 to 92 % with). Later: one label path for grips and signs (both are held positions),

@@ -100,17 +100,64 @@ function shade(hex, t) {
   return `rgb(${Math.round((n >> 16) * k)}, ${Math.round(((n >> 8) & 255) * k)}, ${Math.round((n & 255) * k)})`;
 }
 
+const FOREARM_MM = 110;
+// Half the palm's thickness, and the forearm's cross-section (half width across, half depth) at the wrist and the
+// far end, in mm. Both are drawn as the outline of a solid, so they keep their thickness seen from the side
+const PALM_HALF_MM = 5;
+const FOREARM_SECTION = [[16, 10], [20, 13]];
+
+// Outline (convex hull) of projected points, anticlockwise
+function hull(pts) {
+  const s = [...pts].sort((a, b) => a.x - b.x || a.y - b.y);
+  const cross = (o, a, b) => (a.x - o.x) * (b.y - o.y) - (a.y - o.y) * (b.x - o.x);
+  const half = (list) => {
+    const out = [];
+    for (const q of list) {
+      while (out.length >= 2 && cross(out[out.length - 2], out[out.length - 1], q) <= 0) out.pop();
+      out.push(q);
+    }
+    out.pop();
+    return out;
+  };
+  return [...half(s), ...half([...s].reverse())];
+}
+
+// Bends the hand at the wrist (the origin) for the wrist cues: deviation about z, flexion about x towards the palm
+// (+z), then the forearm's rotation about y
+function turnAtWrist([x, y, z], angles) {
+  const f = rad(angles.wrist_flex ?? 0), d = rad(angles.wrist_dev ?? 0), r = rad(angles.forearm_rot ?? 0);
+  [x, y] = [x * Math.cos(d) + y * Math.sin(d), -x * Math.sin(d) + y * Math.cos(d)];
+  [y, z] = [y * Math.cos(f) - z * Math.sin(f), y * Math.sin(f) + z * Math.cos(f)];
+  [x, z] = [x * Math.cos(r) + z * Math.sin(r), -x * Math.sin(r) + z * Math.cos(r)];
+  return [x, y, z];
+}
+
 // Draws a filled hand: palm and rounded finger segments, painted back to front and shaded by depth so the
 // fingers in front cover the ones behind. opts: {view, mirror, color (#rrggbb), alpha}
 function drawSolidHand(ctx, angles, opts) {
   const hand = buildHand(angles);
   const { width: w, height: h } = ctx.canvas;
-  const scale = Math.min(w, h) / 230;
-  const p = (q) => project(q, opts.view, opts.mirror);
+  const arm = angles.arm ?? 0;
+  // Smaller and moved up while the forearm shows, so it fits below the hand
+  const scale = (Math.min(w, h) / 230) * (1 - 0.3 * arm);
+  const view = { yaw: opts.view.yaw + (angles.view_yaw ?? 0), pitch: opts.view.pitch };
+  const p = (q) => project(turnAtWrist(q, angles), view, opts.mirror);
   const parts = [];
-  // Palm outline from the base of the thumb round the knuckles to both sides of the wrist
-  const palm = [hand.thumb[0], hand.index[0], hand.middle[0], hand.ring[0], hand.pinky[0], [-30, 8, 0], [16, 0, 0]].map(p);
-  parts.push({ kind: "palm", pts: palm, depth: palm.reduce((a, q) => a + q.depth, 0) / palm.length - 20 });
+  if (arm > 0.02) {
+    // Two elliptical cross-sections, turned with the forearm. Always painted first, the hand sits in front of it
+    const r = rad(angles.forearm_rot ?? 0);
+    const ring = (y, [a, b]) => Array.from({ length: 16 }, (_, k) => {
+      const t = (2 * Math.PI * k) / 16;
+      const [x, z] = [-7 + a * Math.cos(t), b * Math.sin(t)];
+      return project([x * Math.cos(r) + z * Math.sin(r), y, -x * Math.sin(r) + z * Math.cos(r)], view, opts.mirror);
+    });
+    const pts = [...ring(4, FOREARM_SECTION[0]), ...ring(-FOREARM_MM * arm, FOREARM_SECTION[1])];
+    parts.push({ kind: "palm", pts: hull(pts), depth: -Infinity });
+  }
+  // Palm outline from the base of the thumb round the knuckles to both sides of the wrist, front and back face
+  const outline = [hand.thumb[0], hand.index[0], hand.middle[0], hand.ring[0], hand.pinky[0], [-30, 8, 0], [16, 0, 0]];
+  const palm = [-1, 1].flatMap((side) => outline.map(([x, y, z]) => p([x, y, z + side * PALM_HALF_MM])));
+  parts.push({ kind: "palm", pts: hull(palm), depth: palm.reduce((a, q) => a + q.depth, 0) / palm.length - 20 });
   for (const [name, pts] of Object.entries(hand)) {
     if (name === "palm") continue;
     const proj = pts.map(p);
@@ -118,20 +165,20 @@ function drawSolidHand(ctx, angles, opts) {
       parts.push({ kind: "bone", a: proj[i], b: proj[i + 1], width: THICKNESS[name][i], depth: (proj[i].depth + proj[i + 1].depth) / 2 });
     }
   }
-  const depths = parts.map((x) => x.depth);
+  const depths = parts.map((x) => x.depth).filter(Number.isFinite);
   const lo = Math.min(...depths), hi = Math.max(...depths);
   parts.sort((x, y) => x.depth - y.depth);
 
   ctx.save();
   ctx.translate(w / 2, h / 2);
   ctx.scale(scale, scale);
-  ctx.translate(0, 95);
+  ctx.translate(0, 95 - 60 * arm);
   ctx.globalAlpha = opts.alpha ?? 1;
   ctx.lineCap = "round";
   ctx.lineJoin = "round";
   const edge = COLORS.bg;
   for (const part of parts) {
-    const fill = shade(opts.color, (part.depth - lo) / (hi - lo || 1));
+    const fill = shade(opts.color, Number.isFinite(part.depth) ? (part.depth - lo) / (hi - lo || 1) : 0.75);
     ctx.beginPath();
     if (part.kind === "palm") {
       part.pts.forEach((q, i) => (i ? ctx.lineTo(q.x, q.y) : ctx.moveTo(q.x, q.y)));

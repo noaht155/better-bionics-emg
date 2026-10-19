@@ -368,7 +368,7 @@ for _k, _v in LIBRARY.items():
 
 
 # How the cue hand moves (web/app.js cueFrame, sent to the page in the config): a grip closes in GRIP_CLOSE_S, a held
-# protocol C movement in C_CLOSE_S, then both hold until the cue ends. The drawn hand follows on a spring (SPRING_W 12
+# protocol C movement or sign and a held wrist bend (wristFrame) in C_CLOSE_S, then they hold until the cue ends. The drawn hand follows on a spring (SPRING_W 12
 # in web/app.js), which trails a moving target by about 2 / 12 s and settles from a jump in about 0.4 s
 GRIP_CLOSE_S = 0.5
 C_CLOSE_S = 1.0

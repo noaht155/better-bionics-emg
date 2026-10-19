@@ -51,6 +51,8 @@ body {
 }
 
 #warnings div.serious { background: var(--bad); color: #fff; }
+#warnings div.new { animation: drop 160ms ease-out; }
+@keyframes drop { from { opacity: 0; transform: translateY(-100%); } }
 
 main {
   display: grid;
@@ -101,6 +103,22 @@ fieldset label { display: inline-block; margin-right: 16px; color: var(--text); 
 
 button { cursor: pointer; padding: 8px 16px; background: transparent; }
 button:hover:not(:disabled) { border-color: var(--text); }
+button:active:not(:disabled), button.pressed { border-color: var(--text); transform: translateY(1px); }
+/* Waiting for the server's reply: no second click, and a sweep if the reply takes longer than a moment */
+button { position: relative; overflow: hidden; }
+button.busy { pointer-events: none; }
+button.busy::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 40%;
+  height: 2px;
+  background: var(--gradient);
+  opacity: 0;
+  animation: sweep 900ms linear 150ms infinite;
+}
+@keyframes sweep { from { opacity: 1; transform: translateX(-100%); } to { opacity: 1; transform: translateX(250%); } }
 button[type=submit], button.primary { background: var(--text); border-color: var(--text); color: #000; font-weight: 600; }
 button[type=submit]:hover:not(:disabled), button.primary:hover:not(:disabled) {
   background: linear-gradient(var(--text), var(--text)) padding-box, var(--gradient) border-box;
@@ -128,9 +146,24 @@ button.armed { background: var(--bad); border-color: var(--bad); color: #fff; }
 
 #cue-text small, #preview-text small { display: block; font-size: 18px; font-weight: 400; color: var(--muted); margin-top: 6px; }
 #cue-text.paused { color: var(--warn); }
+#bad-mark {
+  display: inline-block;
+  margin-top: 12px;
+  padding: 4px 10px;
+  border: 1px solid var(--bad);
+  color: var(--bad);
+  font: 700 12px var(--font-mono);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  animation: drop 160ms ease-out;
+}
+#cue-text.changed, #next.changed { animation: enter 180ms ease-out; }
+@keyframes enter { from { opacity: 0; transform: translateY(8px); } }
 
 .bar { height: 6px; background: var(--raised); border-radius: 0; overflow: hidden; }
 #cue-bar { height: 100%; width: 0; background: var(--gradient); }
+#cue-bar.ending { animation: ending 250ms ease-in-out infinite alternate; }
+@keyframes ending { to { opacity: 0.35; } }
 
 #cue-time { font-size: 22px; margin-top: 6px; font-variant-numeric: tabular-nums; }
 #next { font-size: 28px; font-weight: 600; letter-spacing: -0.02em; line-height: 1.15; margin-top: 14px; min-height: 2.6em; }
@@ -152,6 +185,7 @@ canvas { display: block; width: 100%; height: auto; }
 .mirror canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
 
 #tabs {
+  position: relative;
   display: flex;
   gap: 4px;
   align-items: center;
@@ -180,11 +214,32 @@ canvas { display: block; width: 100%; height: auto; }
   letter-spacing: 0.12em;
   text-transform: uppercase;
 }
+.tab-sep { width: 1px; height: 16px; margin: 0 10px; background: var(--line-strong); }
 #tabs button:hover { color: var(--text); border-bottom-color: transparent; }
-#tabs button.active { color: var(--text); border-image: var(--gradient) 1; }
+#tabs button.active { color: var(--text); }
+#tab-ink { position: absolute; left: 0; width: 0; height: 2px; background: var(--gradient); transition: left 200ms ease-out, width 200ms ease-out; }
+
+/* Pulses while state arrives from the server, grey and red once it stops for a second */
+#live-dot {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--muted);
+  font: 12px var(--font-mono);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+#live-dot::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--accent); animation: live 1.6s ease-out infinite; }
+#live-dot.stale { color: var(--bad); }
+#live-dot.stale::before { background: var(--line-strong); animation: none; }
+@keyframes live {
+  from { box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 60%, transparent); }
+  to { box-shadow: 0 0 0 8px transparent; }
+}
 
 #battery-chip {
-  margin-left: auto;
+  margin-left: 12px;
   padding: 4px 10px;
   border: 1px solid var(--line-strong);
   border-radius: 2px;
@@ -195,14 +250,13 @@ canvas { display: block; width: 100%; height: auto; }
 
 #battery-chip.low { background: var(--warn); border-color: var(--warn); color: #000; font-weight: 700; }
 #battery-chip.critical { background: var(--bad); border-color: var(--bad); color: #fff; font-weight: 700; }
-#battery-chip:not([hidden]) + #rec-badge { margin-left: 8px; }
 
 .battery-detail { display: flex; gap: 32px; flex-wrap: wrap; margin: 8px 0; }
 .battery-detail div { font-size: 28px; font-weight: 600; letter-spacing: -0.02em; }
 .battery-detail small { display: block; font: 11px var(--font-mono); letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); }
 
 #rec-badge {
-  margin-left: auto;
+  margin-left: 12px;
   padding: 4px 10px;
   border-radius: 2px;
   background: var(--bad);
@@ -261,12 +315,31 @@ pre:empty { display: none; }
 #outputs { max-width: 900px; margin-top: 8px; }
 
 .big-label { font-size: 40px; font-weight: 600; letter-spacing: -0.03em; text-align: center; min-height: 1.3em; }
+/* Underline that fades after the predicted class changes, so flicker between classes is easy to see */
+.big-label { position: relative; }
+.big-label::after { content: ""; position: absolute; left: 25%; right: 25%; bottom: -6px; height: 2px; background: var(--gradient); opacity: 0; }
+.big-label.changed::after { animation: fade 600ms ease-out; }
+@keyframes fade { from { opacity: 1; } }
 .big-label small { display: block; font-size: 15px; font-weight: 400; color: var(--muted); }
 
 table { border-collapse: collapse; margin: 8px 0; font-size: 14px; }
 td, th { padding: 5px 10px; text-align: left; border-bottom: 1px solid var(--line); }
 th { color: var(--muted); font: 400 11px var(--font-mono); letter-spacing: 0.12em; text-transform: uppercase; }
 #live-probs, #net-probs { max-width: 900px; }
+
+/* Train: sessions beside the jobs on a wide screen, so Train stays in view next to the list */
+.train-layout { display: grid; grid-template-columns: 1fr; gap: 0 32px; }
+.train-layout > div { min-width: 0; }
+@media (min-width: 1300px) {
+  .train-layout { grid-template-columns: 1.45fr 1fr; align-items: start; }
+}
+.table-scroll { max-height: 60vh; overflow: auto; border: 1px solid var(--line); border-radius: 2px; }
+.table-scroll table { margin: 0; width: 100%; }
+.table-scroll tr:first-child th { position: sticky; top: 0; z-index: 1; background: var(--panel); }
+#train-pick button { padding: 5px 10px; font-size: 13px; }
+#train-sessions { font-size: 13px; }
+#train-sessions td:nth-child(2), #train-sessions td:nth-child(3) { white-space: nowrap; }
+#train-sessions td { padding: 4px 8px; }
 .hand-pair { display: flex; flex-wrap: wrap; gap: 16px; }
 .hand-pair > div { flex: 1 1 320px; max-width: 520px; }
 #net-hand, #net-hand-effort { max-width: 520px; width: 100%; background: var(--bg); border: 1px solid var(--line); border-radius: 2px; cursor: grab; touch-action: none; }
@@ -329,3 +402,14 @@ th { color: var(--muted); font: 400 11px var(--font-mono); letter-spacing: 0.12e
 #pick-list .pick-head input { margin-right: 6px; }
 #pick-list label:not(.pick-head) { min-width: 170px; margin: 2px 12px 2px 0; }
 #pick-list label.shown { color: var(--accent); }
+
+/* Fingers on a tablet need bigger targets than a mouse */
+@media (pointer: coarse) {
+  input, select, button { min-height: 44px; }
+  .row.filters label { padding: 12px 18px; }
+  .param input[type=range] { min-height: 32px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; }
+}

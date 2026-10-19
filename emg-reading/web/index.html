@@ -15,13 +15,16 @@
 <nav id="tabs">
   <span class="wordmark">BETTER BIONICS</span>
   <button data-tab="record" class="active">Record</button>
-  <button data-tab="signals">Signals</button>
-  <button data-tab="calibrate">Calibrate</button>
   <button data-tab="train">Train</button>
   <button data-tab="control">Control</button>
-  <button data-tab="cursor">Cursor</button>
-  <button data-tab="haptics">Haptics</button>
+  <span class="tab-sep"></span>
+  <button data-tab="signals">Signals</button>
   <button data-tab="connection">Connection</button>
+  <button data-tab="haptics">Haptics</button>
+  <button data-tab="calibrate">Calibrate</button>
+  <button data-tab="cursor">Cursor</button>
+  <span id="tab-ink"></span>
+  <span id="live-dot">live</span>
   <span id="battery-chip" hidden></span>
   <span id="rec-badge" hidden>recording</span>
 </nav>
@@ -31,6 +34,7 @@
     <form id="setup">
       <h1>New session</h1>
       <p id="source" class="muted"></p>
+      <h2>Subject and placement</h2>
       <label>Subject id <input name="subject" required pattern="[A-Za-z0-9_\-]{1,32}"></label>
       <div class="row">
         <label>Band on
@@ -57,6 +61,7 @@
         </label>
       </div>
       <label>Placement notes <input name="placement" placeholder="optional, e.g. rotated a few mm towards the thumb"></label>
+      <h2>Protocol</h2>
       <label>Protocol
         <select name="protocol">
           <option value="A">A: held grips and single fingers</option>
@@ -80,6 +85,7 @@
         </div>
         <div id="pick-list"></div>
       </fieldset>
+      <h2>Timing</h2>
       <div class="row">
         <label data-protocol="A">Repetitions <input name="reps" type="number" min="1" max="20" value="3"></label>
         <label data-protocol="B">Rounds <input name="rounds" type="number" min="1" max="20" value="6"></label>
@@ -98,8 +104,10 @@
       <label>Notes <input name="notes"></label>
       <p id="duration" class="muted"></p>
       <label class="check"><input type="checkbox" name="practice" id="practice"> Practice run, nothing is saved</label>
-      <button type="submit" id="start-button">Start recording</button>
-      <button type="button" id="preview-button">Preview cues</button>
+      <div class="controls">
+        <button type="submit" id="start-button">Start recording</button>
+        <button type="button" id="preview-button">Preview cues</button>
+      </div>
       <p id="setup-error" class="error"></p>
       <div id="summary" hidden></div>
     </form>
@@ -117,6 +125,7 @@
 
     <div id="cue-panel" hidden>
       <div class="cue-top"><span id="posture"></span><span id="progress-text"></span></div>
+      <div id="bad-mark" hidden></div>
       <div id="cue-text"></div>
       <div class="bar"><div id="cue-bar"></div></div>
       <div id="cue-time"></div>
@@ -198,10 +207,14 @@
     <p class="muted">Every model trains here: LDA (seconds, on the CPU) or the ring network (on the GPU, only on the
       training desktop, needs torch). Both use 200 ms windows of the filtered EMG. Grip sessions (protocols A to D)
       and sign sessions (E and F) train separate models, so they can't be ticked together.</p>
+    <div class="train-layout">
+    <div>
     <h2>Sessions</h2>
     <div class="row" id="train-pick"></div>
     <p id="train-pick-note" class="muted"></p>
-    <table id="train-sessions"></table>
+    <div class="table-scroll"><table id="train-sessions"></table></div>
+    </div>
+    <div>
     <h2>Model</h2>
     <div class="row narrow">
       <label>Model <select id="train-kind"><option value="lda">LDA</option><option value="network">Network</option></select></label>
@@ -247,6 +260,8 @@
     <div class="controls">
       <button id="net-eval-newest">Evaluate the newest session</button>
       <button id="net-eval">Evaluate all sessions</button>
+    </div>
+    </div>
     </div>
     <h2>Live test</h2>
     <div class="row narrow">
