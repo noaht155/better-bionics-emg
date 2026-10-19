@@ -25,7 +25,7 @@ from pydantic import BaseModel, Field
 from armband import Armband, Replay
 from calibrate import load_calibration
 from camera import Camera
-from control import DEFAULTS as CONTROL_DEFAULTS
+from control import DEFAULTS as CONTROL_DEFAULTS, check_rules, rules_for
 from esp32_link import WIFI_IP
 from gestures import (C_CLOSE_S, C_MOVE_S, C_ROUNDS, CATEGORIES, D_ACTIVITY_S, D_ROUNDS, E_ROUNDS, E_SIGN_S,
                       F_ROUNDS, F_SIGN_S, GESTURE_SET, GESTURES, GRIP_CLOSE_S, LIBRARY, POSTURES, plan_for)
@@ -33,7 +33,7 @@ from hand_angles import JOINTS, RELIABLE
 from processing import spectrum
 from recorder import Recorder
 from session import DATA_DIR
-from tools import Tools
+from tools import POSES, Tools
 
 # The ml package sits next to emg-reading/ in the repo
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
@@ -42,6 +42,8 @@ from ml import NETWORK_DIR, dataset, gesture_model  # noqa: E402
 WEB_DIR = Path(__file__).with_name("web")
 # Saved control parameter sets, next to the models. "default" is always the spec's values and isn't stored
 PRESET_FILE = gesture_model.MODEL_DIR.parent / "control_presets.json"
+# Saved mappings (rule lists) of the Control tab, apart from the profiles (presets) that also carry one
+MAPPING_FILE = gesture_model.MODEL_DIR.parent / "control_mappings.json"
 SEND_HZ = 20
 PREVIEW_HZ = 15
 
@@ -114,6 +116,8 @@ class TrainSettings(BaseModel):
     accel: bool = False
     extended: bool = True
     vote: int = Field(ge=1, le=15)
+    # Positions left out of training
+    exclude: list[str] = []
 
 
 class ModelChoice(BaseModel):
@@ -143,7 +147,7 @@ class ControlParams(BaseModel):
     release_s: float = Field(ge=0, le=5)
     # Presets saved before the distance check have no value, they get the default
     max_distance: float = Field(CONTROL_DEFAULTS["max_distance"], ge=0, le=50)
-    mode: Literal["lock", "blend", "trigger"] = CONTROL_DEFAULTS["mode"]
+    mode: Literal["lock", "blend", "trigger", "rules"] = CONTROL_DEFAULTS["mode"]
     smooth_s: float = Field(CONTROL_DEFAULTS["smooth_s"], ge=0, le=3)
     lock_s: float = Field(CONTROL_DEFAULTS["lock_s"], ge=0, le=5)
     pulse_level: float = Field(CONTROL_DEFAULTS["pulse_level"], ge=0, le=1)
@@ -179,19 +183,38 @@ class CursorTargets(BaseModel):
     on: bool
 
 
+class Rule(BaseModel):
+    """One line of a Control tab mapping, see control.py's rules mode."""
+    trigger: str = Field(max_length=60)
+    how: Literal["held", "repeated"]
+    value: float = Field(ge=0, le=10)
+    action: str = Field(max_length=60)
+
+
 class ControlPreset(BaseModel):
+    """A profile: settings, the mapping in use when it was saved and the model it was built on."""
     name: str = Field(pattern=r"^[A-Za-z0-9 _-]{1,40}$")
     params: ControlParams
+    rules: list[Rule] | None = None
+    model: str | None = None
+
+
+class ControlMapping(BaseModel):
+    name: str = Field(pattern=r"^[A-Za-z0-9 _-]{1,40}$")
+    rules: list[Rule]
+    model: str | None = None
 
 
 class NetworkJobSettings(BaseModel):
-    job: Literal["evaluate", "evaluate_newest", "train", "calibrate"]
+    job: Literal["evaluate", "evaluate_newest", "train", "calibrate", "signs"]
     epochs: int = Field(15, ge=1, le=200)
     network: str | None = None
     session: str | None = None
     reps: list[int] = Field([1, 2], min_length=1)
-    # Sessions to train a network on, None for all good sessions
+    # Sessions to train a network on, None for all good sessions; for signs the sign sessions
     sessions: list[str] | None = None
+    # Signs left out of a sign network, grip networks always learn all the grips
+    exclude: list[str] = []
 
 
 def placement_text(settings):
@@ -213,11 +236,21 @@ def session_list():
         meta = json.loads(path.read_text())
         settings = meta.get("settings", {})
         gestures = sum(c["kind"] == "hold" and c["label"] != "rest" for c in meta.get("plan", []))
-        signs = sum(c["kind"] == "custom" for c in meta.get("plan", [])) if settings.get("protocol") in ("E", "F") else 0
+        sign_session = settings.get("protocol") in ("E", "F")
+        signs = sum(c["kind"] == "custom" for c in meta.get("plan", [])) if sign_session else 0
+        # What a model trained on it could learn, for leaving positions out on the Train tab
+        plan = meta.get("plan", [])
+        if sign_session:
+            positions = {c["label"] for c in plan if c["kind"] == "custom"}
+            positions |= {"notsign"} if any(c["kind"] == "nogrip" for c in plan) else set()
+        else:
+            positions = {c["label"] for c in plan if c["kind"] == "hold" and c["label"] in GESTURE_SET}
+        positions.discard("rest")
         out.append({"name": path.parent.name, "subject": meta.get("subject"), "postures": settings.get("postures"),
                     "band_arm": settings.get("band_arm"), "port_facing": settings.get("port_facing"),
                     "placement": placement_text(settings),
-                    "gestures": gestures, "signs": signs, "completed": meta.get("completed"),
+                    "gestures": gestures, "signs": signs, "positions": sorted(positions),
+                    "completed": meta.get("completed"),
                     "seconds": round(meta["ended"] - meta["started"]) if meta.get("ended") else None,
                     "protocol": settings.get("protocol", "A")})
     return out
@@ -245,13 +278,19 @@ def network_list():
         return []
     out = []
     for path in sorted(NETWORK_DIR.glob("*.pt"), reverse=True):
-        info = torch.load(path, map_location="cpu", weights_only=True)["info"]
-        out.append(dict(info, name=path.name))
+        blob = torch.load(path, map_location="cpu", weights_only=True)
+        out.append(dict(blob["info"], name=path.name, classes=blob["classes"]))
     return out
 
 
 def saved_presets():
-    return json.loads(PRESET_FILE.read_text()) if PRESET_FILE.exists() else {}
+    """{name: {"params", "rules", "model"}}. Presets saved before profiles were only the params."""
+    presets = json.loads(PRESET_FILE.read_text()) if PRESET_FILE.exists() else {}
+    return {k: v if "params" in v else {"params": v, "rules": None, "model": None} for k, v in presets.items()}
+
+
+def saved_mappings():
+    return json.loads(MAPPING_FILE.read_text()) if MAPPING_FILE.exists() else {}
 
 
 def refuse(e):
@@ -424,7 +463,7 @@ def make_app(recorder, band, camera, tools):
         try:
             tools.trainer.start([str(f) for f in folders],
                                 {"log": settings.log, "accel": settings.accel, "vote": settings.vote,
-                                 "extended": settings.extended})
+                                 "extended": settings.extended, "exclude": settings.exclude})
         except ValueError as e:
             refuse(e)
         return {"ok": True}
@@ -440,6 +479,8 @@ def make_app(recorder, band, camera, tools):
     @app.post("/api/network/run")
     def run_network(settings: NetworkJobSettings):
         good = [f.name for f in dataset.good_sessions()]
+        if settings.exclude and settings.job != "signs":
+            refuse("leaving out positions works for LDA and sign networks; grip networks always learn all 7 grips")
         if settings.job in ("evaluate", "evaluate_newest") and len(good) < 2:
             refuse("needs at least 2 completed sessions with grips")
         if settings.job == "evaluate":
@@ -458,8 +499,16 @@ def make_app(recorder, band, camera, tools):
             name = settings.network or ""
             if Path(name).name != name or not (NETWORK_DIR / name).is_file():
                 refuse("unknown network")
-            args = ["ml.networks", "calibrate", name, str(session_folder(settings.session or "")),
-                    "--reps", *map(str, settings.reps)]
+            if settings.job == "signs":
+                signs = [s["name"] for s in session_list() if s["completed"] and s["signs"]]
+                if not settings.sessions or any(n not in signs for n in settings.sessions):
+                    refuse("pick at least one completed sign session")
+                args = ["ml.networks", "signs", name, "--epochs", str(settings.epochs), "--sessions", *settings.sessions]
+                if settings.exclude:
+                    args += ["--exclude", *settings.exclude]
+            else:
+                args = ["ml.networks", "calibrate", name, str(session_folder(settings.session or "")),
+                        "--reps", *map(str, settings.reps)]
         try:
             tools.network.start(settings.job, args)
         except ValueError as e:
@@ -489,7 +538,8 @@ def make_app(recorder, band, camera, tools):
         try:
             if path.suffix == ".pt":
                 info = next(n for n in network_list() if n["name"] == choice.name)
-                if not info.get("calibrated_on"):
+                # A sign network takes its levels from its newest training session until it is calibrated
+                if not info.get("calibrated_on") and info.get("kind") != "signs":
                     refuse("calibrate the network on a session first, the effort levels come from it")
                 session = model_session({"kind": "network", "info": info})
             else:
@@ -512,16 +562,55 @@ def make_app(recorder, band, camera, tools):
         tools.control.reset_counts()
         return {"ok": True}
 
+    @app.post("/api/control/rules")
+    def control_rules(rules: list[Rule]):
+        try:
+            tools.control.set_rules([r.model_dump() for r in rules])
+        except ValueError as e:
+            refuse(e)
+        return {"ok": True}
+
+    @app.post("/api/control/default_rules")
+    def control_default_rules(classes: list[str]):
+        """The default mapping for a model with these classes."""
+        return rules_for(classes)
+
+    @app.get("/api/control/mappings")
+    def control_mappings():
+        return saved_mappings()
+
+    @app.post("/api/control/mappings")
+    def save_control_mapping(mapping: ControlMapping):
+        try:
+            check_rules([r.model_dump() for r in mapping.rules], POSES)
+        except ValueError as e:
+            refuse(e)
+        mappings = saved_mappings()
+        mappings[mapping.name] = {"rules": [r.model_dump() for r in mapping.rules], "model": mapping.model}
+        MAPPING_FILE.parent.mkdir(parents=True, exist_ok=True)
+        MAPPING_FILE.write_text(json.dumps(mappings, indent=2) + "\n")
+        return {"ok": True}
+
+    @app.delete("/api/control/mappings/{name}")
+    def delete_control_mapping(name: str):
+        mappings = saved_mappings()
+        if mappings.pop(name, None) is None:
+            refuse("no saved mapping with that name")
+        MAPPING_FILE.write_text(json.dumps(mappings, indent=2) + "\n")
+        return {"ok": True}
+
     @app.get("/api/control/presets")
     def control_presets():
-        return {"default": CONTROL_DEFAULTS, **saved_presets()}
+        return {"default": {"params": dict(CONTROL_DEFAULTS, mode="rules"), "rules": None, "model": None},
+                **saved_presets()}
 
     @app.post("/api/control/presets")
     def save_control_preset(preset: ControlPreset):
         if preset.name == "default":
             refuse("default is fixed, pick another name")
         presets = saved_presets()
-        presets[preset.name] = preset.params.model_dump()
+        presets[preset.name] = {"params": preset.params.model_dump(), "model": preset.model,
+                                "rules": None if preset.rules is None else [r.model_dump() for r in preset.rules]}
         PRESET_FILE.parent.mkdir(parents=True, exist_ok=True)
         PRESET_FILE.write_text(json.dumps(presets, indent=2) + "\n")
         return {"ok": True}
@@ -575,9 +664,11 @@ def make_app(recorder, band, camera, tools):
 
     def model_session(model):
         """The session a model's levels come from: the one a calibrated network was calibrated on, or an LDA
-        model's newest training session. None if it isn't on this computer."""
-        if model.get("kind") == "network":
+        model's or sign network's newest training session. None if it isn't on this computer."""
+        if model.get("kind") == "network" and model["info"].get("kind") != "signs":
             session = model["info"].get("calibrated_on")
+        elif model.get("kind") == "network":
+            session = model["info"]["sessions"][-1]
         else:
             session = (model.get("sessions") or [None])[-1]
         return session if session and (DATA_DIR / session / "session.json").exists() else None

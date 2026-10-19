@@ -66,7 +66,7 @@ input, select, button {
   padding: 6px 8px;
 }
 
-label input:not([type=checkbox]), label select { display: block; width: 100%; margin-top: 2px; }
+label input:not([type=checkbox]):not([type=radio]), label select { display: block; width: 100%; margin-top: 2px; }
 
 .row { display: flex; gap: 12px; flex-wrap: wrap; }
 .row label { flex: 1; min-width: 110px; }
@@ -213,10 +213,24 @@ th { color: var(--muted); font-weight: 400; }
   .ctl-layout { grid-template-columns: 1.3fr 1fr; grid-template-areas: "live settings" "plots settings"; align-items: start; }
 }
 @media (orientation: landscape) and (min-width: 1400px) {
-  .ctl-layout { grid-template-columns: 1fr 1.3fr 1fr; grid-template-areas: "live plots settings"; }
+  .ctl-layout { grid-template-columns: 0.9fr 1.2fr 1.1fr; grid-template-areas: "live plots settings"; }
 }
 #ctl-hand { display: block; width: min(100%, calc(45vh * 1.2)); margin: 0 auto; background: #16181c; border-radius: 6px; cursor: grab; touch-action: none; }
 #ctl-trace, #ctl-probs { width: 100%; }
+.ctl-mapping { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin: 10px 0; color: var(--text); }
+.ctl-mapping small { flex-basis: 100%; color: var(--muted); }
+.row.filters label { flex: 0 0 auto; margin-right: 16px; }
+#ctl-rules input { width: 6em; }
+.pose-pick { min-width: 14em; text-align: left; }
+#ctl-pose-picker { position: fixed; z-index: 20; display: flex; gap: 12px; padding: 8px; background: var(--panel); border: 1px solid #3a3f48; border-radius: 6px; box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5); }
+#ctl-pose-picker[hidden] { display: none; }
+#ctl-pose-list { width: 240px; max-height: 60vh; overflow-y: auto; }
+.pick-group { font-weight: 700; font-style: italic; color: var(--text); padding: 6px 6px 2px; }
+.pick-item { padding: 3px 6px 3px 18px; border-radius: 4px; cursor: pointer; color: var(--text); }
+.pick-item:hover { background: #3a3f48; }
+.pick-item.current { color: var(--accent); }
+#ctl-pose-preview { display: block; background: var(--bg); border-radius: 6px; }
+#ctl-pose-name { text-align: center; margin-top: 6px; color: var(--text); }
 .param { display: grid; grid-template-columns: 9em 1fr 4em; gap: 8px; align-items: center; margin: 6px 0; color: var(--text); }
 .param input[type=range] { width: 100%; padding: 0; }
 .param output { font-variant-numeric: tabular-nums; text-align: right; }

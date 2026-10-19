@@ -17,7 +17,6 @@ function showTab(name) {
   if (name === "signals") openSignals();
   else closeSignals();
   if (name === "train") loadTrainLists();
-  if (name === "network") loadNetworkLists();
   if (name === "control") loadControlLists();
   if (name === "cursor") loadCursorSessions();
 }
@@ -290,51 +289,140 @@ function ldaLabel(m) {
   return `${m.name}, trained on ${m.sessions.map(shortSession).join(", ")}${acc}`;
 }
 
+// Grip sessions (protocols A to D) and sign sessions (E, F) train separate models, the server refuses a mix too
+const signSession = (s) => s.protocol === "E" || s.protocol === "F";
+const GRIP_PROTOCOLS = ["A", "B", "C", "D"];
+const SIGN_PROTOCOLS = ["E", "F"];
+let trainSessions = [];
+// Sign networks start from the newest general network (networks are listed newest first)
+let newestGeneral = null;
+
+function networkLabel(n) {
+  if (n.kind === "signs") return `${n.name}, sign network from ${n.sessions.length} sessions, not calibrated`;
+  const score = n.balanced != null ? `, ${pct(n.balanced)} balanced on its other repetitions` : "";
+  const seen = n.seen_in_training ? " (session was in training, optimistic)" : "";
+  return `${n.name}, ${n.signs ? "sign " : ""}network calibrated on ${shortSession(n.calibrated_on)}${score}${seen}`;
+}
+
 async function loadTrainLists() {
-  const [sessions, models] = await Promise.all([fetch("/api/sessions"), fetch("/api/models")].map((r) => r.then((x) => x.json())));
+  const [sessions, models, networks] = await Promise.all(["/api/sessions", "/api/models", "/api/networks"]
+    .map((u) => fetch(u).then((x) => x.json())));
   const table = $("train-sessions");
   const checked = new Set([...table.querySelectorAll("input:checked")].map((c) => c.value));
   const listed = new Set([...table.querySelectorAll("input")].map((c) => c.value));
-  // Sign sessions (E, F) train a sign model, they can't be mixed with grip sessions (the server refuses)
-  const usable = sessions.filter((s) => s.gestures > 0 || s.signs > 0);
+  const signsTicked = trainSessions.some((s) => checked.has(s.name) && signSession(s));
+  trainSessions = sessions.filter((s) => s.gestures > 0 || s.signs > 0);
   table.innerHTML = "<tr><th></th><th>Session</th><th>Arm</th><th>Postures</th><th>Placement</th><th>Length</th><th>Protocol</th></tr>";
-  for (const s of usable) {
+  for (const s of trainSessions) {
     const tr = document.createElement("tr");
-    // Keep the choice for sessions already listed, a grip session recorded since then starts ticked if it finished.
-    // Sign sessions start unticked and "good" only ticks grip sessions, a mix can't be trained
-    const good = s.completed && s.gestures > 0;
-    const on = listed.has(s.name) ? checked.has(s.name) : good;
-    tr.innerHTML = `<td><input type="checkbox" value="${s.name}" data-good="${good ? 1 : ""}" ${on ? "checked" : ""}></td><td>${s.name}</td>
+    // Keep the choice for sessions already listed. A grip session recorded since then starts ticked if it finished
+    // and no sign sessions are ticked
+    const on = listed.has(s.name) ? checked.has(s.name) : s.completed && !signSession(s) && !signsTicked;
+    tr.innerHTML = `<td><input type="checkbox" value="${s.name}" ${on ? "checked" : ""}></td><td>${s.name}</td>
       <td>${s.band_arm ?? ""}${s.port_facing ? `, port to ${s.port_facing}` : ""}</td><td>${(s.postures || []).join(", ")}</td><td>${s.placement || ""}</td>
       <td>${s.seconds ? fmtTime(s.seconds) : ""}${s.completed ? "" : " (stopped early)"}</td>
       <td>${s.protocol}</td>`;
     table.append(tr);
   }
-  if (!usable.length) table.innerHTML = "<tr><td>No sessions with gestures yet, record one on the Record tab.</td></tr>";
-  const select = $("model-select");
-  const current = select.value;
-  select.innerHTML = models.map((m) => `<option value="${m.name}">${ldaLabel(m)}</option>`).join("")
-    || "<option value=''>no models yet</option>";
+  if (!trainSessions.length) table.innerHTML = "<tr><td>No sessions with gestures yet, record one on the Record tab.</td></tr>";
+  const present = new Set(trainSessions.map((s) => s.protocol));
+  const picks = [["All grip sessions (A to D)", GRIP_PROTOCOLS], ...GRIP_PROTOCOLS.map((p) => [`All ${p}`, [p]]),
+    ["All sign sessions (E, F)", SIGN_PROTOCOLS], ...SIGN_PROTOCOLS.map((p) => [`All ${p}`, [p]])]
+    .filter(([, protocols]) => protocols.some((p) => present.has(p)));
+  $("train-pick").innerHTML = picks.map(([label, protocols]) => `<button data-protocols="${protocols.join("")}">${label}</button>`).join("")
+    + "<button data-protocols=''>Deselect all</button>";
+  updateTrainForm();
+
+  newestGeneral = networks.find((n) => n.kind === "general") || null;
+  fillSelect($("net-base"), networks.filter((n) => n.kind === "general" || n.kind === "signs"),
+    (n) => `${n.name}, ${n.kind === "signs" ? "signs from " : ""}${n.sessions.length} sessions, ${n.epochs} epochs`);
+  fillSelect($("net-session"), trainSessions, (s) => `${s.name}, protocol ${s.protocol}${s.completed ? "" : " (stopped early)"}`);
+  const live = [...models, ...networks.filter((n) => n.kind === "calibrated" || n.kind === "signs")];
+  fillSelect($("model-select"), live, (m) => (m.name.endsWith(".pt") ? networkLabel(m) : `LDA ${ldaLabel(m)}`));
   // A model that was just trained is already running, show that one
   const running = state?.tools?.predictor?.running && state.tools.predictor.model;
-  if (running && models.some((m) => m.name === running)) select.value = running;
-  else if (current && models.some((m) => m.name === current)) select.value = current;
+  if (running && live.some((m) => m.name === running)) $("model-select").value = running;
 }
 
-// Good is a completed session, the same rule training data follows
-$("train-all-good").addEventListener("click", () => {
-  for (const c of $("train-sessions").querySelectorAll("input")) c.checked = Boolean(c.dataset.good);
-});
-$("train-none").addEventListener("click", () => {
-  for (const c of $("train-sessions").querySelectorAll("input")) c.checked = false;
+function tickedSessions() {
+  const names = new Set([...$("train-sessions").querySelectorAll("input:checked")].map((c) => c.value));
+  return trainSessions.filter((s) => names.has(s.name));
+}
+
+// Completed sessions of the picked protocols. Picking the other kind unticks the ticked ones first
+$("train-pick").addEventListener("click", (e) => {
+  const protocols = e.target.dataset?.protocols;
+  if (protocols == null) return;
+  for (const c of $("train-sessions").querySelectorAll("input")) {
+    const s = trainSessions.find((x) => x.name === c.value);
+    c.checked = Boolean(protocols) && s.completed && protocols.includes(s.protocol);
+  }
+  $("train-pick-note").textContent = "";
+  updateTrainForm();
 });
 
+// Ticking a session of the other kind unticks the rest
+$("train-sessions").addEventListener("change", (e) => {
+  if (!e.target.checked) return updateTrainForm();
+  const sign = signSession(trainSessions.find((s) => s.name === e.target.value));
+  let cleared = 0;
+  for (const c of $("train-sessions").querySelectorAll("input:checked")) {
+    if (signSession(trainSessions.find((s) => s.name === c.value)) !== sign) { c.checked = false; cleared++; }
+  }
+  $("train-pick-note").textContent = cleared
+    ? `Unticked ${cleared} ${sign ? "grip" : "sign"} session${cleared > 1 ? "s" : ""}: grip and sign sessions train separate models.` : "";
+  updateTrainForm();
+});
+
+let trainFamily = null;
+function updateTrainForm() {
+  const ticked = tickedSessions();
+  const signs = ticked.some(signSession);
+  const network = $("train-kind").value === "network";
+  $("train-lda-options").hidden = network;
+  $("train-net-options").hidden = !network;
+  // Sign networks only fine-tune a general one, they settle in more epochs
+  if (signs !== trainFamily) $("net-epochs").value = signs ? 30 : 15;
+  trainFamily = signs;
+  $("train-kind-note").textContent = !network ? "Trains, tests each session on a model trained on the others, saves it and makes it the live one."
+    : signs ? (newestGeneral ? `Starts from the newest general network (${newestGeneral.name}, trained on ${newestGeneral.sessions.length} grip sessions), `
+      + "which already knows what this band's EMG looks like, and fine-tunes it on the signs every ticked session has. Calibrate it below before live use."
+      : "Needs a general network to start from: train one on grip sessions first.")
+    : "Trains a new general network on the ticked sessions. Calibrate it below before live use.";
+  // Only the positions every ticked session has can be trained, those are the ones to leave out
+  const shared = ticked.length ? ticked.map((s) => new Set(s.positions || []))
+    .reduce((a, b) => new Set([...a].filter((x) => b.has(x)))) : new Set();
+  const box = $("train-exclude-list");
+  const was = new Set([...box.querySelectorAll("input:checked")].map((c) => c.value));
+  box.innerHTML = [...shared].sort().map((p) => `<label class="check"><input type="checkbox" value="${p}"
+    ${was.has(p) ? "checked" : ""}> ${p.replaceAll("_", " ")}</label>`).join("")
+    || `<small>${!ticked.length ? "tick sessions first"
+      : ticked.some((s) => !s.positions) ? "restart the app, the running server is older than this page"
+      : "the ticked sessions share no positions"}</small>`;
+  box.hidden = !$("train-exclude").checked;
+}
+
+$("train-kind").addEventListener("change", updateTrainForm);
+$("train-exclude").addEventListener("change", updateTrainForm);
+
 $("train-start").addEventListener("click", () => {
-  const sessions = [...$("train-sessions").querySelectorAll("input:checked")].map((c) => c.value);
-  postShowing("/api/train", {
-    sessions, log: $("train-log").checked, accel: $("train-accel").checked, extended: $("train-extended").checked,
-    vote: Number($("train-vote").value),
-  }, "train-error");
+  const ticked = tickedSessions();
+  const sessions = ticked.map((s) => s.name);
+  const exclude = $("train-exclude").checked
+    ? [...$("train-exclude-list").querySelectorAll("input:checked")].map((c) => c.value) : [];
+  $("train-error").textContent = "";
+  $("net-error").textContent = "";
+  if ($("train-kind").value === "lda") {
+    postShowing("/api/train", {
+      sessions, log: $("train-log").checked, accel: $("train-accel").checked, extended: $("train-extended").checked,
+      vote: Number($("train-vote").value), exclude,
+    }, "train-error");
+    return;
+  }
+  const signs = ticked.some(signSession);
+  const body = { job: signs ? "signs" : "train", epochs: Number($("net-epochs").value), sessions, exclude };
+  if (signs) body.network = newestGeneral?.name;
+  postShowing("/api/network/run", body, "net-error");
 });
 
 // Haptics start with the model, on the ESP32 link set on the Haptics tab
@@ -346,17 +434,13 @@ async function useModel(name, error, note) {
 
 $("model-use").addEventListener("click", () => useModel($("model-select").value, "model-error", "model-haptics"));
 $("model-stop").addEventListener("click", () => post("/api/model/stop").catch(() => {}));
-// The Train and Deep learning tabs both set the one threshold the running model uses
-for (const [box, error] of [["model-threshold", "model-error"], ["net-threshold", "net-error"]]) {
-  $(box).addEventListener("change", () => {
-    const value = Math.min(0.99, Math.max(0, Number($(box).value)));
-    post("/api/model/threshold", { value }).catch((err) => { $(error).textContent = err.message; });
-  });
-}
+$("model-threshold").addEventListener("change", () => {
+  const value = Math.min(0.99, Math.max(0, Number($("model-threshold").value)));
+  post("/api/model/threshold", { value }).catch((err) => { $("model-error").textContent = err.message; });
+});
 
 let trainWasRunning = false;
 function drawTrain(t) {
-  $("train-start").disabled = t.running;
   $("train-step").textContent = t.running ? `${t.step || "starting"}...` : "";
   if (t.error) $("train-error").textContent = t.error;
   $("train-result").textContent = (t.lines || []).join("\n");
@@ -475,33 +559,9 @@ function showParams(defs, prefix, params) {
   }
 }
 
-async function loadNetworkLists() {
-  const [sessions, networks] = await Promise.all([fetch("/api/sessions"), fetch("/api/networks")].map((r) => r.then((x) => x.json())));
-  const good = sessions.filter((s) => s.completed && s.gestures > 0);
-  $("net-count").textContent = `${good.length} now`;
-  // Keep the ticks of sessions already listed, a session that is new since then starts ticked
-  const box = $("net-train-sessions");
-  const listed = new Set([...box.querySelectorAll("input")].map((c) => c.value));
-  const ticked = new Set([...box.querySelectorAll("input:checked")].map((c) => c.value));
-  box.innerHTML = "<legend>Sessions</legend>" + good.map((s) => `<label><input type="checkbox" value="${s.name}"
-    ${!listed.has(s.name) || ticked.has(s.name) ? "checked" : ""}> ${s.name}</label>`).join("");
-  fillSelect($("net-base"), networks.filter((n) => n.kind === "general"),
-    (n) => `${n.name}, ${n.sessions.length} sessions, ${n.epochs} epochs`);
-  fillSelect($("net-session"), sessions.filter((s) => s.gestures > 0),
-    (s) => `${s.name}${s.completed ? "" : " (stopped early)"}`);
-  fillSelect($("net-live"), networks.filter((n) => n.kind === "calibrated"), (n) => {
-    const score = n.balanced != null ? `, ${pct(n.balanced)} balanced on its other repetitions` : "";
-    const seen = n.seen_in_training ? " (session was in training, optimistic)" : "";
-    return `${n.name}, calibrated on ${shortSession(n.calibrated_on)}${score}${seen}`;
-  });
-  // A network that was just saved is the one to use next
-  const running = state?.tools?.predictor?.running && state.tools.predictor.model;
-  if (running && networks.some((n) => n.name === running)) $("net-live").value = running;
-}
-
+// Calibration and evaluation run as a network job like training
 function runNetwork(job) {
   const body = { job, epochs: Number($("net-epochs").value) };
-  if (job === "train") body.sessions = [...$("net-train-sessions").querySelectorAll("input:checked")].map((c) => c.value);
   if (job === "calibrate") {
     body.network = $("net-base").value;
     body.session = $("net-session").value;
@@ -512,11 +572,8 @@ function runNetwork(job) {
 
 $("net-eval-newest").addEventListener("click", () => runNetwork("evaluate_newest"));
 $("net-eval").addEventListener("click", () => runNetwork("evaluate"));
-$("net-train").addEventListener("click", () => runNetwork("train"));
 $("net-calibrate").addEventListener("click", () => runNetwork("calibrate"));
 $("net-stop").addEventListener("click", () => post("/api/network/stop").catch(() => {}));
-$("net-use").addEventListener("click", () => useModel($("net-live").value, "net-error", "net-haptics"));
-$("net-live-stop").addEventListener("click", () => post("/api/model/stop").catch(() => {}));
 
 function networkTable(job, r) {
   if (job.startsWith("evaluate") && r.grips) {
@@ -530,8 +587,11 @@ function networkTable(job, r) {
   if (job === "calibrate" && r.scores) {
     const m = r.scores;
     const note = r.seen_in_training ? " (the network trained on this session, optimistic)" : "";
-    return `<tr><th>other repetitions${note}</th><th>balanced</th><th>rest taken for a grip</th><th>wrong grip shown</th></tr>
-      <tr><td>${r.saved}</td><td>${pct(m.balanced)}</td><td>${pct(m.rest_false)}</td><td>${pct(m.wrong)}</td></tr>`;
+    const wrist = m.wrist_as_sign != null;
+    return `<tr><th>other repetitions${note}</th><th>balanced</th><th>rest taken for a position</th>
+      <th>wrong position shown</th>${wrist ? "<th>wrist bends read as a sign</th>" : ""}</tr>
+      <tr><td>${r.saved}</td><td>${pct(m.balanced)}</td><td>${pct(m.rest_false)}</td><td>${pct(m.wrong)}</td>
+      ${wrist ? `<td>${pct(m.wrist_as_sign)}</td>` : ""}</tr>`;
   }
   return "";
 }
@@ -588,7 +648,8 @@ $("net-side").addEventListener("change", () => {
 let networkWasRunning = false;
 let shownNetError = null;
 function drawNetwork(n, p) {
-  for (const id of ["net-eval-newest", "net-eval", "net-train", "net-calibrate"]) $(id).disabled = n.running;
+  for (const id of ["net-eval-newest", "net-eval", "net-calibrate"]) $(id).disabled = n.running;
+  $("train-start").disabled = n.running || state.tools.trainer.running;
   $("net-stop").disabled = !n.running;
   // Time since the last line tells a slow job from a stalled one, every finished epoch prints a line
   $("net-step").textContent = n.running
@@ -603,14 +664,8 @@ function drawNetwork(n, p) {
   if ($("net-table").innerHTML !== html) $("net-table").innerHTML = html;
   $("net-table").hidden = !html;
   $("net-lines").textContent = (n.lines || []).join("\n");
-  if (networkWasRunning && !n.running && currentTab === "network") loadNetworkLists();
+  if (networkWasRunning && !n.running && currentTab === "train") loadTrainLists();
   networkWasRunning = n.running;
-  $("net-live-stop").disabled = !p.running;
-  const box = $("net-threshold");
-  if (p.threshold != null && document.activeElement !== box) box.value = p.threshold;
-  $("net-status").textContent = p.running ? `Running ${p.model}` : "No model running";
-  $("net-label").innerHTML = predictionLabel(p);
-  drawProbs(p, "net-probs");
   const side = $("setup").tracked_hand.value;
   if (document.activeElement !== $("net-side") && $("net-side").value !== side) $("net-side").value = side;
   drawNetHand(p);

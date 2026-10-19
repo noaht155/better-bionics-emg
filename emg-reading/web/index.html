@@ -14,7 +14,6 @@
   <button data-tab="signals">Signals</button>
   <button data-tab="calibrate">Calibrate</button>
   <button data-tab="train">Train</button>
-  <button data-tab="network">Deep learning</button>
   <button data-tab="control">Control</button>
   <button data-tab="cursor">Cursor</button>
   <button data-tab="haptics">Haptics</button>
@@ -191,33 +190,70 @@
 
 <main id="tab-train" class="tab single" hidden>
   <section>
-    <h1>Gesture model (protocol A)</h1>
-    <p class="muted">LDA on 200 ms windows of the filtered EMG. Trains on the ticked sessions, tests each one on a model
-      trained on the others, saves the model and makes it the live one.</p>
+    <h1>Train</h1>
+    <p class="muted">Every model trains here: LDA (seconds, on the CPU) or the ring network (on the GPU, only on the
+      training desktop, needs torch). Both use 200 ms windows of the filtered EMG. Grip sessions (protocols A to D)
+      and sign sessions (E and F) train separate models, so they can't be ticked together.</p>
     <h2>Sessions</h2>
-    <div class="row">
-      <button id="train-all-good">Select all good</button>
-      <button id="train-none">Deselect all</button>
-    </div>
+    <div class="row" id="train-pick"></div>
+    <p id="train-pick-note" class="muted"></p>
     <table id="train-sessions"></table>
+    <h2>Model</h2>
     <div class="row narrow">
+      <label>Model <select id="train-kind"><option value="lda">LDA</option><option value="network">Network</option></select></label>
+    </div>
+    <div id="train-lda-options" class="row narrow">
       <label class="check"><input type="checkbox" id="train-log" checked> Log amplitude features</label>
       <label class="check"><input type="checkbox" id="train-extended" checked> Extra features (frequency shape, channel correlations)</label>
       <label class="check"><input type="checkbox" id="train-accel"> Accelerometer features</label>
       <label>Majority vote <input id="train-vote" type="number" min="1" max="15" value="5"></label>
     </div>
-    <button id="train-start" class="primary">Train and evaluate</button>
+    <div id="train-net-options" class="row narrow" hidden>
+      <label>Epochs <input id="net-epochs" type="number" min="1" max="200" value="15"></label>
+    </div>
+    <p id="train-kind-note" class="muted"></p>
+    <label class="check"><input type="checkbox" id="train-exclude"> Leave positions out</label>
+    <div id="train-exclude-list" class="row" hidden></div>
+    <div class="controls">
+      <button id="train-start" class="primary">Train</button>
+      <button id="net-stop">Stop network job</button>
+    </div>
     <p id="train-step" class="muted"></p>
     <p id="train-error" class="error"></p>
     <pre id="train-result"></pre>
+    <p id="net-step" class="muted"></p>
+    <p id="net-error" class="error"></p>
+    <table id="net-table" hidden></table>
+    <pre id="net-lines"></pre>
+    <h2>Calibrate a network</h2>
+    <p class="muted">Fits the per-person transform and the output layer on the chosen repetitions of a session recorded
+      at the current band position, scores it on the other repetitions and saves the calibrated network. A sign
+      network takes a sign session; there the repetitions are its rounds (round 1 is the first time each sign comes up
+      in each posture). LDA models don't need this, train one on the new session instead.</p>
+    <div class="row narrow">
+      <label>Network <select id="net-base"></select></label>
+      <label>Session <select id="net-session"></select></label>
+      <label>Repetitions <input id="net-reps" value="1 2"></label>
+    </div>
+    <div class="controls"><button id="net-calibrate">Calibrate</button></div>
+    <h2>Evaluate networks</h2>
+    <p class="muted">Grip sessions only. Leaves each session out in turn, trains on the others and tests on it, without
+      and with a 2-repetition calibration, against LDA on the same windows. Newest only scores the newest session on a
+      network that hasn't seen it, do that before training on a new session. Uses the epochs above.</p>
+    <div class="controls">
+      <button id="net-eval-newest">Evaluate the newest session</button>
+      <button id="net-eval">Evaluate all sessions</button>
+    </div>
     <h2>Live test</h2>
     <div class="row narrow">
       <label>Model <select id="model-select"></select></label>
+      <label>Hand <select id="net-side"><option value="right">right hand</option><option value="left">left hand</option></select></label>
       <label>Confidence threshold
         <input id="model-threshold" type="number" min="0" max="0.99" step="0.05" value="0.8">
       </label>
     </div>
-    <p class="muted">Below the threshold the output says unsure instead of guessing. 0 always guesses.</p>
+    <p class="muted">Below the threshold the output says unsure instead of guessing, it changes the running model
+      straight away. 0 always guesses. The Record tab's model view shows the same output.</p>
     <div class="controls">
       <button id="model-use">Use this model</button>
       <button id="model-stop">Stop</button>
@@ -227,68 +263,11 @@
     <p id="model-error" class="error"></p>
     <div id="live-label" class="big-label"></div>
     <canvas id="live-probs" width="900" height="320"></canvas>
-  </section>
-</main>
-
-<main id="tab-network" class="tab single" hidden>
-  <section>
-    <h1>General network</h1>
-    <p class="muted">The ring network on 200 ms windows of the filtered EMG, trained on every completed session with
-      grips (<span id="net-count">-</span>). Runs as a separate low-priority process, so it is safe during a
-      recording. Only on the training desktop (needs torch).</p>
-    <h2>Evaluate</h2>
-    <p class="muted">Leaves each session out in turn, trains on the others and tests on it, without and with a
-      2-repetition calibration, against LDA on the same windows. Newest only scores the newest session on a network
-      that hasn't seen it, do that before training on a new session.</p>
-    <div class="row narrow">
-      <label>Epochs <input id="net-epochs" type="number" min="1" max="200" value="15"></label>
-    </div>
-    <div class="controls">
-      <button id="net-eval-newest">Evaluate the newest session</button>
-      <button id="net-eval">Evaluate all sessions</button>
-    </div>
-    <h2>Train</h2>
-    <p class="muted">Trains one network on the ticked sessions and saves it. All of them is the normal case, a single
-      session is for testing it on its own. It still needs a calibration before live use.</p>
-    <fieldset id="net-train-sessions"><legend>Sessions</legend></fieldset>
-    <div class="controls"><button id="net-train" class="primary">Train on the ticked sessions</button></div>
-    <h2>Calibrate</h2>
-    <p class="muted">Fits the per-person transform and the grip head on the chosen repetitions of a session recorded at
-      the current band position, scores it on the other repetitions and saves the calibrated network.</p>
-    <div class="row narrow">
-      <label>Network <select id="net-base"></select></label>
-      <label>Session <select id="net-session"></select></label>
-      <label>Repetitions <input id="net-reps" value="1 2"></label>
-    </div>
-    <div class="controls"><button id="net-calibrate">Calibrate</button></div>
-    <p id="net-step" class="muted"></p>
-    <p id="net-haptics" class="muted"></p>
-    <p id="net-error" class="error"></p>
-    <div class="controls"><button id="net-stop">Stop job</button></div>
-    <table id="net-table" hidden></table>
-    <pre id="net-lines"></pre>
-    <h2>Live test</h2>
-    <div class="row narrow">
-      <label>Network <select id="net-live"></select></label>
-      <label>Hand <select id="net-side"><option value="right">right hand</option><option value="left">left hand</option></select></label>
-      <label>Confidence threshold
-        <input id="net-threshold" type="number" min="0" max="0.99" step="0.05" value="0.8">
-      </label>
-    </div>
-    <p class="muted">Below the threshold the output says unsure instead of guessing, it changes the running model
-      straight away. Same setting as on the Train tab, and the Record tab's model view shows the same output.</p>
-    <div class="controls">
-      <button id="net-use">Use this network</button>
-      <button id="net-live-stop">Stop</button>
-    </div>
-    <p id="net-status" class="muted"></p>
-    <div id="net-label" class="big-label"></div>
-    <canvas id="net-probs" width="900" height="320"></canvas>
     <h2>Finger angles</h2>
-    <p class="muted">Blue: the hand the camera tracks. Orange: the angle head, trained to ignore how hard the muscles
-      fire. Green: the effort head, trained to use it (a finger bent halfway against fully). Both come from the same
-      pass of the network. Drag either to turn both. The match compares each with the camera on the base and middle
-      joints; the joints the network doesn't predict yet (spread, finger tips) are drawn relaxed.</p>
+    <p class="muted">Grip networks only. Blue: the hand the camera tracks. Orange: the angle head, trained to ignore how
+      hard the muscles fire. Green: the effort head, trained to use it (a finger bent halfway against fully). Both come
+      from the same pass of the network. Drag either to turn both. The match compares each with the camera on the base
+      and middle joints; the joints the network doesn't predict yet (spread, finger tips) are drawn relaxed.</p>
     <div class="hand-pair">
       <div><canvas id="net-hand" width="520" height="420"></canvas><div id="net-match" class="big-label"></div></div>
       <div><canvas id="net-hand-effort" width="520" height="420"></canvas><div id="net-match-effort" class="big-label"></div></div>
@@ -297,12 +276,13 @@
 </main>
 
 <main id="tab-control" class="tab single" hidden>
-  <section>
+  <section id="ctl-main">
     <h1>Grip control</h1>
-    <p class="muted">The gesture model picks a grip only while effort rises from rest, then the grip is locked and
-      effort closes the hand along the path from relaxed to the grip's pose, until a release. Effort is each channel's
-      envelope scaled between the rest and max levels of the model's newest training session (the haptics' levels),
-      mean over the channels with pad contact. Every setting applies straight away while it runs.</p>
+    <p class="muted">The model's output drives a virtual hand. Effort is each channel's envelope scaled between the rest
+      and max levels of the model's newest training session, or the session a network was calibrated on (the haptics'
+      levels), mean over the channels with pad contact. In rules mode the mapping says which pattern picks which pose;
+      while a pose is held, squeezing closes the hand in proportion to effort. Every setting applies straight away
+      while it runs.</p>
     <div class="row narrow">
       <label>Model <select id="ctl-model"></select></label>
     </div>
@@ -323,15 +303,21 @@
       <div class="ctl-plots">
         <h2>Last 10 s</h2>
         <p class="muted">Blue: effort. White: closure. Dashed: start level (orange), hold level (grey), release level
-          (red); in trigger mode clench level (orange) and hold level. Green lines mark starts, red lines releases.</p>
+          (red); in trigger and rules mode clench level (orange) and hold level. Green lines mark starts, red lines
+          releases.</p>
         <canvas id="ctl-trace" width="900" height="220"></canvas>
-        <h2>Grip probabilities</h2>
-        <canvas id="ctl-probs" width="900" height="260"></canvas>
+        <div id="ctl-output" hidden>
+          <h2>Model output</h2>
+          <canvas id="ctl-probs" width="900" height="260"></canvas>
+        </div>
       </div>
       <div class="ctl-settings">
-        <h2>Settings</h2>
-        <div id="ctl-params"></div>
-        <h2>Presets</h2>
+        <h2>Profile</h2>
+        <p class="muted">Settings and the mapping together, saved per person. Loading one also loads its mapping.</p>
+        <div class="row filters">
+          <label class="check"><input type="radio" name="ctl-profile-filter" value="model" checked> Built on this model</label>
+          <label class="check"><input type="radio" name="ctl-profile-filter" value="all"> All profiles</label>
+        </div>
         <div class="row">
           <label>Saved <select id="ctl-preset"></select></label>
           <label>Save as <input id="ctl-preset-name" placeholder="name"></label>
@@ -342,8 +328,54 @@
           <button id="ctl-delete">Delete</button>
         </div>
         <p id="ctl-preset-note" class="muted"></p>
+        <h2>Basic</h2>
+        <div id="ctl-basic"></div>
+        <div class="ctl-mapping">
+          <span>Mapping: <b id="ctl-mapping-name"></b></span>
+          <button id="ctl-mapping-open">Configure mapping</button>
+          <small>Which pattern picks which pose. Rules mode uses all of it; lock, blend and trigger only take which
+            class stands for which grip from the held rules.</small>
+        </div>
+        <details id="ctl-advanced">
+          <summary>Advanced</summary>
+          <div id="ctl-params"></div>
+        </details>
       </div>
     </div>
+  </section>
+  <section id="ctl-mapping-page" hidden>
+    <div class="controls"><button id="ctl-mapping-back">Back to control</button></div>
+    <h1>Mapping</h1>
+    <p class="muted">Each line: if a trigger happens in a pattern, then do this. Clench is effort above the clench level,
+      in any hand shape; the other triggers are the model's classes, on while their probability is at least the
+      threshold. Held: on for at least this long. Repeated: this many short times with pauses under the pause time
+      in between; held 0 s acts on the first step the trigger is on. Poses are only picked while the hand is open
+      and empty; close, open and release only work while holding, so nothing switches grips with an object in the
+      hand. Hover a pose in the Then list to see it. Changes apply straight away.</p>
+    <h2>Saved mappings</h2>
+    <div class="row filters">
+      <label class="check"><input type="radio" name="ctl-mapping-filter" value="model" checked> Built on this model</label>
+      <label class="check"><input type="radio" name="ctl-mapping-filter" value="all"> All mappings</label>
+    </div>
+    <div class="row narrow">
+      <label>Saved <select id="ctl-mapping-select"></select></label>
+      <label>Save as <input id="ctl-mapping-save-name" placeholder="name"></label>
+    </div>
+    <div class="controls">
+      <button id="ctl-mapping-load">Load</button>
+      <button id="ctl-mapping-save">Save</button>
+      <button id="ctl-mapping-delete">Delete</button>
+      <button id="ctl-mapping-default">Default for this model</button>
+    </div>
+    <p id="ctl-mapping-note" class="muted"></p>
+    <p id="ctl-mapping-error" class="error"></p>
+    <h2>Rules</h2>
+    <table id="ctl-rules"></table>
+    <div id="ctl-pose-picker" hidden>
+      <div id="ctl-pose-list"></div>
+      <div><canvas id="ctl-pose-preview" width="260" height="260"></canvas><div id="ctl-pose-name"></div></div>
+    </div>
+    <div class="controls"><button id="ctl-rule-add">Add rule</button></div>
   </section>
 </main>
 

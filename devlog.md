@@ -1391,6 +1391,122 @@ prediction works with these models; the Control tab still only knows the grips. 
 Live (Noah): the `notsign` class, trained only on the held wrist bends, takes up most of the noise between and around
 the signs. To watch: whether it swallows the lightest sign (thumb out, about 2x rest).
 
+## 2026-10-19: second protocol F session
+
+**Second F session** (`2026-10-19_092314_noah`, band at 7 cm from the crease, table and forward, 4 rounds, 7.4 min,
+no dropped samples). Cross-session test with `diagnostics/signs/sign_net.py across`, each F session tested in turn
+with the E session and the other F session as training, calibration on the tested session's first round per posture,
+test on its other rounds. Balanced over the 4 signs and rest / wrist bends read as a sign:
+
+| Model | Test `092314` | Test `153635` |
+|---|---|---|
+| LDA on the calibration round | 75.6 % / 13 % | 86.2 % / 7 % |
+| LDA on the other sessions + calibration round | 81.7 % / 22 % | 91.9 % / 23 % |
+| network, frozen backbone + sign layer, calibrated | 81.7 % / 13 % | 81.2 % / 2 % |
+| network fine-tuned, no calibration (3 seeds) | 84.3 to 87.2 % / 10 to 11 % | 94.7 to 95.9 % / 0 to 1 % |
+| network fine-tuned, transform + sign layer calibrated (3 seeds) | 87.4 to 88.2 % / 11 % | 93.3 to 93.8 % / 0 % |
+
+- The fine-tuned network beats the best LDA by 3 to 6 points on both sessions with about half the wrist false reads,
+  and on these two sessions needed no calibration round to do it (not true on the third F day, below). Calibration
+  adds 0 to 3 points on the new session and loses 1 to 2 on the other. The frozen backbone alone is worse than LDA, the gain comes from fine-tuning on sign data.
+- `092314` is harder for every model. Its weak sign is open (59 to 67 % right with the network, 64 % LDA); the other
+  signs are 79 to 97 %. Neither model reaches the 90 % bar on it.
+- Two test sessions on two days, one person. Decision: the sign network moves into `ml/`.
+
+**Sign network in `ml/` and the Deep learning tab.** `ml.networks signs <general network> --sessions ...` (Signs
+section of the tab) loads the E and F sessions with the Train tab's sign labels (`gesture_model.session_windows`,
+only the signs every ticked session has, rest, `notsign`), puts a new output layer on the general network, trains it
+alone for 15 epochs and then fine-tunes everything but the transform for 30, the `fine` variant above. Saved as kind
+`signs`, listed for the live test without a calibration; haptic levels come from its newest session, as for a sign
+LDA. The Control tab doesn't list it (grips only). Checked against the diagnostic: trained on E + `153635`, tested on
+all of `092314`, 86.7 % balanced, wrist bends read as a sign 8 %. 12 s on the 4070. First one trained on all three
+sessions: `ringnet_2026-10-16_112322_signs_2026-10-19_094303.pt`. 111 tests pass.
+
+**Third F session** (`2026-10-19_095340_noah`, 7.5 cm, 11 min with 3 pauses, 4 bad cues redone, 78 dropped
+samples). Each F session held out in turn, trained on E and the other two F sessions, one seed:
+
+| Model | Test `095340` | Test `092314` | Test `153635` |
+|---|---|---|---|
+| LDA on the calibration round | 82.5 % / 9 % | 75.6 % / 13 % | 86.2 % / 7 % |
+| LDA on the other sessions + calibration round | 76.6 % / 22 % | 81.2 % / 9 % | 89.8 % / 23 % |
+| network fine-tuned, no calibration | 76.7 % / 11 % | 87.7 % / 5 % | 92.4 % / 0 % |
+| network fine-tuned, transform + sign layer calibrated | 86.3 % / 4 % | 88.7 % / 8 % | 92.2 % / 0 % |
+
+- Calibrated, the fine-tuned network is the best model on all three sessions (mean 89.1 %, worst 86.3 %; best LDA
+  per session 82.5 to 89.8 %) with the fewest wrist false reads. Without calibration it falls under LDA on `095340`,
+  so the calibration round is needed after all: it adds 10 points there, 0 to 1 on the other two.
+- The saved network (trained on E, `153635`, `092314`) on all of `095340`: 78.5 %. Its weak sign is two finger point
+  (55 %), read as open (both mostly the finger extensor, as seen live on 10-16) and, arm forward, as thumb out.
+- Still under the 90 % bar on the worst session. One seed; seeds varied by up to 3 points before.
+- Kept, not re-recorded (Noah asked): the bad cues were redone and training skips them, and the worst session is
+  the one the bar is about.
+
+**Sign networks calibrate on the Deep learning tab.** Calibrate takes sign networks and sign sessions; repetitions
+are rounds there (round k of a sign is its k-th cue in that posture, rest counts to the sign before it). Fits the
+transform and the sign layer, as `sign_net.py`, and scores balanced over signs and rest, rest taken for a sign,
+wrong answers at 0.8 and wrist bends read as a sign. Calibrated sign networks stay marked `signs`, so the Control
+tab doesn't list them and refuses them. Grip calibration unchanged: same session and seed before and after 79.8 /
+79.9 % balanced, the old code alone 79.7 to 79.8 % from run to run (GPU). Through the app, the 3-session network
+calibrated on round 1 of `095340`: 86.7 % (sign_net.py 86.3 %). Grip and sign labels stay two paths in the code for
+now (Noah: both are just position labels; unifying them is open). 111 tests pass.
+Networks: `ringnet_2026-10-16_112322_signs_2026-10-19_101915.pt` (all 4 sign sessions) and
+`..._signs_2026-10-19_094303_cal_2026-10-19_095340.pt` (3 sessions, calibrated on `095340` round 1).
+
+**Without open** (3 signs + rest, same held-out test, one seed; `sign_net.py` with open dropped). Balanced / wrist
+bends read as a sign, test `095340` / `092314` / `153635`:
+- network fine-tuned + calibrated: 93.2 % / 1 %, 96.6 % / 6 %, 96.0 % / 1 %. Worst session 93.2 % against 86.3 %
+  with open, so the 3-sign set clears the 90 % bar on every F session.
+- best LDA per session: 89.6 %, 89.9 %, 93.4 %.
+Part of the rise is one class fewer (chance 25 % instead of 20 %), most is open and two finger point no longer
+taking each other's windows. Without an open sign, trigger mode can't open the hand part way by sign; a release
+still opens it fully. Network on all 4 sessions without open: `ringnet_2026-10-16_112322_signs_2026-10-19_103625.pt`.
+
+**Train and Deep learning tabs merged into one Train tab** (Noah: two trains and two calibrations were confusing).
+One session table with buttons per protocol (all grip sessions, all A to D, all sign sessions, all E, all F, deselect
+all), one Train button for LDA or a network (a sign network when sign sessions are ticked, with the general network to
+start from), one Calibrate, one Live test list with LDA models and networks, evaluation and finger angles below.
+Ticking a sign session unticks the grip sessions and the other way round, and the server still refuses a mix.
+"Leave positions out" lists the positions every ticked session has; the ticked ones get no label (LDA, sign networks;
+grip networks refuse it, their output layer is the 7 grips). Rest can't be left out. A sign network always starts
+from the newest general network, named in the note under the model choice (a "Start from" list was confusing).
+
+**Start from the general network or from scratch: no difference.** Same held-out test, both calibrated on round 1,
+2 seeds each; scratch is a fresh ring network trained 60 epochs on the sign sessions alone. Mean balanced over the 3
+F sessions: with open 89.4 % (general start) vs 89.0 % (scratch), without open 94.1 % vs 94.3 %; per session within
+0 to 2.4 points, which is the seed spread (`095340` with open 85.2 to 88.4 % between seeds). Wrist bends read as a
+sign about the same. So the grip network neither helps nor hurts the signs yet, and the low `095340` is the session,
+not the start. Kept the general start for now (no cost); scratch would make sign networks independent of grip
+training, worth rechecking with more people.
+
+**Control tab: rules mode, mapping page, profiles** (Noah's design). A new mode beside lock, blend and trigger (all
+three unchanged): the mapping is a list of rules "if (clench or a model class) (held for s, or repeated n times)
+then (release, open, or any grip or protocol C library pose)", edited on its own page and saved on its own. Poses are
+only picked while the hand is open and empty; release and open only work while holding, so a stray pattern can't
+switch grips with an object in the hand (my call, Noah left it open). Closing stays proportional to effort as in
+trigger mode. Repeats are counted as each one starts, so the highest count of a trigger acts straight away (two
+point flicks release on the second one, as before), lower counts after the pause. The default mapping is trigger
+mode written as rules, two finger point in place of point for sign models, without classes the model lacks.
+Lock, blend and trigger take a sign model's class-to-grip map from the held rules (replaces the map dropdowns of
+earlier today). Profiles carry settings, the mapping and the model they were built on; the list shows "built on this
+model" or all, and loading one loads its mapping, which can then be changed. Settings split in basic (mode, clench
+level, mapping) and advanced (only what the mode uses; max distance hidden for networks, which have no distance).
+Network files now list their classes for the trigger dropdowns. 119 tests pass; checked headless on a test copy.
+Layout fixes after the first look: radio buttons were stretched by the global full-width input style (radios now
+excluded), the mapping line and its button sit in their own row, the mode help only describes the chosen mode, the
+Control tab starts in rules mode (`control.DEFAULTS` stays lock for the replays and tests), the model output plot
+only shows while running, and an untouched mapping follows the chosen model's default.
+Then (Noah): a "close grip" action beside open and release (closes while its trigger stays on, speed set by effort,
+squeezing still closes too), the three actions first in the list, and the Then dropdown replaced by a list that draws
+the hovered pose beside it (a dropdown can't report the hovered item). Held 0 s acts on the first 50 ms step the
+class is on; there is no vote in rules mode, so 0 s picks on a single window. 120 tests pass.
+
+**Control tab runs sign models.** Each sign's probability goes to a grip through a map shown on the Control tab
+(default open = open, two finger point = point, little finger out = fist, thumb out = pinch, notsign = rest), so lock,
+blend and trigger run unchanged; trigger picks point and releases with two finger point. Uncalibrated sign networks
+take their levels from their newest training session. Levels from a sign session (also for haptics) take the max from
+the held signs, since it has no grips; on `095340` the max sits at the 2x rest floor on 7 of 8 channels, so effort
+saturates early and the clench level may need raising. Grip sessions' levels unchanged. 112 tests pass.
+
 ## Open
 
 - Trigger mode on the arm: tune clench level and timings live, count wrong picks (short clench read as two, a grab
@@ -1404,6 +1520,12 @@ the signs. To watch: whether it swallows the lightest sign (thumb out, about 2x 
 - Arm animation for cues: forearm, wrist and upper arm in the cue drawing, so D's activities and the wrist
   movements left out of protocol C can be shown. Later: a bigger build, not needed yet (Noah, 2026-10-15); D's cues
   are text with the relaxed hand until then.
+- App look: restyle the web app like the Better Bionics site, dark theme (near-black, white type, orange to magenta
+  gradient accents, monospace uppercase labels, thin outlined boxes). Noah, 2026-10-19: later, not started.
+- Sign network (in `ml/` with calibration since 2026-10-19): try it live against the sign LDA, and trigger mode with
+  it on the Control tab (sign map, clench level against the sign session's levels); decide whether open stays in the
+  set (93 to 97 % without it, 86 to 92 % with). Later: one label path for grips and signs (both are held positions),
+  without changing grip training results.
 - Sign research (`sign-research.md`, tests and times in its section 7): "not a sign" class for wrist flexion on the
   D sessions; calibrated ring network on the 2 to 4 sign sets (1 to 2 h GPU, ask first); still gate and 12 votes
   live in lock mode with open, fist, point; record a protocol E session and run `screen_e.py`; then build protocol F
