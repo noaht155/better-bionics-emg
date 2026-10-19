@@ -203,16 +203,19 @@ def threshold_score(true, probs, classes, threshold):
             "rest_false": float(np.mean(answer[rest] & (pred[rest] != "rest"))) if rest.any() else None}
 
 
-def evaluate(sessions, options, votes=(1, 3, 5, 7)):
+def evaluate(sessions, options, votes=(1, 3, 5, 7), log=None):
     """sessions: {name: session_windows output}. Leave one session out and leave one posture out.
     Predictions are smoothed over each held-out session's whole window stream, transitions included, then
-    scored on the labelled windows only."""
+    scored on the labelled windows only. log(text, share): called after each held-out session and posture, share
+    of the evaluation done."""
+    log = log or (lambda text, share: None)
+    shown_vote = options.get("vote") if options.get("vote") in votes else votes[-1]
     classes = sorted({str(l) for s in sessions.values() for l in s[2] if l is not None})
     result = {"classes": classes, "sessions": {}, "postures": {}}
     by_vote = {v: ([], []) for v in votes}
     sure = ([], [])
     if len(sessions) > 1:
-        for name, (feats, _, labels, _) in sessions.items():
+        for k, (name, (feats, _, labels, _)) in enumerate(sessions.items(), 1):
             train = [(f[l != None], l[l != None]) for n, (f, _, l, _) in sessions.items() if n != name]  # noqa: E711
             model = make_lda().fit(np.vstack([f for f, _ in train]), np.concatenate([l for _, l in train]))
             probs = model.predict_proba(feats)
@@ -229,6 +232,8 @@ def evaluate(sessions, options, votes=(1, 3, 5, 7)):
                 by_vote[v][0].append(labels[known])
                 by_vote[v][1].append(pred[known])
                 result["sessions"][name][v] = score(labels[known], pred[known], classes)["balanced"]
+            log(f"left out {name}: balanced {100 * result['sessions'][name][shown_vote]:.1f} % "
+                f"(vote {shown_vote})", 0.8 * k / len(sessions))
         result["loso"] = {v: score(np.concatenate(t), np.concatenate(p), classes) for v, (t, p) in by_vote.items()}
         result["threshold"] = threshold_score(np.concatenate(sure[0]), np.vstack(sure[1]), classes, THRESHOLD)
 
@@ -237,13 +242,15 @@ def evaluate(sessions, options, votes=(1, 3, 5, 7)):
     labels = np.concatenate([s[2] for s in sessions.values()])
     postures = np.concatenate([s[3] for s in sessions.values()])
     known = labels != None  # noqa: E711
-    for p in sorted({p for p in postures[known]}):
+    names = sorted({p for p in postures[known]})
+    for k, p in enumerate(names, 1):
         test = known & (postures == p)
         train = known & (postures != p)
         if not train.any():
             continue
         model = make_lda().fit(feats[train], labels[train])
         result["postures"][p] = score(labels[test], model.predict(feats[test]), classes)["balanced"]
+        log(f"left out posture {p}: balanced {100 * result['postures'][p]:.1f} %", 0.8 + 0.2 * k / len(names))
     return result
 
 
@@ -262,25 +269,32 @@ def sign_sessions(folders):
     return kinds.pop()
 
 
-def load_sessions(folders, options):
+def load_sessions(folders, options, log=None):
+    """log(text, share): called after each session, share of the folders loaded."""
     out = {}
-    for folder in folders:
+    for k, folder in enumerate(folders, 1):
         data = load_session(folder)
         meta = data["meta"]
         if meta.get("filter_version") != FILTER_VERSION:
             raise ValueError(f"{Path(folder).name} was recorded with another filter version")
         windows = session_windows(data, meta["rate"], options)
-        if not any(l is not None for l in windows[2]):
+        labelled = sum(l is not None for l in windows[2])
+        if log:
+            log(f"loaded {Path(folder).name}: {labelled} labelled windows" if labelled
+                else f"skipped {Path(folder).name}: no labelled windows", k / len(folders))
+        if not labelled:
             continue
         out[Path(folder).name] = windows
     return out
 
 
-def train(folders, options, evaluate_it=True):
+def train(folders, options, evaluate_it=True, log=None):
     """Trains on all the given sessions. options["exclude"]: positions left out, their windows get no label.
+    log(text, share): progress for the page, share of the whole job done (loading is the first half).
     Returns (model dict ready to save, evaluation or None)."""
+    say = log or (lambda text, share: None)
     options = dict(options, signs=sign_sessions(folders))
-    sessions = load_sessions(folders, options)
+    sessions = load_sessions(folders, options, lambda text, share: say(text, 0.5 * share))
     if not sessions:
         raise ValueError("none of these sessions has gesture cues")
     if options["signs"]:
@@ -301,6 +315,7 @@ def train(folders, options, evaluate_it=True):
     feats = np.vstack([s[0] for s in sessions.values()])
     labels = np.concatenate([s[2] for s in sessions.values()])
     known = labels != None  # noqa: E711
+    say(f"fitting on all {len(sessions)} sessions, {int(known.sum())} windows", 0.5)
     lda = make_lda().fit(feats[known], labels[known])
     model = {"lda": lda, "space": distance_space(feats[known], labels[known]),
              "options": options, "classes": [str(c) for c in lda.classes_],
@@ -311,7 +326,7 @@ def train(folders, options, evaluate_it=True):
              # Training sessions are all turned to the reference orientation, live windows are turned the same way
              # when the band sits as in the newest of them
              "mirrored": mirrored(max(metas, key=lambda m: m["started"]).get("settings", {}))}
-    result = evaluate(sessions, options) if evaluate_it else None
+    result = evaluate(sessions, options, log=lambda text, share: say(text, 0.5 + 0.5 * share)) if evaluate_it else None
     model["evaluation"] = result
     return model, result
 

@@ -1538,6 +1538,31 @@ Timing check (Noah asked whether transitions got slower): the spring (SPRING_W 1
 sign 1.0 s) are unchanged, so grips still match their 1.17 s training trim (`settle_s`). The new held wrist bends first
 bent in the grip's 0.5 s, but training trims them like signs (1.67 s), so they now bend in `C_CLOSE_S` too. D's moving
 wrist cues have no trim and no pose to reach.
+
+**Responsive pass** (every tab at 1440, 820 and 390 px): the tabs are one row that scrolls sideways under the wordmark
+below 900 px (they wrapped into 2 or 3 rows); the 44 px touch minimum no longer applies to checkboxes (it spread the
+posture list out) and checkboxes are 20 px on touch screens; the pill switch no longer breaks in two on a phone; help
+text is capped at 90 characters per line; number inputs on the single-column tabs stop at 14em; plots get the same
+outlined box as the hands; the probability plot and the finger angle hands hide while nothing runs instead of
+showing empty boxes; the session table scrolls sideways below the two-column width instead of squeezing to 5-line
+rows; probability labels scale with the canvas (they were 7 px on the Control tab).
+
+**Training progress on the Train tab** (Noah: there was no bar). Network jobs: the server reads the `fold k/n` and
+`epoch k/n` lines the scripts already print (`tools.job_progress`, tests in `tests/test_job_progress.py`) and the page
+shows a bar over the whole job (all folds of an evaluation), the fold, epoch and time left; before the first epoch,
+and for calibration which prints no epochs, a block moves along instead. LDA: `gesture_model.train` takes an optional
+`log(text, share)`, called per loaded session, for the final fit and per held-out session and posture, so the bar
+and the step line follow it (loading is the first half). Both have a Log dropdown with the full output, 200 lines kept
+for networks (was 40) and the network's last line shown in its title. On 3 sessions the LDA log reads "loaded ...: 1904
+labelled windows", "left out ...: balanced 55.3 % (vote 5)", "left out posture table: balanced 64.1 %".
+
+**System group** (Noah's idea): the top bar is Record, Train, Control, System. System has its own row: Signals,
+Connection, Haptics, Calibrate, and a Show archived switch that adds Cursor (parked); it opens on the last page used
+(Signals by default) and the switch is remembered per browser. Replaces the workflow and tools split from earlier
+today. Page ids and code unchanged.
+**Sharp canvases**: every plot and hand was drawn at its fixed width and height attributes and stretched to the panel
+by the browser, so the EMG bars were blurry (Noah), worse on a high-dpi screen. `sharpen()` in `app.js` sizes each
+bitmap to its size on screen times the pixel density; plots draw in screen pixels, labels now a fixed 12 to 13 px.
 **Keyboard shortcuts ignored caps lock**: Mark bad checked `e.key === "b"`, and with caps lock on the key is "B", so
 `b` did nothing while the button worked (Noah). Same for `f` and `s` on Signals. Now case-insensitive, and a shortcut
 shows on its button like a click.

@@ -359,7 +359,7 @@ $("ctl-mapping-default").addEventListener("click", async () => {
 // Drawing
 
 function drawControlHand(c, running) {
-  const ctx = $("ctl-hand").getContext("2d");
+  const { ctx } = sharpen($("ctl-hand"), false);
   ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
   const angles = running && c.angles ? c.angles : config.gestures.rest.angles;
   drawSolidHand(ctx, anglesByName(angles), { view: ctlView, mirror: mirrored(), color: running ? TRACKED_COLOR : TARGET_COLOR });
@@ -368,8 +368,7 @@ function drawControlHand(c, running) {
 attachRotate($("ctl-hand"), ctlView, () => state?.tools && drawControlHand(state.tools.control, state.tools.predictor.running && state.tools.predictor.control));
 
 function drawTrace() {
-  const ctx = $("ctl-trace").getContext("2d");
-  const { width: w, height: h } = ctx.canvas;
+  const { ctx, w, h } = sharpen($("ctl-trace"));
   ctx.clearRect(0, 0, w, h);
   ctx.fillStyle = COLORS.bg;
   ctx.fillRect(0, 0, w, h);

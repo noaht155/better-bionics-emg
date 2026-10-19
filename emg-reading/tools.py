@@ -8,6 +8,7 @@ shared stream instead of opening the armband again. Network training and evaluat
 """
 import json
 import os
+import re
 import subprocess
 import sys
 import tempfile
@@ -31,7 +32,11 @@ sys.path.insert(0, str(REPO))
 from ml import gesture_model  # noqa: E402
 
 # Lines of a network job's output kept for the page
-JOB_LINES = 40
+# Output lines kept for the page's log, the newest are the ones shown first
+JOB_LINES = 200
+# What the network scripts print (train_ringnet.epoch_printer and the fold loop), read for the Train tab's bar
+FOLD_LINE = re.compile(r"fold (\d+)/(\d+)")
+EPOCH_LINE = re.compile(r"epoch (\d+)/(\d+)(?:.*about (.+) left)?")
 
 CHECK_S = 5.0
 COUNTDOWN_S = 3
@@ -495,8 +500,12 @@ class Trainer(Tool):
         self._launch(self._run, folders, options)
 
     def _run(self, folders, options):
-        self.state["step"] = f"loading {len(folders)} sessions and evaluating"
-        model, result = gesture_model.train(folders, options)
+        self.state.update(step=f"loading {len(folders)} sessions", log=[], share=0.0)
+
+        def log(text, share):
+            self.state.update(step=text, log=self.state["log"] + [text], share=share)
+
+        model, result = gesture_model.train(folders, options, log=log)
         path = gesture_model.save(model)
         self.state.update(step=None, model=path.name, lines=[
             f"{model['windows']} labelled windows from {len(model['sessions'])} sessions, "
@@ -530,7 +539,7 @@ class NetworkJob(Tool):
         # The page shows how long it has run and how long since the last line, so a stalled job can be told apart
         # from a slow one
         now = time.time()
-        self.state.update(job=job, lines=[], result=None, started=now, last_line=now)
+        self.state.update(job=job, lines=[], result=None, started=now, last_line=now, progress={"share": None})
         try:
             self._proc = subprocess.Popen([sys.executable, "-u", "-m", *args, "--json", out], cwd=REPO,
                                           stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
@@ -538,7 +547,8 @@ class NetworkJob(Tool):
                 # Library warnings would push the useful lines off the page
                 if line.strip() and "Warning" not in line:
                     lines.append(line.rstrip())
-                    self.state.update(lines=list(lines), last_line=time.time())
+                    self.state.update(lines=list(lines), last_line=time.time(),
+                                      progress=job_progress(line, self.state["progress"]))
             if self._proc.wait() != 0:
                 # A stopped job's last line is just where it got to, not an error
                 if self._stopping:
@@ -548,6 +558,23 @@ class NetworkJob(Tool):
             self.state["result"] = json.loads(text) if text else None
         finally:
             Path(out).unlink(missing_ok=True)
+
+
+def job_progress(line, progress):
+    """progress updated from one output line of a network job: {"fold": (k, n), "epoch": (k, n), "left": text}.
+    share is how much of the job is done, from the epochs and, when it runs folds, the fold. None until the first
+    epoch, the page shows a moving bar then."""
+    progress = dict(progress)
+    if m := FOLD_LINE.search(line):
+        progress.update(fold=(int(m[1]), int(m[2])), epoch=None, left=None)
+    elif m := EPOCH_LINE.search(line):
+        progress.update(epoch=(int(m[1]), int(m[2])), left=m[3])
+    epoch, fold = progress.get("epoch"), progress.get("fold")
+    share = epoch[0] / epoch[1] if epoch else None
+    if fold:
+        share = (fold[0] - 1 + (share or 0)) / fold[1]
+    progress["share"] = share
+    return progress
 
 
 class Tools:

@@ -18,6 +18,27 @@ const TRACKED_COLOR = cssVar("--hand-tracked");
 // #rrggbb plus an opacity, for canvas fills
 const withAlpha = (hex, a) => hex + Math.round(a * 255).toString(16).padStart(2, "0");
 
+// Gives a canvas a bitmap of its size on screen times the pixel density, keeping the shape its width and height
+// attributes give it, so a stretched canvas or a high-dpi screen doesn't blur it. A plot then draws in screen pixels
+// (the context is scaled, w and h are screen sizes); the hands size themselves from the bitmap, so they pass false.
+// A hidden canvas keeps its last size
+function sharpen(canvas, scaled = true) {
+  const dpr = window.devicePixelRatio || 1;
+  canvas.dataset.aspect ||= canvas.height / canvas.width;
+  const cssW = canvas.clientWidth;
+  if (cssW) {
+    const bw = Math.round(cssW * dpr), bh = Math.round(cssW * canvas.dataset.aspect * dpr);
+    if (canvas.width !== bw || canvas.height !== bh) {
+      canvas.width = bw;
+      canvas.height = bh;
+    }
+  }
+  const k = scaled ? canvas.width / (cssW || canvas.width / dpr) : 1;
+  const ctx = canvas.getContext("2d");
+  ctx.setTransform(k, 0, 0, k, 0, 0);
+  return { ctx, w: canvas.width / k, h: canvas.height / k };
+}
+
 // Shown on a canvas with nothing to draw yet, so an idle plot doesn't look broken
 function drawIdle(ctx, text) {
   const { width: w, height: h } = ctx.canvas;
@@ -202,7 +223,7 @@ function syncCategories() {
 }
 
 function drawPick(dt) {
-  const ctx = $("pick-hand").getContext("2d");
+  const { ctx } = sharpen($("pick-hand"), false);
   ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
   if (!pick || $("moves").hidden || $("setup").hidden) return;
   const cue = { kind: "custom", label: pick.label, seconds: Number($("setup").c_move_s.value) || 6 };
@@ -350,7 +371,7 @@ function drawPreview(dt = 0) {
   $("preview-info").textContent = cue.kind === "break" ? "waits for Continue" : `${cue.seconds} s, ${posture}`;
   $("preview-count").textContent = `${preview.at + 1} / ${preview.cues.length}`;
   $("preview-text").innerHTML = cueTitle(cue.text);
-  const ctx = $("preview-hand").getContext("2d");
+  const { ctx } = sharpen($("preview-hand"), false);
   ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
   // Plays on a loop at the real pace from the moment the cue is shown, the hand easing over from the last one
   const t = ((performance.now() - preview.shownAt) / 1000) % (cue.seconds || 4);
@@ -531,7 +552,7 @@ function follow(key, angles, dt) {
 
 function drawTarget(dt) {
   const s = state?.session;
-  const ctx = $("target").getContext("2d");
+  const { ctx } = sharpen($("target"), false);
   ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
   if (!s) return follow("target", null);
   const elapsed = s.cue_elapsed + (s.paused ? 0 : (performance.now() - stateAt) / 1000);
@@ -691,7 +712,7 @@ function targetPose(elapsed) {
 const matchScore = (meanError) => Math.max(0, Math.round(100 - 2 * meanError));
 
 function drawPose() {
-  const ctx = $("pose").getContext("2d");
+  const { ctx } = sharpen($("pose"), false);
   ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
   const s = state.session;
   const cue = s?.cue;
@@ -721,12 +742,11 @@ function emgY(uv, top, height) {
 }
 
 function drawEmg() {
-  const ctx = $("emg").getContext("2d");
-  const { width: w, height: h } = ctx.canvas;
+  const { ctx, w, h } = sharpen($("emg"));
   ctx.clearRect(0, 0, w, h);
   const top = 10, bottom = 50, left = 40;
   const plotH = h - top - bottom;
-  ctx.font = `12px ${MONO}`;
+  ctx.font = `${w < 500 ? 10 : 12}px ${MONO}`;
   ctx.fillStyle = COLORS.muted;
   ctx.strokeStyle = COLORS.line;
   for (const uv of [1, 10, 100, 1000]) {

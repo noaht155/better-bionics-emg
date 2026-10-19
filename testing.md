@@ -108,6 +108,14 @@ These decide when the recorder marks a cue bad and redoes it.
 | `test_completed_session_is_evaluated_before_training` | When a completed session is saved, the app starts "evaluate the newest session" on it (15 epochs), so every session gets an honest score before anything trains on it |
 | `test_session_without_grips_is_skipped` | A session without grips (a sync check, for example) starts nothing |
 
+### Network job progress (`tests/test_job_progress.py`)
+
+| Test | Checks |
+|---|---|
+| `test_epochs_of_a_single_training` | The Train tab's bar follows the `epoch k/n` lines of a training run, with the time left they print |
+| `test_folds_count_towards_the_whole_job` | In an evaluation the bar covers all folds, not just the current one, and a new fold restarts the epoch count |
+| `test_nothing_to_count_before_the_first_epoch` | Before the first epoch there is no share, so the page shows a moving bar instead of a wrong number |
+
 ### Mirrored band (`tests/test_mirror.py`)
 
 | Test | Checks |

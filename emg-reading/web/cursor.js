@@ -34,8 +34,7 @@ $("cur-targets").addEventListener("click", () => {
 });
 
 function drawCursorCanvas(c) {
-  const ctx = $("cur-canvas").getContext("2d");
-  const { width: w, height: h } = ctx.canvas;
+  const { ctx, w, h } = sharpen($("cur-canvas"));
   const scale = (Math.min(w, h) / 2 - 10) / 1.2;
   const px = (x) => w / 2 + x * scale;
   const py = (y) => h / 2 - y * scale;
@@ -116,7 +115,7 @@ function drawCursor(c) {
   $("cur-targets").textContent = c.targets_on ? "Targets off" : "Targets on";
   $("cur-status").textContent = running ? `Running, levels from ${c.levels_from}${c.log ? `, logging to data/cursor/${c.log}` : ""}` : "Stopped";
   if (c.error) $("cur-error").textContent = c.error;
-  if (currentTab === "cursor" && !running) drawIdle($("cur-canvas").getContext("2d"), "start to see the dot");
+  if (currentTab === "cursor" && !running) drawIdle(sharpen($("cur-canvas")).ctx, "start to see the dot");
   if (currentTab !== "cursor" || !running || c.x == null) return;
   cur.trail.push([c.x, c.y]);
   cur.trail = cur.trail.slice(-CURSOR_TRAIL);

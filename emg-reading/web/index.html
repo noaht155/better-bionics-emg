@@ -14,19 +14,25 @@
 
 <nav id="tabs">
   <span class="wordmark">BETTER BIONICS</span>
+  <div class="tab-list">
   <button data-tab="record" class="active">Record</button>
   <button data-tab="train">Train</button>
   <button data-tab="control">Control</button>
-  <span class="tab-sep"></span>
+  <button data-tab="system">System</button>
+  <span id="tab-ink"></span>
+  </div>
+  <span id="live-dot">live</span>
+  <span id="battery-chip" hidden></span>
+  <span id="rec-badge" hidden>recording</span>
+</nav>
+
+<nav id="subtabs" hidden>
   <button data-tab="signals">Signals</button>
   <button data-tab="connection">Connection</button>
   <button data-tab="haptics">Haptics</button>
   <button data-tab="calibrate">Calibrate</button>
-  <button data-tab="cursor">Cursor</button>
-  <span id="tab-ink"></span>
-  <span id="live-dot">live</span>
-  <span id="battery-chip" hidden></span>
-  <span id="rec-badge" hidden>recording</span>
+  <button data-tab="cursor" class="archived">Cursor</button>
+  <label class="check"><input type="checkbox" id="show-archived"> Show archived</label>
 </nav>
 
 <main id="tab-record" class="tab">
@@ -236,12 +242,15 @@
       <button id="net-stop">Stop network job</button>
     </div>
     <p id="train-step" class="muted"></p>
+    <div id="train-progress" class="bar" hidden><div id="train-bar"></div></div>
+    <details id="train-log-box" class="log" hidden><summary>Log</summary><pre id="train-log"></pre></details>
     <p id="train-error" class="error"></p>
     <pre id="train-result"></pre>
     <p id="net-step" class="muted"></p>
+    <div id="net-progress" class="bar" hidden><div id="net-bar"></div></div>
     <p id="net-error" class="error"></p>
     <table id="net-table" hidden></table>
-    <pre id="net-lines"></pre>
+    <details id="net-log-box" class="log" hidden><summary>Log <span id="net-log-last"></span></summary><pre id="net-lines"></pre></details>
     <h2>Calibrate a network</h2>
     <p class="muted">Fits the per-person transform and the output layer on the chosen repetitions of a session recorded
       at the current band position, scores it on the other repetitions and saves the calibrated network. A sign

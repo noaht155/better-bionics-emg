@@ -7,9 +7,34 @@ const SPECTRUM_MS = 250;
 
 // Tabs
 
+// The setup and troubleshooting pages sit under System. Cursor is archived: only listed with Show archived on
+const SYSTEM_TABS = ["signals", "connection", "haptics", "calibrate", "cursor"];
+const SYSTEM_KEY = "system-tab";
+const ARCHIVED_KEY = "show-archived";
+
+function stored(key) {
+  try { return localStorage.getItem(key); } catch { return null; }
+}
+
+function store(key, value) {
+  try { localStorage.setItem(key, value); } catch { /* private window, nothing is remembered */ }
+}
+
+const showArchived = () => $("show-archived").checked;
+
 function showTab(name) {
+  if (name === "system") {
+    const last = stored(SYSTEM_KEY);
+    name = SYSTEM_TABS.includes(last) && (last !== "cursor" || showArchived()) ? last : "signals";
+  }
   currentTab = name;
-  document.querySelectorAll("#tabs button").forEach((b) => b.classList.toggle("active", b.dataset.tab === name));
+  const system = SYSTEM_TABS.includes(name);
+  if (system) store(SYSTEM_KEY, name);
+  $("subtabs").hidden = !system;
+  document.querySelectorAll("#tabs button").forEach((b) => {
+    b.classList.toggle("active", b.dataset.tab === name || (system && b.dataset.tab === "system"));
+  });
+  document.querySelectorAll("#subtabs button").forEach((b) => b.classList.toggle("active", b.dataset.tab === name));
   document.querySelectorAll(".tab").forEach((t) => { t.hidden = t.id !== `tab-${name}`; });
   // The camera preview and the signal stream only run while their tab is open
   if (name === "record") showView();
@@ -22,10 +47,23 @@ function showTab(name) {
   moveTabInk();
 }
 
-document.querySelectorAll("#tabs button").forEach((b) => b.addEventListener("click", () => showTab(b.dataset.tab)));
+document.querySelectorAll("#tabs button, #subtabs button").forEach((b) => b.addEventListener("click", () => showTab(b.dataset.tab)));
+
+function applyArchived() {
+  document.querySelectorAll("#subtabs .archived").forEach((b) => { b.hidden = !showArchived(); });
+  if (!showArchived() && currentTab === "cursor") showTab("signals");
+}
+
+$("show-archived").checked = stored(ARCHIVED_KEY) === "1";
+$("show-archived").addEventListener("change", () => {
+  store(ARCHIVED_KEY, showArchived() ? "1" : "0");
+  applyArchived();
+});
+applyArchived();
 
 function moveTabInk() {
   const b = document.querySelector("#tabs button.active");
+  b.scrollIntoView({ block: "nearest", inline: "nearest" });
   const ink = $("tab-ink");
   ink.style.left = `${b.offsetLeft}px`;
   ink.style.top = `${b.offsetTop + b.offsetHeight - 2}px`;
@@ -251,8 +289,7 @@ $("hap-stop").addEventListener("click", () => postShowing("/api/haptics/stop", u
 $("esp-test").addEventListener("click", () => postShowing("/api/esp32/test", linkBody(), "hap-error"));
 
 function drawOutputs(h) {
-  const ctx = $("outputs").getContext("2d");
-  const { width: w, height: hgt } = ctx.canvas;
+  const { ctx, w, h: hgt } = sharpen($("outputs"));
   ctx.clearRect(0, 0, w, hgt);
   const outputs = h.outputs || [];
   if (!outputs.length) {
@@ -457,8 +494,21 @@ $("model-threshold").addEventListener("change", () => {
 });
 
 let trainWasRunning = false;
+// Fills a log box, and keeps it scrolled to the newest line unless the user has scrolled up to read
+function showLog(pre, lines) {
+  const text = lines.join("\n");
+  if (pre.textContent === text) return;
+  const atEnd = pre.scrollHeight - pre.scrollTop - pre.clientHeight < 20;
+  pre.textContent = text;
+  if (atEnd) pre.scrollTop = pre.scrollHeight;
+}
+
 function drawTrain(t) {
   $("train-step").textContent = t.running ? `${t.step || "starting"}...` : "";
+  $("train-progress").hidden = !t.running;
+  $("train-bar").style.width = `${100 * (t.share ?? 0)}%`;
+  $("train-log-box").hidden = !(t.log || []).length;
+  showLog($("train-log"), t.log || []);
   if (t.error) $("train-error").textContent = t.error;
   $("train-result").textContent = (t.lines || []).join("\n");
   if (trainWasRunning && !t.running && currentTab === "train") loadTrainLists();
@@ -480,8 +530,7 @@ function predictionLabel(p) {
 }
 
 function drawProbs(p, canvas = "live-probs") {
-  const ctx = $(canvas).getContext("2d");
-  const { width: w, height: h } = ctx.canvas;
+  const { ctx, w, h } = sharpen($(canvas));
   ctx.clearRect(0, 0, w, h);
   if (!p.running || !p.probs) {
     drawIdle(ctx, "start a model to see its class probabilities");
@@ -490,7 +539,7 @@ function drawProbs(p, canvas = "live-probs") {
   const classes = p.classes;
   const rowH = h / classes.length;
   const left = 110;
-  ctx.font = `14px ${SANS}`;
+  ctx.font = `13px ${SANS}`;
   classes.forEach((c, i) => {
     const v = p.probs[c] ?? 0;
     const y = i * rowH;
@@ -511,7 +560,7 @@ function drawProbs(p, canvas = "live-probs") {
 // The virtual hand shows the predicted gesture's target pose
 function drawModelView() {
   const p = state.tools?.predictor;
-  const ctx = $("model-hand").getContext("2d");
+  const { ctx } = sharpen($("model-hand"), false);
   ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
   if (!p?.running) {
     $("model-label").innerHTML = "<small>no model running, train or pick one on the Train tab</small>";
@@ -531,6 +580,8 @@ function drawPredictor(p) {
   if (p.error) $("model-error").textContent = p.error;
   $("live-label").innerHTML = predictionLabel(p);
   flashOnChange($("live-label"), p.running ? String(p.label) : "");
+  // No empty plot taking up the page while nothing runs
+  $("live-probs").hidden = !p.running;
   drawProbs(p);
   // Rewriting an option redraws an open dropdown, so only touch it when the model starts or stops
   const option = $("model-option");
@@ -629,7 +680,7 @@ function predictedHand(angles) {
 
 // One view: the camera's hand with one head's prediction over it, and its match score
 function drawHeadHand(canvas, match, p, predicted, color, missing, name) {
-  const ctx = $(canvas).getContext("2d");
+  const { ctx } = sharpen($(canvas), false);
   ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
   const tracked = state.hand ? anglesByName(state.hand.angles) : null;
   if (tracked) drawHand(ctx, tracked, { view: netView, mirror: mirrored(), color: TRACKED_COLOR, width: 5 });
@@ -650,6 +701,7 @@ function drawHeadHand(canvas, match, p, predicted, color, missing, name) {
 }
 
 function drawNetHand(p) {
+  document.querySelector(".hand-pair").classList.toggle("idle", !p.running);
   const lda = "this model doesn't predict finger angles (LDA)";
   drawHeadHand("net-hand", "net-match", p, p.running ? p.angles : null, PREDICTED_COLOR, lda, "angle head");
   drawHeadHand("net-hand-effort", "net-match-effort", p, p.running ? p.effort_angles : null, EFFORT_COLOR,
@@ -674,9 +726,15 @@ function drawNetwork(n, p) {
   $("train-start").disabled = n.running || state.tools.trainer.running;
   $("net-stop").disabled = !n.running;
   // Time since the last line tells a slow job from a stalled one, every finished epoch prints a line
+  const pr = n.progress || {};
+  const where = [pr.fold && `fold ${pr.fold[0]} of ${pr.fold[1]}`, pr.epoch && `epoch ${pr.epoch[0]} of ${pr.epoch[1]}`,
+    !pr.fold && pr.left && `about ${pr.left} left`].filter(Boolean).join(", ");
   $("net-step").textContent = n.running
-    ? `${n.job.replace("_", " ")} running for ${fmtTime(n.running_s ?? 0)}, last output ${fmtTime(n.quiet_s ?? 0)} ago`
+    ? `${n.job.replace("_", " ")} running for ${fmtTime(n.running_s ?? 0)}${where ? `, ${where}` : ""}, last output ${fmtTime(n.quiet_s ?? 0)} ago`
     : "";
+  $("net-progress").hidden = !n.running;
+  $("net-bar").classList.toggle("waiting", n.running && pr.share == null);
+  $("net-bar").style.width = n.running && pr.share != null ? `${100 * pr.share}%` : "";
   // Only a new error from the server is shown. An update sent just before a click would otherwise put the last
   // job's error back after the click cleared it
   if (n.error && n.error !== shownNetError) $("net-error").textContent = n.error;
@@ -685,7 +743,10 @@ function drawNetwork(n, p) {
   const html = n.result ? networkTable(n.job, n.result) : "";
   if ($("net-table").innerHTML !== html) $("net-table").innerHTML = html;
   $("net-table").hidden = !html;
-  $("net-lines").textContent = (n.lines || []).join("\n");
+  const lines = n.lines || [];
+  $("net-log-box").hidden = !lines.length;
+  $("net-log-last").textContent = lines.length ? lines[lines.length - 1].trim() : "";
+  showLog($("net-lines"), lines);
   if (networkWasRunning && !n.running && currentTab === "train") loadTrainLists();
   networkWasRunning = n.running;
   const side = $("setup").tracked_hand.value;
