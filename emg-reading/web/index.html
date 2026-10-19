@@ -4,12 +4,16 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>EMG recorder</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap">
 <link rel="stylesheet" href="/web/style.css">
 </head>
 <body>
 <div id="warnings"></div>
 
 <nav id="tabs">
+  <span class="wordmark">BETTER BIONICS</span>
   <button data-tab="record" class="active">Record</button>
   <button data-tab="signals">Signals</button>
   <button data-tab="calibrate">Calibrate</button>
@@ -264,8 +268,8 @@
     <div id="live-label" class="big-label"></div>
     <canvas id="live-probs" width="900" height="320"></canvas>
     <h2>Finger angles</h2>
-    <p class="muted">Grip networks only. Blue: the hand the camera tracks. Orange: the angle head, trained to ignore how
-      hard the muscles fire. Green: the effort head, trained to use it (a finger bent halfway against fully). Both come
+    <p class="muted">Grip networks only. White: the hand the camera tracks. Orange: the angle head, trained to ignore how
+      hard the muscles fire. Magenta: the effort head, trained to use it (a finger bent halfway against fully). Both come
       from the same pass of the network. Drag either to turn both. The match compares each with the camera on the base
       and middle joints; the joints the network doesn't predict yet (spread, finger tips) are drawn relaxed.</p>
     <div class="hand-pair">
@@ -302,8 +306,8 @@
       </div>
       <div class="ctl-plots">
         <h2>Last 10 s</h2>
-        <p class="muted">Blue: effort. White: closure. Dashed: start level (orange), hold level (grey), release level
-          (red); in trigger and rules mode clench level (orange) and hold level. Green lines mark starts, red lines
+        <p class="muted">White: effort. Pink: closure. Dashed: start level (yellow), hold level (grey), release level
+          (red); in trigger and rules mode clench level (yellow) and hold level. Green lines mark starts, red lines
           releases.</p>
         <canvas id="ctl-trace" width="900" height="220"></canvas>
         <div id="ctl-output" hidden>

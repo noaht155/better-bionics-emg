@@ -4,8 +4,19 @@
 const $ = (id) => document.getElementById(id);
 const SETTINGS_KEY = "recorder-settings";
 const SERIOUS = new Set(["no_data", "contact", "hum", "camera", "loop_error"]);
-const TARGET_COLOR = "#6b7280";
-const TRACKED_COLOR = "#4fa3ff";
+// Canvas colours come from the tokens in style.css, so canvases and the page stay one scheme
+const cssVar = (name) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+const COLORS = {
+  bg: cssVar("--bg"), raised: cssVar("--raised"), line: cssVar("--line"), lineStrong: cssVar("--line-strong"),
+  text: cssVar("--text"), muted: cssVar("--muted"), accent: cssVar("--accent"),
+  warn: cssVar("--warn"), bad: cssVar("--bad"), good: cssVar("--good"), mains: cssVar("--mains"),
+};
+const MONO = cssVar("--font-mono");
+const SANS = cssVar("--font-sans");
+const TARGET_COLOR = cssVar("--hand-target");
+const TRACKED_COLOR = cssVar("--hand-tracked");
+// #rrggbb plus an opacity, for canvas fills
+const withAlpha = (hex, a) => hex + Math.round(a * 255).toString(16).padStart(2, "0");
 
 let config = null;
 let state = null;
@@ -14,7 +25,7 @@ let currentTab = "record";
 const view = { yaw: -45, pitch: -25 };
 // The filled hand reads best with the palm towards the viewer, turned a little
 const solidView = { yaw: 25, pitch: -20 };
-const SOLID_COLOR = "#c8cdd6";
+const SOLID_COLOR = cssVar("--hand-solid");
 
 function anglesByName(list) {
   return Object.fromEntries(config.joints.map((j, i) => [j, list[i]]));
@@ -607,9 +618,9 @@ function drawEmg() {
   ctx.clearRect(0, 0, w, h);
   const top = 10, bottom = 50, left = 40;
   const plotH = h - top - bottom;
-  ctx.font = "12px system-ui";
-  ctx.fillStyle = "#8b919c";
-  ctx.strokeStyle = "#2f333b";
+  ctx.font = `12px ${MONO}`;
+  ctx.fillStyle = COLORS.muted;
+  ctx.strokeStyle = COLORS.line;
   for (const uv of [1, 10, 100, 1000]) {
     const y = emgY(uv, top, plotH);
     ctx.fillText(`${uv}`, 4, y + 4);
@@ -621,16 +632,16 @@ function drawEmg() {
     const x = left + i * slot + slot * 0.15;
     const bw = slot * 0.7;
     const y = emgY(state.env[i] ?? 0, top, plotH);
-    ctx.fillStyle = state.lost[i] ? "#e5484d" : "#4fa3ff";
+    ctx.fillStyle = state.lost[i] ? COLORS.bad : TRACKED_COLOR;
     ctx.fillRect(x, y, bw, top + plotH - y);
     const cal = config.calibration?.[String(ch)];
     if (cal) {
-      ctx.fillStyle = "#e6e6e6";
+      ctx.fillStyle = COLORS.accent;
       for (const uv of [cal.rest, cal.max]) ctx.fillRect(x - 3, emgY(uv, top, plotH) - 1, bw + 6, 2);
     }
-    ctx.fillStyle = "#e6e6e6";
+    ctx.fillStyle = COLORS.text;
     ctx.fillText(`ch ${ch}`, x, h - bottom + 16);
-    ctx.fillStyle = "#8b919c";
+    ctx.fillStyle = COLORS.muted;
     ctx.fillText(`${Math.round(state.env[i] ?? 0)} µV`, x, h - bottom + 31);
     ctx.fillText(`hum ${Math.round(state.hum[i] ?? 0)}`, x, h - bottom + 46);
   });

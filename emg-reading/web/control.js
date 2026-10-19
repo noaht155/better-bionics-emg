@@ -371,21 +371,21 @@ function drawTrace() {
   const ctx = $("ctl-trace").getContext("2d");
   const { width: w, height: h } = ctx.canvas;
   ctx.clearRect(0, 0, w, h);
-  ctx.fillStyle = "#16181c";
+  ctx.fillStyle = COLORS.bg;
   ctx.fillRect(0, 0, w, h);
   const xOf = (i) => (w * i) / (TRACE_STEPS - 1);
   const yOf = (v) => h - 6 - (h - 12) * Math.min(Math.max(v, 0), 1);
   ctx.lineWidth = 2;
   ctl.trace.forEach((s, i) => {
     if (!s.start && !s.release) return;
-    ctx.strokeStyle = s.start ? "#45c27a" : "#e5484d";
+    ctx.strokeStyle = s.start ? COLORS.good : COLORS.bad;
     ctx.beginPath(); ctx.moveTo(xOf(i), 0); ctx.lineTo(xOf(i), h); ctx.stroke();
   });
   if (ctl.params) {
     ctx.setLineDash([6, 4]);
     const clenches = ctl.params.mode === "trigger" || ctl.params.mode === "rules";
-    const lines = clenches ? [["pulse_level", "#e0a02a"], ["hold_level", "#8b919c"]]
-      : [["start_level", "#e0a02a"], ["hold_level", "#8b919c"], ["release_level", "#e5484d"]];
+    const lines = clenches ? [["pulse_level", COLORS.warn], ["hold_level", COLORS.muted]]
+      : [["start_level", COLORS.warn], ["hold_level", COLORS.muted], ["release_level", COLORS.bad]];
     for (const [key, color] of lines) {
       if (key === "hold_level" && ctl.params.closure_mode !== "speed" && !clenches) continue;
       ctx.strokeStyle = color;
@@ -393,7 +393,7 @@ function drawTrace() {
     }
     ctx.setLineDash([]);
   }
-  for (const [key, color] of [["effort", TRACKED_COLOR], ["closure", "#e6e6e6"]]) {
+  for (const [key, color] of [["effort", TRACKED_COLOR], ["closure", COLORS.accent]]) {
     ctx.strokeStyle = color;
     ctx.beginPath();
     ctl.trace.forEach((s, i) => (i ? ctx.lineTo(xOf(i), yOf(s[key])) : ctx.moveTo(xOf(i), yOf(s[key]))));

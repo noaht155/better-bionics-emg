@@ -1507,6 +1507,14 @@ take their levels from their newest training session. Levels from a sign session
 the held signs, since it has no grips; on `095340` the max sits at the 2x rest floor on 7 of 8 channels, so effort
 saturates early and the clench level may need raising. Grip sessions' levels unchanged. 112 tests pass.
 
+**App restyled like the Better Bionics site** (dark). Tokens in `emg-reading/web/style.css` `:root`: black page,
+panels `#0a0a0b`, white text, muted `#a1a1aa` (about 8:1 on black), one accent `#ff3d8b` in an orange to pink to
+magenta gradient (wordmark, active tab, progress bars, primary hover, pill switches, section numbers). Inter for text,
+JetBrains Mono for labels, tabs and table headers. Warnings keep solid yellow `#ffc233` and red `#ff3b3b` fills, the
+only filled colour on the page. Canvases read the same tokens (`COLORS` in `app.js`). The tracked hand and live
+signals went white instead of blue so a lost channel (red) can't be mistaken for the pink accent; the colour notes on
+Train and Control were updated to match. Rules for new UI in CLAUDE.md "Visual style".
+
 ## Open
 
 - Trigger mode on the arm: tune clench level and timings live, count wrong picks (short clench read as two, a grab
@@ -1520,8 +1528,8 @@ saturates early and the clench level may need raising. Grip sessions' levels unc
 - Arm animation for cues: forearm, wrist and upper arm in the cue drawing, so D's activities and the wrist
   movements left out of protocol C can be shown. Later: a bigger build, not needed yet (Noah, 2026-10-15); D's cues
   are text with the relaxed hand until then.
-- App look: restyle the web app like the Better Bionics site, dark theme (near-black, white type, orange to magenta
-  gradient accents, monospace uppercase labels, thin outlined boxes). Noah, 2026-10-19: later, not started.
+- App look, next: motion only where it shows state (live data dot, cue change, warning bar without layout jump, busy
+  buttons, idle canvas placeholders, grip change flash), under 200 ms, never on the data itself.
 - Sign network (in `ml/` with calibration since 2026-10-19): try it live against the sign LDA, and trigger mode with
   it on the Control tab (sign map, clench level against the sign session's levels); decide whether open stays in the
   set (93 to 97 % without it, 86 to 92 % with). Later: one label path for grips and signs (both are held positions),

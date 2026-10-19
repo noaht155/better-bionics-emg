@@ -41,34 +41,34 @@ function drawCursorCanvas(c) {
   const py = (y) => h / 2 - y * scale;
   const circle = (x, y, r) => { ctx.beginPath(); ctx.arc(px(x), py(y), r * scale, 0, 2 * Math.PI); };
   const p = cur.params;
-  ctx.fillStyle = "#16181c";
+  ctx.fillStyle = COLORS.bg;
   ctx.fillRect(0, 0, w, h);
   ctx.lineWidth = 1;
-  ctx.strokeStyle = "#2c3038";
+  ctx.strokeStyle = COLORS.line;
   circle(0, 0, p.target_r); ctx.stroke();
   circle(0, 0, 1.2); ctx.stroke();
 
   // Each electrode's direction, and its level as a spoke, so the map can be learned by looking
   const n = c.levels.length;
-  ctx.font = "12px sans-serif";
+  ctx.font = `12px ${MONO}`;
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
   c.levels.forEach((level, i) => {
     const a = (p.rotation_deg * Math.PI) / 180 + (p.flip ? -1 : 1) * (2 * Math.PI * i) / n;
     const [ux, uy] = [Math.cos(a), Math.sin(a)];
-    ctx.strokeStyle = c.lost[i] ? "#e5484d" : "#3a5f8a";
+    ctx.strokeStyle = c.lost[i] ? COLORS.bad : COLORS.lineStrong;
     ctx.lineWidth = 6;
     ctx.beginPath(); ctx.moveTo(px(0), py(0)); ctx.lineTo(px(ux * level * p.target_r), py(uy * level * p.target_r)); ctx.stroke();
-    ctx.fillStyle = c.lost[i] ? "#e5484d" : "#8b919c";
+    ctx.fillStyle = c.lost[i] ? COLORS.bad : COLORS.muted;
     ctx.fillText(`ch ${i}`, px(ux * 1.12), py(uy * 1.12));
   });
 
   ctx.lineWidth = 2;
   const home = c.targets_on && c.phase === "home";
-  ctx.strokeStyle = home ? "#45c27a" : "#8b919c";
+  ctx.strokeStyle = home ? COLORS.good : COLORS.muted;
   circle(0, 0, p.home_size); ctx.stroke();
   if (home && p.home_s > 0) {
-    ctx.fillStyle = "rgba(69, 194, 122, 0.3)";
+    ctx.fillStyle = withAlpha(COLORS.good, 0.3);
     circle(0, 0, p.home_size * Math.min(1, c.t / p.home_s)); ctx.fill();
   }
   if (c.targets_on) {
@@ -76,20 +76,20 @@ function drawCursorCanvas(c) {
       const a = (deg * Math.PI) / 180;
       const [x, y] = [p.target_r * Math.cos(a), p.target_r * Math.sin(a)];
       const active = c.phase === "go" && c.target === k;
-      ctx.strokeStyle = active ? "#e0a02a" : "#2c3038";
+      ctx.strokeStyle = active ? COLORS.accent : COLORS.line;
       circle(x, y, p.target_size); ctx.stroke();
       if (active) {
-        ctx.fillStyle = "rgba(224, 160, 42, 0.25)";
+        ctx.fillStyle = withAlpha(COLORS.accent, 0.25);
         ctx.fill();
         if (c.dwell > 0 && p.dwell_s > 0) {
-          ctx.fillStyle = "rgba(69, 194, 122, 0.6)";
+          ctx.fillStyle = withAlpha(COLORS.good, 0.6);
           circle(x, y, p.target_size * Math.min(1, c.dwell / p.dwell_s)); ctx.fill();
         }
       }
     });
   }
 
-  ctx.strokeStyle = "rgba(79, 163, 255, 0.4)";
+  ctx.strokeStyle = withAlpha(TRACKED_COLOR, 0.4);
   ctx.beginPath();
   cur.trail.forEach(([x, y], i) => (i ? ctx.lineTo(px(x), py(y)) : ctx.moveTo(px(x), py(y))));
   ctx.stroke();

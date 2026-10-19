@@ -129,7 +129,7 @@ function drawSolidHand(ctx, angles, opts) {
   ctx.globalAlpha = opts.alpha ?? 1;
   ctx.lineCap = "round";
   ctx.lineJoin = "round";
-  const edge = "#16181c";
+  const edge = COLORS.bg;
   for (const part of parts) {
     const fill = shade(opts.color, (part.depth - lo) / (hi - lo || 1));
     ctx.beginPath();

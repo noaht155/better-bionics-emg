@@ -90,7 +90,7 @@ function channelRows(ctx) {
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   ctx.clearRect(0, 0, w, h);
   const rowH = h / config.channels.length;
-  ctx.font = "13px system-ui";
+  ctx.font = `11px ${MONO}`;
   return { w, rowH };
 }
 
@@ -114,11 +114,11 @@ function drawSweep() {
     const mid = rowH * c + rowH / 2;
     let sq = 0, count = 0;
     for (const v of x) if (!Number.isNaN(v)) { sq += v * v; count++; }
-    ctx.fillStyle = "#e6e6e6";
+    ctx.fillStyle = COLORS.text;
     ctx.fillText(`ch ${config.channels[c]}`, 8, mid - 4);
-    ctx.fillStyle = "#8b919c";
+    ctx.fillStyle = COLORS.muted;
     ctx.fillText(`rms ${count ? Math.sqrt(sq / count).toFixed(1) : "-"} µV`, 8, mid + 13);
-    ctx.strokeStyle = "#2f333b";
+    ctx.strokeStyle = COLORS.line;
     ctx.beginPath(); ctx.moveTo(left, mid); ctx.lineTo(w, mid); ctx.stroke();
     ctx.strokeStyle = TRACKED_COLOR;
     ctx.lineWidth = 1;
@@ -133,7 +133,7 @@ function drawSweep() {
     }
     ctx.stroke();
   });
-  ctx.fillStyle = "#8b919c";
+  ctx.fillStyle = COLORS.muted;
   ctx.fillText(`±${lim.toFixed(0)} µV`, w - 90, 14);
 }
 
@@ -150,10 +150,10 @@ function drawSpectrum() {
   const xOf = (f) => left + ((w - left) * f) / fMax;
   s.mag.forEach((m, c) => {
     const top = rowH * c;
-    ctx.fillStyle = "#e6e6e6";
+    ctx.fillStyle = COLORS.text;
     ctx.fillText(`ch ${config.channels[c]}`, 8, top + rowH / 2);
     // Mains and its harmonics, where the notches sit
-    ctx.strokeStyle = "#3a2f2f";
+    ctx.strokeStyle = COLORS.mains;
     for (const f of [60, 120, 180]) { ctx.beginPath(); ctx.moveTo(xOf(f), top); ctx.lineTo(xOf(f), top + rowH); ctx.stroke(); }
     ctx.strokeStyle = TRACKED_COLOR;
     ctx.beginPath();
@@ -165,7 +165,7 @@ function drawSpectrum() {
     });
     ctx.stroke();
   });
-  ctx.fillStyle = "#8b919c";
+  ctx.fillStyle = COLORS.muted;
   for (let f = 0; f <= fMax; f += 50) ctx.fillText(`${f} Hz`, xOf(f) - 12, rowH * config.channels.length - 2);
 }
 
@@ -245,19 +245,19 @@ function drawOutputs(h) {
   const slot = w / outputs.length;
   const top = 10, bottom = 44;
   const plotH = hgt - top - bottom;
-  ctx.font = "13px system-ui";
+  ctx.font = `13px ${MONO}`;
   outputs.forEach((chs, i) => {
     const duty = h.duties?.[i] ?? 0;
     const x = i * slot + slot * 0.15;
     const bw = slot * 0.7;
-    ctx.fillStyle = "#2a2e36";
+    ctx.fillStyle = COLORS.raised;
     ctx.fillRect(x, top, bw, plotH);
     const lost = chs.some((ch) => h.lost?.[config.channels.indexOf(ch)]);
-    ctx.fillStyle = lost ? "#e5484d" : TRACKED_COLOR;
+    ctx.fillStyle = lost ? COLORS.bad : TRACKED_COLOR;
     ctx.fillRect(x, top + plotH * (1 - duty / 100), bw, plotH * duty / 100);
-    ctx.fillStyle = "#e6e6e6";
+    ctx.fillStyle = COLORS.text;
     ctx.fillText(`out ${i}  ${duty}%`, x, hgt - bottom + 18);
-    ctx.fillStyle = "#8b919c";
+    ctx.fillStyle = COLORS.muted;
     ctx.fillText(`ch ${chs.join("+")}`, x, hgt - bottom + 35);
   });
 }
@@ -470,20 +470,20 @@ function drawProbs(p, canvas = "live-probs") {
   const classes = p.classes;
   const rowH = h / classes.length;
   const left = 110;
-  ctx.font = "14px system-ui";
+  ctx.font = `14px ${SANS}`;
   classes.forEach((c, i) => {
     const v = p.probs[c] ?? 0;
     const y = i * rowH;
-    ctx.fillStyle = c === p.label ? "#e6e6e6" : "#8b919c";
+    ctx.fillStyle = c === p.label ? COLORS.text : COLORS.muted;
     ctx.fillText(c.replace("_", " "), 4, y + rowH * 0.65);
-    ctx.fillStyle = "#2a2e36";
+    ctx.fillStyle = COLORS.raised;
     ctx.fillRect(left, y + 3, w - left, rowH - 6);
-    ctx.fillStyle = c === p.label ? TRACKED_COLOR : "#4b5563";
+    ctx.fillStyle = c === p.label ? COLORS.accent : COLORS.lineStrong;
     ctx.fillRect(left, y + 3, (w - left) * v, rowH - 6);
   });
   // A gesture's bar has to cross this line before it is shown
   const x = left + (w - left) * (p.threshold ?? 0);
-  ctx.strokeStyle = "#e0a02a";
+  ctx.strokeStyle = COLORS.text;
   ctx.lineWidth = 2;
   ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, h); ctx.stroke();
 }
@@ -596,8 +596,8 @@ function networkTable(job, r) {
   return "";
 }
 
-const PREDICTED_COLOR = "#e0a02a";
-const EFFORT_COLOR = "#45c27a";
+const PREDICTED_COLOR = cssVar("--predicted");
+const EFFORT_COLOR = cssVar("--effort");
 const netView = { yaw: -45, pitch: -25 };
 
 // The network predicts the base and middle joints only, the others come from the relaxed pose
