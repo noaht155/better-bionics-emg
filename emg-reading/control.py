@@ -23,6 +23,17 @@ Two options against grips picked during arm activity (both off by default): stil
 while the arm moves (accelerometer, see movement), and pinch_clenches 2 moves pinch, tripod and key to 2, 3 and 4
 clenches, since most false picks were a single clench. Replayed on the protocol D activities at clench level 0.3:
 14.9 false picks per minute, 5.4 with the gate, 6.1 with 2 clenches, 1.0 with both (diagnostics/trigger_gates.py).
+
+mode "rules" (Noah, 2026-10-19) is trigger mode with the wiring as a list the user edits (the mapping): each rule is
+{"trigger": "clench" or one of the model's classes, "how": "held" or "repeated", "value": seconds or count,
+"action": "close", "open", "release" or a pose}. A clench is effort above pulse_level; a class is on while its probability is
+at least the threshold. Held fires once the trigger has been on that long; repeated counts short episodes (shorter
+than the trigger's held rule) and fires after gap_s without a new one, or straight away at the highest count any rule
+of that trigger asks for. Poses are only picked while choosing, release only works while holding, and close and
+open move the hand for as long as their trigger stays on (speed set by effort), so nothing switches grips with an
+object in the hand. Held 0 s acts on the first step the trigger is on. While holding, effort above hold_level also
+closes the hand as in trigger mode. A clench during which a rule's class is on belongs to
+that class, not to the clench count.
 """
 import math
 
@@ -39,6 +50,18 @@ DEFAULTS = {"threshold": 0.7, "vote_n": 8, "start_level": 0.02, "onset_s": 3.0, 
             "mode": "lock", "smooth_s": 0.25, "lock_s": 0.5,
             "pulse_level": 0.2, "long_s": 0.7, "gap_s": 0.6, "double_s": 1.0, "release_with": "point",
             "still_gate": False, "pinch_clenches": 1}
+# Rules mode: the default mapping is trigger mode's defaults written as rules. A sign model without point uses two
+# finger point in its place (rules_for)
+DEFAULT_RULES = [{"trigger": "clench", "how": "held", "value": 0.7, "action": "fist"},
+                 {"trigger": "clench", "how": "repeated", "value": 1, "action": "pinch"},
+                 {"trigger": "clench", "how": "repeated", "value": 2, "action": "tripod"},
+                 {"trigger": "clench", "how": "repeated", "value": 3, "action": "key"},
+                 {"trigger": "point", "how": "held", "value": 0.4, "action": "point"},
+                 {"trigger": "point", "how": "repeated", "value": 2, "action": "release"},
+                 {"trigger": "open", "how": "held", "value": 0.0, "action": "open"}]
+RULE_ACTIONS = ("close", "open", "release")
+MAX_REPEATS = 6
+MAX_HELD_S = 5.0
 # Trigger mode: grips by number of short clenches, from pinch_clenches up. Fist is the long clench, point comes from
 # the classifier
 TRIGGER_GRIPS = ["pinch", "tripod", "key"]
@@ -52,6 +75,34 @@ FLICK_GAP_S = 0.15
 SPRING_STEP_S = 0.005
 # Sums of dt drift a little, 12 x 0.05 isn't exactly 0.6
 EPS = 1e-9
+
+
+def rules_for(classes):
+    """The default mapping for a model with these classes, without the rules of classes it doesn't have."""
+    stand_in = "point" if "point" in classes or "two_point" not in classes else "two_point"
+    rules = [dict(r, trigger=stand_in if r["trigger"] == "point" else r["trigger"]) for r in DEFAULT_RULES]
+    return [r for r in rules if r["trigger"] == "clench" or r["trigger"] in classes]
+
+
+def check_rules(rules, poses):
+    """Raises ValueError for a rule that can't work: unknown how or action, a value out of range, or two rules on the
+    same trigger and pattern (a trigger can have one held rule)."""
+    seen = set()
+    for r in rules:
+        if not r["trigger"]:
+            raise ValueError("every rule needs a trigger")
+        if r["how"] not in ("held", "repeated"):
+            raise ValueError(f"{r['how']}: a rule is held or repeated")
+        if r["action"] not in RULE_ACTIONS and r["action"] not in poses:
+            raise ValueError(f"{r['action']} is not a pose or action")
+        if r["how"] == "held" and not 0 <= r["value"] <= MAX_HELD_S:
+            raise ValueError(f"held time is 0 to {MAX_HELD_S:g} s")
+        if r["how"] == "repeated" and (r["value"] != int(r["value"]) or not 1 <= r["value"] <= MAX_REPEATS):
+            raise ValueError(f"repeated is 1 to {MAX_REPEATS} times")
+        key = (r["trigger"], r["how"], r["value"] if r["how"] == "repeated" else None)
+        if key in seen:
+            raise ValueError(f"two rules for {r['trigger']} {r['how']}" + (f" {r['value']:g}" if key[2] else ""))
+        seen.add(key)
 
 
 def movement(accel):
@@ -75,7 +126,18 @@ class Controller:
         self.grips = list(grips)
         self.poses = {g: np.asarray(a, float) for g, a in poses.items()}
         self.relaxed = self.poses["rest"]
+        self.rules = [dict(r) for r in DEFAULT_RULES]
         self.reset()
+
+    def set_rules(self, rules):
+        check_rules(rules, self.poses)
+        self.rules = [dict(r) for r in rules]
+        self._reset_rules()
+
+    def _reset_rules(self):
+        """Per trigger: time on in the current episode, time since it was last on, short episodes counted, whether
+        this episode already did something; stuck triggers wait to go off first."""
+        self.run_t, self.off_t, self.counts, self.used, self.stuck = {}, {}, {}, {}, set()
 
     def reset(self):
         self.state = "idle"
@@ -92,6 +154,7 @@ class Controller:
         self.clock, self.flicks, self.flick_was_on, self.flick_off = 0.0, [], False, FLICK_GAP_S
         self.pulse_time, self.pulse_open, self.pulses, self.gap, self.point_votes = 0.0, False, 0, 0.0, 0
         self.point_blocked = False
+        self._reset_rules()
         self.x = self.relaxed.copy()
         self.v = np.zeros_like(self.x)
 
@@ -106,6 +169,8 @@ class Controller:
             return self._blend(probs, effort, dt)
         if p["mode"] == "trigger":
             return self._trigger(probs, effort, dt, moving)
+        if p["mode"] == "rules":
+            return self._rules(probs, effort, dt, moving)
         prob = lambda g: float(probs.get(g, 0.0))
         event = None
 
@@ -241,6 +306,83 @@ class Controller:
 
         return {"state": self.state, "grip": self.grip, "closure": self.closure, "angles": self._spring(dt),
                 "event": event, "pulses": self.pulses}
+
+    def _repeats(self, t, count):
+        return [r for r in self.rules if r["trigger"] == t and r["how"] == "repeated" and r["value"] == count]
+
+    def _rules(self, probs, effort, dt, moving=False):
+        p = self.params
+        triggers = sorted({r["trigger"] for r in self.rules})
+        on = {t: float(probs.get(t, 0.0)) >= p["threshold"] for t in triggers if t != "clench"}
+        class_on = any(on.values())
+        on["clench"] = effort >= p["pulse_level"]
+        gated = p["still_gate"] and moving and self.state == "idle"
+        held = {r["trigger"]: r for r in self.rules if r["how"] == "held"}
+        events = []
+
+        for t in triggers:
+            if t in self.stuck:
+                if on[t]:
+                    continue
+                self.stuck.discard(t)
+            now = on[t] and not gated
+            run, used = self.run_t.get(t, 0.0), self.used.get(t, False)
+            if now:
+                if run == 0:
+                    # Counted as it starts, so the last of a repeat acts straight away; a hold takes it back
+                    self.counts[t] = self.counts.get(t, 0) + 1
+                    counts = [r["value"] for r in self.rules if r["trigger"] == t and r["how"] == "repeated"]
+                    if counts and self.counts[t] >= max(counts):
+                        events += self._repeats(t, self.counts[t])
+                        self.counts[t] = 0
+                        used = True
+                run += dt
+                self.off_t[t] = 0.0
+                rule = held.get(t)
+                if not used and ((t == "clench" and class_on) or (rule and run >= rule["value"] - EPS)):
+                    used = True
+                    self.counts[t] -= 1
+                    if not (t == "clench" and class_on):
+                        events.append(rule)
+            else:
+                self.off_t[t] = self.off_t.get(t, 0.0) + dt
+                # A class has to stay off a little to end an episode, so a one window drop isn't a second flick
+                if run > 0 and (t == "clench" or self.off_t[t] >= FLICK_GAP_S - EPS):
+                    run, used = 0.0, False
+                elif run == 0 and self.counts.get(t) and self.off_t[t] >= p["gap_s"] - EPS:
+                    events += self._repeats(t, self.counts[t])
+                    self.counts[t] = 0
+            self.run_t[t], self.used[t] = run, used
+
+        event = None
+        for r in events:
+            if r["action"] == "release" and self.state == "active":
+                self.state, self.grip, self.closure, event = "idle", None, 0.0, "release"
+            elif r["action"] not in RULE_ACTIONS and self.state == "idle" and r["action"] in self.poses:
+                self._choose(r["action"])
+                event = "start"
+            else:
+                continue
+            # Whatever is still on carried the pick or release, it has to go off before it counts again
+            self.stuck = {t for t in triggers if on[t]}
+            self.run_t, self.off_t, self.counts, self.used = {}, {}, {}, {}
+            break
+
+        if self.state == "active" and event is None:
+            moving_to = {r["action"] for r in self.rules if r["action"] in ("open", "close") and on[r["trigger"]]
+                         and self.run_t.get(r["trigger"], 0.0) >= r["value"] - EPS}
+            speed = max(effort, p["hold_level"]) * p["gain"] * dt
+            if "open" in moving_to:
+                self.closure -= speed
+            elif "close" in moving_to:
+                self.closure += speed
+            elif class_on:
+                pass
+            elif effort >= p["hold_level"]:
+                self.closure += (effort - p["hold_level"]) * p["gain"] * dt
+            self.closure = float(np.clip(self.closure, 0.0, 1.0))
+        return {"state": self.state, "grip": self.grip, "closure": self.closure, "angles": self._spring(dt),
+                "event": event, "pulses": self.counts.get("clench", 0)}
 
     def _choose(self, grip):
         self.state, self.grip, self.closure = "active", grip, 0.0

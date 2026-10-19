@@ -340,3 +340,106 @@ def test_still_limit_and_movement():
     assert movement(still[:, :250]) < limit
     assert movement(rng.normal(0, 0.1, (3, 250))) > limit
     assert still_limit(still, [], rate) == float("inf")
+
+
+def rules(**params):
+    return make(mode="rules", **params)
+
+
+def test_rules_default_mapping_picks_like_trigger_mode():
+    c = rules()
+    assert run(c, ("fist", 0.5, 13)) == [] and c.state == "idle"
+    assert run(c, ("fist", 0.5, 1)) == ["start"] and c.grip == "fist"
+    for count, grip in ((1, "pinch"), (2, "tripod")):
+        c = rules()
+        assert run(c, *[SHORT, PAUSE] * count) == [] and c.state == "idle"
+        assert run(c, GAP) == ["start"] and c.grip == grip and c.closure == 0
+    # 3 is the highest count any clench rule asks for, so it fires without waiting for the pause
+    c = rules()
+    assert run(c, *[SHORT, PAUSE] * 3) == ["start"] and c.grip == "key"
+    c = rules()
+    assert run(c, ("point", 0.5, 8)) == ["start"] and c.grip == "point"
+
+
+def test_rules_hold_squeeze_open_and_release():
+    c = rules()
+    run(c, ("fist", 0.5, 14))
+    closed = c.closure
+    run(c, ("rest", 0.5, 4))
+    assert c.closure > closed
+    closed = c.closure
+    run(c, ("rest", 0.05, 10))
+    assert c.closure == closed
+    run(c, ("open", 0.5, 2))
+    assert c.closure < closed and c.state == "active"
+    # One point flick does nothing, a one window drop inside a flick isn't a second one, two flicks release
+    assert run(c, ("point", 0.5, 3), ("rest", 0.0, 1), ("point", 0.5, 2), ("rest", 0.0, 20)) == []
+    assert run(c, ("point", 0.5, 3), ("rest", 0.0, 4), ("point", 0.5, 3)) == ["release"]
+    assert c.state == "idle" and c.closure == 0
+
+
+def test_rules_never_switch_grips_while_holding():
+    c = rules()
+    run(c, ("fist", 0.5, 14), ("rest", 0.0, 4))
+    assert run(c, SHORT, PAUSE, GAP, ("point", 0.5, 10), ("rest", 0.0, 4)) == []
+    assert c.grip == "fist"
+
+
+def test_rules_on_sign_classes_and_library_poses():
+    from gestures import LIBRARY
+    poses = dict(POSES, cylinder=LIBRARY["cylinder"]["angles"])
+    c = Controller({**BASE, "mode": "rules"}, GESTURE_SET, poses)
+    c.set_rules([{"trigger": "little_out", "how": "held", "value": 0.2, "action": "cylinder"},
+                 {"trigger": "two_point", "how": "repeated", "value": 2, "action": "release"}])
+    sign = lambda name: {name: 0.9, "rest": 0.1}
+    events = [c.step(sign("little_out"), 0.3)["event"] for _ in range(4)]
+    assert events.count("start") == 1 and c.grip == "cylinder"
+    for name, steps in (("rest", 4), ("two_point", 3), ("rest", 4), ("two_point", 3)):
+        events = [c.step(sign(name), 0.0)["event"] for _ in range(steps)]
+    assert "release" in events and c.state == "idle"
+
+
+def test_rules_close_action_closes_while_its_trigger_stays_on():
+    c = rules()
+    c.set_rules([{"trigger": "clench", "how": "held", "value": 0.7, "action": "fist"},
+                 {"trigger": "point", "how": "held", "value": 0.0, "action": "close"}])
+    run(c, ("fist", 0.5, 14), ("rest", 0.0, 4))
+    closed = c.closure
+    # Held 0 s acts on the first step: the hand closes while point stays on, even with no effort above the hold level
+    run(c, ("point", 0.05, 1))
+    assert c.closure > closed
+    closed = c.closure
+    run(c, ("point", 0.05, 5))
+    assert c.closure > closed
+    closed = c.closure
+    run(c, ("rest", 0.05, 5))
+    assert c.closure == closed
+
+
+def test_rules_clench_with_a_rule_class_on_is_that_class():
+    c = rules()
+    # Opening is a rule's class, so the effort that comes with it is not a clench
+    assert run(c, ("open", 0.5, 4), PAUSE, GAP) == [] and c.state == "idle"
+
+
+def test_rules_still_gate():
+    c = rules(still_gate=True)
+    for _ in range(20):
+        assert c.step(probs("fist"), 0.5, moving=True)["event"] is None
+    assert c.state == "idle"
+
+
+def test_rules_are_checked():
+    from control import check_rules, rules_for
+    good = [{"trigger": "clench", "how": "repeated", "value": 2, "action": "pinch"}]
+    check_rules(good, POSES)
+    for bad in ([dict(good[0], action="nothing")], [dict(good[0], how="twice")], [dict(good[0], value=0)],
+                [dict(good[0], value=1.5)], [dict(good[0], how="held", value=9)], good + good,
+                [dict(good[0], how="held", value=0.5), dict(good[0], how="held", value=1.0)],
+                [dict(good[0], trigger="")]):
+        with pytest.raises(ValueError):
+            check_rules(bad, POSES)
+    assert {r["trigger"] for r in rules_for(["open", "two_point", "rest"])} == {"clench", "two_point", "open"}
+    assert {r["trigger"] for r in rules_for(list(GESTURE_SET))} == {"clench", "point", "open"}
+    # A model without open gets no open rule
+    assert {r["trigger"] for r in rules_for(["two_point", "little_out", "rest"])} == {"clench", "two_point"}

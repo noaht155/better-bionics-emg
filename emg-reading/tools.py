@@ -18,10 +18,10 @@ from pathlib import Path
 
 import calibrate
 import check_connection
-from control import DEFAULTS, STILL_S, Controller, movement, still_limit
+from control import DEFAULT_RULES, DEFAULTS, STILL_S, Controller, check_rules, movement, still_limit
 from cursor import DEFAULTS as CURSOR_DEFAULTS, LEVEL_SCALE as CURSOR_LEVEL_SCALE, Cursor
 from esp32_link import Esp32, self_test
-from gestures import GESTURE_SET, GESTURES
+from gestures import GESTURE_SET, GESTURES, LIBRARY
 from session import DATA_DIR, load_session, segments
 from haptics import OUTPUTS, UPDATE_HZ, channel_levels, effort, output_duties
 
@@ -335,17 +335,33 @@ class Predictor(Tool):
             time.sleep(max(0.0, next_tick - time.perf_counter()))
 
 
+# Every pose a rule can pick: the grips and the protocol C library
+POSES = {**{k: e["angles"] for k, e in LIBRARY.items()}, **{g: GESTURES[g][1] for g in GESTURE_SET}}
+
+
+def sign_map(rules, classes):
+    """Grip per class for the modes that run on grip probabilities (lock, blend, trigger): a class held to pick a grip
+    or to open stands for that grip, any other class not in the grip set counts as rest."""
+    picked = {r["trigger"]: r["action"] for r in rules if r["how"] == "held"
+              and (r["action"] in GESTURE_SET or r["action"] == "open")}
+    return {c: picked.get(c, c if c in GESTURE_SET else "rest") for c in classes}
+
+
 class Control:
     """control.Controller on the predictor's output, stepped inside the predictor's loop so the grip probabilities
-    and the effort come from the same window. Parameters can change while it runs."""
+    and the effort come from the same window. Parameters and the mapping (the rules) can change while it runs. Rules
+    mode gets the model's own classes; the other modes get grip probabilities, a sign model's added up per grip
+    through sign_map."""
 
     def __init__(self, recorder):
         self.recorder = recorder
-        self.params = dict(DEFAULTS)
-        self.state = {"params": self.params}
+        self.params = dict(DEFAULTS, mode="rules")
+        self.rules = [dict(r) for r in DEFAULT_RULES]
+        self.state = {"params": self.params, "rules": self.rules}
         self._controller = None
         self._ranges = None
         self._still = float("inf")
+        self._map = None
 
     def prepare(self, session):
         """Effort levels from the session the model trained on, the same levels the haptics take, and from its held
@@ -355,11 +371,20 @@ class Control:
         self._still = still_limit(data["accel"], [(s["sample0"], s["sample1"]) for s in segments(data["events"])
                                                   if s["kind"] == "hold" and s["sample1"] and not s["bad"]],
                                   data["meta"]["rate"])
-        poses = {g: GESTURES[g][1] for g in GESTURE_SET}
-        self._controller = Controller(self.params, GESTURE_SET, poses)
-        self.state = {"params": self.params, "levels_from": Path(session).name, "step": 0, "state": "idle",
-                      "grip": None, "closure": 0.0, "effort": 0.0, "angles": None, "starts": 0, "releases": 0,
-                      "opens": 0}
+        self._controller = Controller(self.params, GESTURE_SET, POSES)
+        self._controller.set_rules(self.rules)
+        self._map = None
+        self.state = {"params": self.params, "rules": self.rules, "levels_from": Path(session).name, "step": 0,
+                      "state": "idle", "grip": None, "closure": 0.0, "effort": 0.0, "angles": None, "starts": 0,
+                      "releases": 0, "opens": 0}
+
+    def set_rules(self, rules):
+        check_rules(rules, POSES)
+        self.rules = [dict(r) for r in rules]
+        self.state["rules"] = self.rules
+        self._map = None
+        if self._controller is not None:
+            self._controller.set_rules(self.rules)
 
     def set_params(self, params):
         self.params.update(params)
@@ -370,6 +395,13 @@ class Control:
         self.state.update(starts=0, releases=0, opens=0)
 
     def step(self, emg, filtered, probs, dt, distance=None):
+        if self.params["mode"] != "rules" and not set(probs) <= set(GESTURE_SET):
+            if self._map is None:
+                self._map = sign_map(self.rules, probs)
+            grips = dict.fromkeys(GESTURE_SET, 0.0)
+            for c, v in probs.items():
+                grips[self._map[c]] += v
+            probs = grips
         n = self.recorder.env_len
         band = self.recorder.band
         e = effort(emg[:, -n:], filtered[:, -n:], band.channels, self._ranges, True)
