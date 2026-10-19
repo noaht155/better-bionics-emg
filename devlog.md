@@ -1582,6 +1582,24 @@ snapping (`placePill` in `tools.js` measures the labels, which differ in width).
 `b` did nothing while the button worked (Noah). Same for `f` and `s` on Signals. Now case-insensitive, and a shortcut
 shows on its button like a click.
 
+**Fourth F session** (`2026-10-19_141720_noah`, 6.5 cm, 8 min, no bad cues, 140 dropped samples). Each F session
+held out in turn, trained on E and the other three F sessions, one seed, `sign_net.py across`. Network fine-tuned,
+balanced / wrist bends read as a sign:
+
+| Test | with open, calibrated | with open, no calibration | without open, calibrated | without open, no calibration |
+|---|---|---|---|---|
+| `141720` (new) | 88.8 % / 7 % | 93.9 % / 1 % | 93.0 % / 5 % | 92.2 % / 2 % |
+| `095340` | 85.6 % / 2 % | 75.7 % / 8 % | 91.9 % / 1 % | 81.1 % / 6 % |
+| `092314` | 88.5 % / 10 % | 84.3 % / 3 % | 96.9 % / 3 % | 95.3 % / 0 % |
+| `153635` | 94.2 % / 0 % | 94.4 % / 0 % | 95.0 % / 1 % | 98.1 % / 0 % |
+
+- A fourth session in training didn't move the other three: calibrated with open 85.6 / 88.5 / 94.2 against 86.3 /
+  88.7 / 92.2 with three, without open 91.9 / 96.9 / 95.0 against 93.2 / 96.6 / 96.0. All inside the 3 point seed
+  spread. Best LDA per session 82.5 to 90.4 % with open, 88.4 to 94.1 % without.
+- The new session is easy for the network uncalibrated (93.9 % with open) and calibration costs it 5 points there,
+  against +10 on `095340`. One seed, so not yet a reason to make calibration optional.
+- `095340` stays the worst session. Without open every F session is over 90 % calibrated (worst 91.9 %).
+
 ## Open
 
 - Trigger mode on the arm: tune clench level and timings live, count wrong picks (short clench read as two, a grab
@@ -1597,8 +1615,8 @@ shows on its button like a click.
   movements left out of protocol C.
 - Sign network (in `ml/` with calibration since 2026-10-19): try it live against the sign LDA, and trigger mode with
   it on the Control tab (sign map, clench level against the sign session's levels); decide whether open stays in the
-  set (93 to 97 % without it, 86 to 92 % with). Later: one label path for grips and signs (both are held positions),
-  without changing grip training results.
+  set (92 to 97 % without it, 86 to 94 % with, four F sessions). Later: one label path for grips and signs (both are
+  held positions), without changing grip training results.
 - Sign research (`sign-research.md`, tests and times in its section 7): "not a sign" class for wrist flexion on the
   D sessions; calibrated ring network on the 2 to 4 sign sets (1 to 2 h GPU, ask first); still gate and 12 votes
   live in lock mode with open, fist, point; record a protocol E session and run `screen_e.py`; then build protocol F
