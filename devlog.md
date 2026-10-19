@@ -1571,6 +1571,11 @@ a network job runs (next to Train it read as part of LDA training); Control's se
 Model output appearing while running no longer renumbers Profile and Basic; the mapping page's back button is a small
 "Grip control" link above the heading; the pose picker says when a hovered entry is an action with no pose; "Connection
 check" is now "Connection" (the page also holds WiFi and battery), the Train type select is labelled Type.
+
+**Next line before wrist bends and activities** (Noah, found while recording): the rest before a cue only named the
+next one when it was in the gesture list, so the held wrist bends of E and F and 13 of D's 14 activities never
+showed under Next. Now every "nogrip" cue is named too; the hand stays relaxed during that rest (Noah: the text
+matters more than the picture matching). Display only, recordings and labels unchanged.
 **Keyboard shortcuts ignored caps lock**: Mark bad checked `e.key === "b"`, and with caps lock on the key is "B", so
 `b` did nothing while the button worked (Noah). Same for `f` and `s` on Signals. Now case-insensitive, and a shortcut
 shows on its button like a click.

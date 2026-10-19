@@ -509,8 +509,8 @@ function drawSession() {
   $("bad-mark").textContent = mark;
   $("btn-bad").classList.toggle("armed", !!s.marked_bad);
   $("cue-time").textContent = cue.seconds && !s.paused ? `${Math.max(0, cue.seconds - s.cue_elapsed).toFixed(1)} s` : "";
-  // Only when the hand below shows the next gesture, so the text and the picture always agree. Name and
-  // description, without the reminder line every gesture shares
+  // Name and description of the next gesture or activity, without the reminder line every gesture shares. Before a
+  // wrist bend or an activity the hand below stays relaxed, knowing what comes next matters more (Noah)
   const target = targetPose();
   $("next").innerHTML = target?.upcoming ? `<span>Next</span>${cueTitle(target.text)}` : "";
   flashOnChange($("next"), target?.upcoming ? target.text : "");
@@ -702,7 +702,8 @@ function targetPose(elapsed) {
   if (!s) return null;
   const cue = s.cue;
   if (cue.kind === "free" || cue.kind === "sync" || cue.kind === "break") return null;
-  const upcoming = cue.label === "rest" && s.next && !!config.gestures[s.next.label];
+  // Wrist bends and protocol D's activities are "nogrip" cues, not in the gesture list, but still get named
+  const upcoming = cue.label === "rest" && s.next && (!!config.gestures[s.next.label] || s.next.kind === "nogrip");
   const angles = cueFrame(cue, elapsed ?? s.cue_elapsed);
   const [title, description] = (upcoming ? s.next : cue).text.split("\n");
   return angles ? { angles, title, text: `${title}\n${description ?? ""}`.trim(), upcoming } : null;
