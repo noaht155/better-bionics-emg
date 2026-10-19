@@ -1630,6 +1630,19 @@ fist, thumb out held 0.5 s pinch, thumb out twice tripod, little finger out twic
 opens, two finger point twice releases. No clench. Grip models keep the clench default. The repeat counts for tripod
 and key are guesses, not tested live. 127 tests pass; checked headless on a test copy.
 
+**Readable model lists** (Noah: the file names told him nothing). Every model dropdown (Control, live test,
+calibrate) groups models into sign networks, grip networks, sign LDA and grip LDA, newest first, and labels them from
+their own info: when made, sessions, signs (and whether open is in), epochs, the session it was calibrated on, score,
+and the subject where it differs from the newest model's. File names stay as they are (profiles, mappings and
+calibrated networks refer to them) and show on hover. The early 11 grip set models count as grips ("older set").
+Deleted at Noah's request (to the Recycle Bin): the three sign LDA models of 2026-10-16 (`noah_signs5_with-pinch`,
+`noah_signs4_open-twopoint-thumbout-little`, `noah_signs4_F_..._153635`), a stale test. The saved mappings
+`protocol-f-v1` and `protocol-f-default` were built on the first, so they now only list under "All mappings".
+
+**Sign network epochs were never tested.** Grip networks use 15 from the 2026-10-02 epoch sweep; sign networks use 30
+because `sign_net.py` did (15 output layer only, then 30 fine-tuning, on far less data than a grip run). Open: sweep
+them like the grip one.
+
 ## Open
 
 - Trigger mode on the arm: tune clench level and timings live, count wrong picks (short clench read as two, a grab
@@ -1645,8 +1658,9 @@ and key are guesses, not tested live. 127 tests pass; checked headless on a test
   movements left out of protocol C.
 - Sign network (in `ml/` with calibration since 2026-10-19): try it live against the sign LDA, and trigger mode with
   it on the Control tab (sign map, clench level against the sign session's levels); decide whether open stays in the
-  set (92 to 97 % without it, 86 to 94 % with, four F sessions). Later: one label path for grips and signs (both are
-  held positions), without changing grip training results.
+  set (92 to 97 % without it, 86 to 94 % with, four F sessions). Sweep its epochs (30 is untested), each F session
+  held out, 10 to 60. Later: one label path for grips and signs (both are held positions), without changing grip
+  training results.
 - Sign research (`sign-research.md`, tests and times in its section 7): "not a sign" class for wrist flexion on the
   D sessions; calibrated ring network on the 2 to 4 sign sets (1 to 2 h GPU, ask first); still gate and 12 votes
   live in lock mode with open, fist, point; record a protocol E session and run `screen_e.py`; then build protocol F

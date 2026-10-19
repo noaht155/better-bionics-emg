@@ -354,12 +354,48 @@ function drawHaptics(h, test) {
 
 // Gesture model: training and live test
 
-// Session folders start with date and time, that's enough to tell them apart
-const shortSession = (name) => name.slice(0, 17).replace("_", " ");
+// Model lists: what a model is, when it was made, what it learned from, then calibration and score. Grouped by kind,
+// newest first; the file name shows on hover
+const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+const MODEL_GROUPS = ["Sign networks", "Grip networks", "Sign LDA", "Grip LDA"];
 
-function ldaLabel(m) {
-  const acc = m.balanced != null ? `, ${Math.round(100 * m.balanced)} % balanced on unseen sessions` : "";
-  return `${m.name}, trained on ${m.sessions.map(shortSession).join(", ")}${acc}`;
+// "2026-10-19 16:32" or a session folder "2026-10-19_161702_noah" as "19 Oct 16:32"
+function shortTime(t) {
+  const [date, time] = t.replace("_", " ").split(" ");
+  const [, month, day] = date.split("-");
+  return `${Number(day)} ${MONTHS[Number(month) - 1]} ${time.includes(":") ? time : `${time.slice(0, 2)}:${time.slice(2, 4)}`}`;
+}
+
+const isNetwork = (m) => m.name.endsWith(".pt");
+// A sign model has F signs (or notsign); the 11 grip set of early October (peace, OK, ...) is still grips
+const isSignModel = (m) => m.classes.some((c) => c === "notsign" || (c !== "open" && config.sign_sets.F.includes(c)));
+const modelGroup = (m) => `${isSignModel(m) ? "Sign" : "Grip"} ${isNetwork(m) ? "networks" : "LDA"}`;
+
+function modelLabel(m, mainSubject) {
+  const parts = [shortTime(m.created || m.trained), `${m.sessions.length} session${m.sessions.length === 1 ? "" : "s"}`];
+  const classes = m.classes.filter((c) => c !== "rest" && c !== "notsign");
+  if (isSignModel(m)) parts.push(`${classes.length} signs${classes.includes("open") ? "" : ", no open"}`);
+  else if (classes.length !== config.gesture_set.length - 1) parts.push(`${classes.length} grips, older set`);
+  if (isNetwork(m)) parts.push(`${m.epochs} epochs`);
+  if (m.calibrated_on) parts.push(`calibrated on the ${shortTime(m.calibrated_on)} session`);
+  else if (m.kind === "signs") parts.push("not calibrated");
+  if (m.balanced != null) {
+    parts.push(`${pct(m.balanced)} ${isNetwork(m) ? "after calibration" : "on unseen sessions"}${m.seen_in_training ? " (session was in training)" : ""}`);
+  }
+  if (m.subject && m.subject !== mainSubject) parts.push(m.subject);
+  return parts.join(" · ");
+}
+
+function fillModels(select, models) {
+  const current = select.value;
+  const time = (m) => m.created || m.trained;
+  // Subjects show only where they differ from the newest LDA model's
+  const mainSubject = models.filter((m) => m.subject).sort((a, b) => time(b).localeCompare(time(a)))[0]?.subject;
+  select.innerHTML = MODEL_GROUPS.map((group) => {
+    const items = models.filter((m) => modelGroup(m) === group).sort((a, b) => time(b).localeCompare(time(a)));
+    return items.length ? `<optgroup label="${group}">${items.map((m) => `<option value="${m.name}" title="${m.name}">${modelLabel(m, mainSubject)}</option>`).join("")}</optgroup>` : "";
+  }).join("") || "<option value=''>none yet</option>";
+  if (models.some((m) => m.name === current)) select.value = current;
 }
 
 // Grip sessions (protocols A to D) and sign sessions (E, F) train separate models, the server refuses a mix too
@@ -369,13 +405,6 @@ const SIGN_PROTOCOLS = ["E", "F"];
 let trainSessions = [];
 // Sign networks start from the newest general network (networks are listed newest first)
 let newestGeneral = null;
-
-function networkLabel(n) {
-  if (n.kind === "signs") return `${n.name}, sign network from ${n.sessions.length} sessions, not calibrated`;
-  const score = n.balanced != null ? `, ${pct(n.balanced)} balanced on its other repetitions` : "";
-  const seen = n.seen_in_training ? " (session was in training, optimistic)" : "";
-  return `${n.name}, ${n.signs ? "sign " : ""}network calibrated on ${shortSession(n.calibrated_on)}${score}${seen}`;
-}
 
 async function loadTrainLists() {
   const [sessions, models, networks] = await Promise.all(["/api/sessions", "/api/models", "/api/networks"]
@@ -407,11 +436,10 @@ async function loadTrainLists() {
   updateTrainForm();
 
   newestGeneral = networks.find((n) => n.kind === "general") || null;
-  fillSelect($("net-base"), networks.filter((n) => n.kind === "general" || n.kind === "signs"),
-    (n) => `${n.name}, ${n.kind === "signs" ? "signs from " : ""}${n.sessions.length} sessions, ${n.epochs} epochs`);
+  fillModels($("net-base"), networks.filter((n) => n.kind === "general" || n.kind === "signs"));
   fillSelect($("net-session"), trainSessions, (s) => `${s.name}, protocol ${s.protocol}${s.completed ? "" : " (stopped early)"}`);
   const live = [...models, ...networks.filter((n) => n.kind === "calibrated" || n.kind === "signs")];
-  fillSelect($("model-select"), live, (m) => (m.name.endsWith(".pt") ? networkLabel(m) : `LDA ${ldaLabel(m)}`));
+  fillModels($("model-select"), live);
   // A model that was just trained is already running, show that one
   const running = state?.tools?.predictor?.running && state.tools.predictor.model;
   if (running && live.some((m) => m.name === running)) $("model-select").value = running;

@@ -85,9 +85,7 @@ async function loadControlLists() {
   // Calibrated networks take their effort levels from the session they were calibrated on. Sign networks also run
   // uncalibrated, with the levels of their newest training session
   ctl.models = [...lda, ...networks.filter((n) => n.calibrated_on || n.kind === "signs")];
-  fillSelect($("ctl-model"), ctl.models, (m) => (m.calibrated_on
-    ? `${m.name}, ${m.signs ? "sign " : ""}network calibrated on ${shortSession(m.calibrated_on)}`
-    : m.kind === "signs" ? `${m.name}, sign network, not calibrated` : ldaLabel(m)));
+  fillModels($("ctl-model"), ctl.models);
   const running = state?.tools?.predictor?.running && state.tools.predictor.control && state.tools.predictor.model;
   if (running && ctl.models.some((m) => m.name === running)) $("ctl-model").value = running;
   ctl.presets = presets;
