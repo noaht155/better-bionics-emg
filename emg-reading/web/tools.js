@@ -482,8 +482,8 @@ function updateTrainForm() {
   const network = $("train-kind").value === "network";
   $("train-lda-options").hidden = network;
   $("train-net-options").hidden = !network;
-  // Sign networks only fine-tune a general one, they settle in more epochs
-  if (signs !== trainFamily) $("net-epochs").value = signs ? 30 : 15;
+  // Sign networks: 20 from the 2026-10-19 sweep (flat from 10 to 60)
+  if (signs !== trainFamily) $("net-epochs").value = signs ? 20 : 15;
   trainFamily = signs;
   $("train-kind-note").textContent = !network ? "Trains, tests each session on a model trained on the others, saves it and makes it the live one."
     : signs ? (newestGeneral ? `Starts from the newest general network (${newestGeneral.name}, trained on ${newestGeneral.sessions.length} grip sessions), `

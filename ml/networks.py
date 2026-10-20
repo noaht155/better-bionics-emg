@@ -3,7 +3,7 @@ sign sessions.
 
     emg-reading/.venv/Scripts/python -m ml.networks train [--epochs 15] [--sessions name ...]
     emg-reading/.venv/Scripts/python -m ml.networks calibrate <network file> <session folder> [--reps 1 2]
-    emg-reading/.venv/Scripts/python -m ml.networks signs <network file> --sessions name ... [--epochs 30]
+    emg-reading/.venv/Scripts/python -m ml.networks signs <network file> --sessions name ... [--epochs 20]
         [--exclude sign ...]
 
 calibrate fits the per-person transform and the grip head on the given repetitions of the session (normally a
@@ -263,7 +263,7 @@ def main():
     s = sub.add_parser("signs")
     s.add_argument("network", help="general network file in emg-reading/models/networks/")
     s.add_argument("--sessions", nargs="+", required=True, help="protocol E and F session folder names")
-    s.add_argument("--epochs", type=int, default=30)
+    s.add_argument("--epochs", type=int, default=20)
     s.add_argument("--exclude", nargs="*", default=[], help="signs to leave out")
     for p in (t, c, s):
         p.add_argument("--json", help="write the result here")

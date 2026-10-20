@@ -1639,9 +1639,27 @@ Deleted at Noah's request (to the Recycle Bin): the three sign LDA models of 202
 `noah_signs4_open-twopoint-thumbout-little`, `noah_signs4_F_..._153635`), a stale test. The saved mappings
 `protocol-f-v1` and `protocol-f-default` were built on the first, so they now only list under "All mappings".
 
-**Sign network epochs were never tested.** Grip networks use 15 from the 2026-10-02 epoch sweep; sign networks use 30
-because `sign_net.py` did (15 output layer only, then 30 fine-tuning, on far less data than a grip run). Open: sweep
-them like the grip one.
+**Sign network epoch sweep.** Grip networks use 15 from the 2026-10-02 sweep; sign networks used 30 untested, because
+`sign_net.py` did (output layer alone for half the epochs, then fine-tuning for all of them). Swept 10 to 60 with
+`diagnostics/signs/epoch_sweep.py` (rows in `diagnostics/out/signs/epoch_sweep.csv`): each of the 4 F sessions held
+out, trained on E and the other 3, 2 seeds, scored on its rounds 2 on, balanced over signs and rest. Means over the
+4 sessions and seeds:
+
+| Epochs | with open, no cal | with open, calibrated (worst session) | no open, no cal | no open, calibrated (worst session) | s per network |
+|---|---|---|---|---|---|
+| 10 | 85.1 % | 88.7 % (86.9) | 90.6 % | 94.2 % (91.9) | 10 |
+| 20 | 85.3 % | 89.6 % (86.8) | 91.6 % | 94.6 % (91.1) | 18 |
+| 30 | 86.2 % | 88.9 % (85.4) | 91.7 % | 94.0 % (90.3) | 26 |
+| 40 | 84.1 % | 89.7 % (86.2) | 91.9 % | 94.7 % (92.9) | 34 |
+| 50 | 85.1 % | 89.7 % (88.0) | 91.4 % | 94.2 % (90.6) | 42 |
+| 60 | 84.9 % | 89.4 % (86.0) | 92.6 % | 94.4 % (91.4) | 50 |
+
+- Flat from 10 on: calibrated means within 1 point of each other in both sets, about the size of the seed spread
+  (0.6 to 1.4 points per session). Wrist bends read as a sign 2 to 5 % throughout. More epochs don't help on 5
+  sessions; 30 costs 2.5 times the time of 10 for nothing.
+- `095340` is the worst session at every count (85 to 88 % with open), so the gap there isn't undertraining.
+- Sign default changed to 20 (Noah), the smallest count with no loss, in `ml/networks.py` and the Train tab.
+  Recheck when there are more sessions, steps per epoch grow with the data.
 
 ## Open
 
@@ -1658,8 +1676,8 @@ them like the grip one.
   movements left out of protocol C.
 - Sign network (in `ml/` with calibration since 2026-10-19): try it live against the sign LDA, and trigger mode with
   it on the Control tab (sign map, clench level against the sign session's levels); decide whether open stays in the
-  set (92 to 97 % without it, 86 to 94 % with, four F sessions). Sweep its epochs (30 is untested), each F session
-  held out, 10 to 60. Later: one label path for grips and signs (both are held positions), without changing grip
+  set (92 to 97 % without it, 86 to 94 % with, four F sessions). Epochs: 20 since the 2026-10-19 sweep, recheck with
+  more sessions. Later: one label path for grips and signs (both are held positions), without changing grip
   training results.
 - Sign research (`sign-research.md`, tests and times in its section 7): "not a sign" class for wrist flexion on the
   D sessions; calibrated ring network on the 2 to 4 sign sets (1 to 2 h GPU, ask first); still gate and 12 votes
