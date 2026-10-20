@@ -131,6 +131,28 @@ $("ctl-start").addEventListener("click", async () => {
 $("ctl-stop").addEventListener("click", () => post("/api/model/stop").catch(() => {}));
 $("ctl-reset").addEventListener("click", () => post("/api/control/reset").catch(() => {}));
 
+// Saving under a name that exists takes a second click, the button turns into Overwrite until the name changes
+function overwriteOk(button, saved, name, note) {
+  if (!saved[name] || button.dataset.armed === name) {
+    disarm(button);
+    return true;
+  }
+  button.dataset.armed = name;
+  button.textContent = "Overwrite";
+  button.classList.add("danger");
+  $(note).textContent = `${name} already exists, press Overwrite to replace it`;
+  return false;
+}
+
+function disarm(button) {
+  delete button.dataset.armed;
+  button.textContent = "Save";
+  button.classList.remove("danger");
+}
+
+$("ctl-preset-name").addEventListener("input", () => disarm($("ctl-save")));
+$("ctl-mapping-save-name").addEventListener("input", () => disarm($("ctl-mapping-save")));
+
 // Profiles
 
 $("ctl-load").addEventListener("click", async () => {
@@ -142,10 +164,13 @@ $("ctl-load").addEventListener("click", async () => {
   sendControlParams();
   if (preset.rules) await setRules(preset.rules, `from profile ${name}`);
   $("ctl-preset-note").textContent = `loaded ${name}${preset.rules ? " and its mapping" : ""}`;
+  $("ctl-preset-name").value = name;
+  disarm($("ctl-save"));
 });
 
 $("ctl-save").addEventListener("click", async () => {
   const name = $("ctl-preset-name").value.trim();
+  if (!overwriteOk($("ctl-save"), ctl.presets, name, "ctl-preset-note")) return;
   try {
     await post("/api/control/presets", { name, params: ctl.params, rules: ctl.rules, model: $("ctl-model").value || null });
     $("ctl-preset-note").textContent = `saved ${name} with the mapping in use`;
@@ -441,11 +466,15 @@ $("ctl-mapping-load").addEventListener("click", async () => {
   const m = ctl.mappings[name];
   if (!m) return;
   if (m.protocol) $("ctl-protocol").value = m.protocol;
-  if (await setRules(m.rules, name)) $("ctl-mapping-note").textContent = `loaded ${name}`;
+  if (!(await setRules(m.rules, name))) return;
+  $("ctl-mapping-note").textContent = `loaded ${name}`;
+  $("ctl-mapping-save-name").value = name;
+  disarm($("ctl-mapping-save"));
 });
 
 $("ctl-mapping-save").addEventListener("click", async () => {
   const name = $("ctl-mapping-save-name").value.trim();
+  if (!overwriteOk($("ctl-mapping-save"), ctl.mappings, name, "ctl-mapping-note")) return;
   try {
     await post("/api/control/mappings", { name, rules: ctl.rules, model: $("ctl-model").value || null, protocol: $("ctl-protocol").value });
     ctl.mappingName = name;
