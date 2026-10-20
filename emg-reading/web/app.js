@@ -485,7 +485,13 @@ function drawLive(now) {
 function drawSession() {
   const s = state.session;
   if (s) preview = null;
-  $("setup").hidden = !!s || !!preview;
+  if (s) sawSession = true;
+  else if (sawSession && state.summary) {
+    sawSession = false;
+    showOutro(state.summary);
+  }
+  if (s) closeOutro(false);
+  $("setup").hidden = !!s || !!preview || !$("outro").hidden;
   $("preview").hidden = !preview;
   $("cue-panel").hidden = !s;
   if (!s) {
@@ -598,10 +604,78 @@ function drawSummary() {
   if (!r) return;
   const detected = r.hand_detected == null ? "no camera" : `${Math.round(100 * r.hand_detected)} %`;
   const what = r.practice ? "Practice run (nothing saved)" : "Last session";
-  box.innerHTML = `<b>${what} ${r.completed ? "finished" : "stopped early"}</b><br>
+  const marked = r.marked_bad ? `<br><span class="note">${plural(r.marked_bad, "cue")} marked bad, left out of training</span>` : "";
+  box.innerHTML = `<b class="${r.completed ? "done" : "stopped"}">${what} ${r.completed ? "finished" : "stopped early"}</b><br>
     ${r.practice ? "" : `${r.folder}<br>`}${fmtTime(r.seconds)}, ${r.samples} EMG samples, ${r.dropped_samples} dropped,
-    ${r.frames} camera frames, hand detected in ${detected}`;
+    ${r.frames} camera frames, hand detected in ${detected}${marked}`;
 }
+
+const plural = (n, word) => `${n} ${word}${n === 1 ? "" : "s"}`;
+
+// Shown once when a session this page watched ends, not again on a reload. The countdown bar running out closes it
+const OUTRO_HOLD_MS = 6000;
+const CHECK = "M36 62 L53 78 L85 44";
+const OUTRO_MARKS = { done: CHECK, practice: CHECK, stopped: "M42 42 L78 78 M78 42 L42 78" };
+let sawSession = false;
+let outroTimer = null;
+
+function showOutro(r) {
+  const kind = !r.completed ? "stopped" : r.practice ? "practice" : "done";
+  const box = $("outro");
+  box.className = kind;
+  box.style.setProperty("--hold", `${OUTRO_HOLD_MS}ms`);
+  $("outro-path").setAttribute("d", OUTRO_MARKS[kind]);
+  $("outro-kind").textContent = r.practice ? "practice run" : "recording";
+  $("outro-time").textContent = r.cues == null ? ""
+    : r.completed ? `cue ${r.cues} of ${r.cues}` : `stopped at cue ${r.cues_done + 1} of ${r.cues}`;
+  $("outro-title").textContent = { done: "Session complete", stopped: "Stopped early", practice: "Practice run done" }[kind];
+  const marked = r.marked_bad ? ` <b>${plural(r.marked_bad, "cue")} marked bad, left out of training.</b>` : "";
+  $("outro-note").innerHTML = {
+    done: `Saved to ${r.folder}, ready for training.${marked}`,
+    stopped: r.practice ? "Nothing was saved." : `Saved to ${r.folder}, not used for training because it didn't finish.`,
+    practice: `Nothing was saved.${marked}`,
+  }[kind];
+  const stats = [
+    [fmtTime(r.seconds), "duration"],
+    [r.marked_bad ?? "", "marked bad", r.marked_bad > 0],
+    [r.hum_pauses ?? "", "hum redos", r.hum_pauses > 0],
+    [r.dropped_samples, "dropped samples", r.dropped_samples > 0],
+    [r.hand_detected == null ? "no camera" : `${Math.round(100 * r.hand_detected)} %`, "hand detected"],
+  ];
+  $("outro-stats").innerHTML = stats.filter(([v]) => v !== "")
+    .map(([v, label, warn]) => `<div class="${warn ? "warn" : ""}">${v}<small>${label}</small></div>`).join("");
+  // Restarts the animations when two sessions end without a reload in between
+  box.hidden = true;
+  void box.offsetWidth;
+  box.hidden = false;
+  clearTimeout(outroTimer);
+  // With reduced motion the bar has no animation to end, a plain timer closes it
+  if (matchMedia("(prefers-reduced-motion: reduce)").matches) outroTimer = setTimeout(closeOutro, OUTRO_HOLD_MS);
+}
+
+function closeOutro(fade = true) {
+  const box = $("outro");
+  if (box.hidden || (fade && box.classList.contains("leaving"))) return;
+  clearTimeout(outroTimer);
+  const done = () => {
+    box.hidden = true;
+    box.classList.remove("leaving");
+    if (state && !state.session && !preview) {
+      $("setup").hidden = false;
+      flashOnChange($("setup"), String(performance.now()));
+    }
+  };
+  if (!fade) return done();
+  box.classList.add("leaving");
+  outroTimer = setTimeout(done, 180);
+}
+
+$("outro-bar").addEventListener("animationend", () => closeOutro());
+$("outro-close").addEventListener("click", () => closeOutro());
+document.addEventListener("keydown", (e) => {
+  if ($("outro").hidden || currentTab !== "record") return;
+  if (e.key === "Enter" || e.key === "Escape") { e.preventDefault(); closeOutro(); }
+});
 
 const FINGER_NAMES = ["thumb", "index", "middle", "ring", "pinky"];
 const clamp01 = (x) => Math.min(Math.max(x, 0), 1);

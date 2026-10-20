@@ -1678,6 +1678,15 @@ appear. Timed each step on a test copy (warm start, replay, no webcam since the 
   for the first frame) and stays until the first frame is tracked (it used to clear when the camera opened). The
   step also shows next to the view dropdown and on the pose canvas.
 
+## 2026-10-20: end of session screen
+
+Noah wanted a clear visual cue when a session ends instead of the jump back to setup. The cue panel now shows an end
+card for 6 s (held while the mouse is over it, Enter or Escape closes it): a gradient check for a completed session, a
+white check for a practice run, a grey cross for stopped early (only a session that trains gets the
+gradient), then fades back to setup. It shows duration, cues marked bad, hum redos, dropped samples and hand
+detected; marked bad cues are called out in yellow because they are left out of training. It only plays on the page that watched the session end, not on a reload. The
+summary now also carries `cues`, `cues_done`, `marked_bad` and `hum_pauses` (`recorder._finish`).
+
 ## Open
 
 - Trigger mode on the arm: tune clench level and timings live, count wrong picks (short clench read as two, a grab

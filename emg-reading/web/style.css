@@ -140,6 +140,38 @@ fieldset label { display: inline-flex; align-items: center; gap: 8px; }
 .error { color: var(--bad); font-weight: 600; }
 
 #summary { margin-top: 12px; padding: 12px; border: 1px solid var(--line); border-radius: 2px; }
+#summary .stopped { color: var(--muted); }
+#summary .note { color: var(--warn); }
+
+/* End of a session: a few seconds over the whole cue panel, then back to setup. Hovering holds it */
+#outro { display: flex; flex-direction: column; align-items: center; text-align: center; animation: enter 180ms ease-out; }
+#outro[hidden] { display: none; }
+#outro.leaving { opacity: 0; transition: opacity 180ms ease-in; }
+#outro .cue-top { align-self: stretch; }
+#outro-mark { width: 168px; height: 168px; margin: 48px 0 8px; fill: none; stroke: currentColor; stroke-width: 6; stroke-linecap: round; stroke-linejoin: round; }
+#outro-mark * { stroke-dasharray: 1; }
+#outro-mark circle { animation: draw 500ms ease-out both; }
+#outro-mark path { animation: draw 300ms ease-out 400ms both; }
+@keyframes draw { from { stroke-dashoffset: 1; } to { stroke-dashoffset: 0; } }
+/* Only a session that goes into training gets the gradient */
+#outro.done #outro-mark { stroke: url(#outro-gradient); }
+#outro-gradient stop:nth-child(1) { stop-color: var(--accent-orange); }
+#outro-gradient stop:nth-child(2) { stop-color: var(--accent); }
+#outro-gradient stop:nth-child(3) { stop-color: var(--accent-magenta); }
+#outro.stopped #outro-mark { color: var(--muted); }
+#outro.practice #outro-mark { color: var(--text); }
+#outro-title { font-size: 48px; font-weight: 600; letter-spacing: -0.03em; line-height: 1.05; margin-top: 16px; animation: enter 180ms ease-out 250ms both; }
+#outro-note { font-size: 18px; color: var(--muted); margin-top: 10px; max-width: 60ch; animation: enter 180ms ease-out 320ms both; }
+#outro-note b { color: var(--warn); font-weight: 600; }
+#outro-stats { display: flex; flex-wrap: wrap; justify-content: center; gap: 12px 40px; margin: 36px 0; animation: enter 180ms ease-out 400ms both; }
+#outro-stats div { font-size: 28px; font-weight: 600; font-variant-numeric: tabular-nums; }
+#outro-stats small { display: block; margin-top: 4px; font: 400 11px var(--font-mono); letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); }
+#outro-stats .warn { color: var(--warn); }
+#outro .bar { align-self: stretch; height: 2px; margin-bottom: 20px; }
+#outro-bar { height: 100%; background: var(--gradient); animation: shrink var(--hold) linear both; }
+#outro:hover #outro-bar { animation-play-state: paused; }
+@keyframes shrink { from { width: 100%; } to { width: 0; } }
+#setup.changed { animation: enter 180ms ease-out; }
 
 .cue-top { display: flex; justify-content: space-between; color: var(--muted); font: 12px var(--font-mono); letter-spacing: 0.12em; text-transform: uppercase; }
 

@@ -146,6 +146,24 @@
       </div>
       <p id="session-info" class="muted"></p>
     </div>
+
+    <div id="outro" hidden>
+      <div class="cue-top"><span id="outro-kind"></span><span id="outro-time"></span></div>
+      <svg id="outro-mark" viewBox="0 0 120 120" aria-hidden="true">
+        <defs>
+          <linearGradient id="outro-gradient" gradientUnits="userSpaceOnUse" x1="6" y1="0" x2="114" y2="0">
+            <stop offset="0"></stop><stop offset="0.5"></stop><stop offset="1"></stop>
+          </linearGradient>
+        </defs>
+        <circle cx="60" cy="60" r="54" pathLength="1"></circle>
+        <path id="outro-path" pathLength="1"></path>
+      </svg>
+      <div id="outro-title"></div>
+      <div id="outro-note"></div>
+      <div id="outro-stats"></div>
+      <div class="bar"><div id="outro-bar"></div></div>
+      <div class="controls"><button type="button" id="outro-close" class="primary">New session (Enter)</button></div>
+    </div>
   </section>
 
   <section id="right">

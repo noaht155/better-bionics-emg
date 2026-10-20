@@ -181,6 +181,8 @@ class Recorder:
             self.paused = False
             self.hum_pause = None
             self.last_summary = None
+            self.marked_bad = set()
+            self.hum_pauses = 0
             # The quality check counts drops since the app started, the session only wants its own
             self.dropped_at_start = self.quality.dropped_total
             self._go_to(0)
@@ -213,6 +215,7 @@ class Recorder:
                     target = self.index - 1
                 self.session.add_event("bad", index=target)
                 self.bad_mark = {"index": target, "at": time.time()}
+                self.marked_bad.add(target)
             elif action == "stop":
                 self._finish(completed=False)
             else:
@@ -231,6 +234,7 @@ class Recorder:
                 and self.plan[self.index - 1]["kind"] in HUM_REDO_KINDS):
             bad.insert(0, self.index - 1)
         self.paused = True
+        self.hum_pauses += 1
         self.session.add_event("pause", reason="hum")
         for index in bad:
             self.session.add_event("bad", index=index, reason="hum", channels=channels)
@@ -264,7 +268,10 @@ class Recorder:
         detected = session.detected / session.frames if session.frames else None
         practice = session.folder is None
         self.last_summary = dict(summary, folder=_folder_text(session), practice=practice, seconds=seconds,
-                                 samples=session.samples, frames=session.frames, hand_detected=detected)
+                                 samples=session.samples, frames=session.frames, hand_detected=detected,
+                                 ended=session.meta["ended"], cues=len(self.plan),
+                                 cues_done=len(self.plan) if completed else self.index,
+                                 marked_bad=len(self.marked_bad), hum_pauses=self.hum_pauses)
         self.index = -1
         if completed and not practice:
             self._saved(session.folder)
