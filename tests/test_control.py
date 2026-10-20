@@ -491,3 +491,29 @@ def test_rules_higher_in_the_list_wins():
                      "holding": []})
         c.step({"open": 0.9, "point": 0.9}, 0.0)
         assert c.grip == first
+
+
+def test_rules_lock_freezes_the_hand_until_unlocked():
+    holding = [{"trigger": "open", "how": "held", "value": 0.0, "action": "open"},
+               {"trigger": "point", "how": "repeated", "value": 2, "action": "release"},
+               {"trigger": "pinch", "how": "held", "value": 0.2, "action": "tripod"},
+               {"trigger": "key", "how": "held", "value": 0.2, "action": "lock"}]
+    c = rules()
+    c.set_rules({"relaxed": [{"trigger": "clench", "how": "held", "value": 0.7, "action": "fist"}], "holding": holding})
+    run(c, ("fist", 0.5, 14), ("rest", 0.0, 4))
+    assert run(c, ("key", 0.0, 4)) == ["lock"] and c.locked
+    closed = c.closure
+    # Squeezing, opening, a pose and the release pattern all do nothing while locked
+    assert run(c, ("rest", 0.0, 4), ("rest", 0.6, 10), ("open", 0.5, 6), ("pinch", 0.0, 6), ("rest", 0.0, 4),
+               ("point", 0.5, 3), ("rest", 0.0, 4), ("point", 0.5, 3), ("rest", 0.0, 4)) == []
+    assert c.grip == "fist" and c.closure == closed and c.state == "active"
+    # The same trigger unlocks, then squeezing closes again
+    assert run(c, ("key", 0.0, 4)) == ["unlock"] and not c.locked
+    run(c, ("rest", 0.0, 4), ("rest", 0.6, 4))
+    assert c.closure > closed
+    # A separate unlock rule
+    c.set_rules({"relaxed": [{"trigger": "clench", "how": "held", "value": 0.7, "action": "fist"}],
+                 "holding": [{"trigger": "key", "how": "held", "value": 0.2, "action": "lock"},
+                             {"trigger": "point", "how": "held", "value": 0.2, "action": "unlock"}]})
+    assert run(c, ("point", 0.0, 4), ("rest", 0.0, 4), ("key", 0.0, 4), ("rest", 0.0, 4)) == ["lock"]
+    assert run(c, ("point", 0.0, 4)) == ["unlock"] and not c.locked

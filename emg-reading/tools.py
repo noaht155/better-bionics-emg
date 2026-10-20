@@ -383,7 +383,7 @@ class Control:
         self._map = None
         self.state = {"params": self.params, "rules": self.rules, "levels_from": Path(session).name, "step": 0,
                       "state": "idle", "grip": None, "closure": 0.0, "effort": 0.0, "angles": None, "starts": 0,
-                      "releases": 0, "opens": 0}
+                      "releases": 0, "opens": 0, "locks": 0, "unlocks": 0}
 
     def set_rules(self, rules):
         check_rules(rules, POSES)
@@ -399,7 +399,7 @@ class Control:
             self._controller.params.update(params)
 
     def reset_counts(self):
-        self.state.update(starts=0, releases=0, opens=0)
+        self.state.update(starts=0, releases=0, opens=0, locks=0, unlocks=0)
 
     def step(self, emg, filtered, probs, dt, distance=None):
         if self.params["mode"] != "rules" and not set(probs) <= set(GESTURE_SET):
@@ -418,7 +418,7 @@ class Control:
         s.update(step=s["step"] + 1, state=out["state"], grip=out["grip"], closure=round(out["closure"], 3),
                  effort=round(e, 3), angles=[round(a, 1) for a in out["angles"]],
                  distance=None if distance is None else round(distance, 2), pulses=out.get("pulses"),
-                 moving=moving)
+                 locked=out.get("locked", False), moving=moving)
         if out["event"]:
             s[out["event"] + "s"] += 1
 

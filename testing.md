@@ -174,6 +174,7 @@ These decide when the recorder marks a cue bad and redoes it.
 | `test_rules_one_trigger_held_in_both_lists` | Open held 0 s while holding doesn't stop open held 0.7 s from picking a pose while relaxed, and still opens the hand once a grip is held |
 | `test_rules_pose_while_holding_switches_at_the_same_closure` | A pose rule in the holding list switches to that grip and keeps how far the hand is closed |
 | `test_rules_higher_in_the_list_wins` | Two rules firing on the same step: the one higher in the list picks, whatever the trigger names |
+| `test_rules_lock_freezes_the_hand_until_unlocked` | A lock rule while holding freezes the hand: squeezing, open, a pose and the release pattern change nothing until the lock trigger fires again or an unlock rule does; squeezing closes again after |
 | `test_trigger_double_point_goes_back_and_open_only_opens` | Trigger mode, release with point (default): opening twice only opens, a point flick neither opens nor closes, two point flicks go back, and the point still held after that can't pick point until it drops out |
 
 ### Protocols (`tests/test_protocols.py`)

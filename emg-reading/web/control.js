@@ -233,7 +233,8 @@ function triggerOptions(current) {
 
 // Then: the actions, the grips, then the protocol C library by category. A list of our own instead of a dropdown,
 // since a dropdown can't tell which item the mouse is over and the hovered pose is drawn beside the list
-const ACTIONS = { close: "close grip (while it stays on)", open: "open grip (while it stays on)", release: "release (back to choosing)" };
+const ACTIONS = { close: "close grip (while it stays on)", open: "open grip (while it stays on)", release: "release (back to choosing)",
+  lock: "lock position (again to unlock, ignores everything else)", unlock: "unlock position" };
 
 function actionGroups() {
   const groups = [["Actions", Object.entries(ACTIONS)], ["Grips", config.gesture_set.filter((g) => g !== "rest").map((g) => [g, nice(g)])]];
@@ -545,11 +546,12 @@ function drawControl(c, p) {
   ctl.releases = c.releases ?? 0;
   const counting = ctl.params.mode === "trigger" || ctl.params.mode === "rules";
   $("ctl-label").innerHTML = !running ? "<small>not running</small>"
+    : c.state === "active" && c.locked ? `${nice(c.grip)} ${Math.round(100 * c.closure)} %<small>position locked, only unlock works</small>`
     : c.state === "active" ? `${nice(c.grip)} ${Math.round(100 * c.closure)} %<small>locked, closure</small>`
     : c.state === "blend" ? `${c.grip ? nice(c.grip) : "relaxed"} ${Math.round(100 * c.closure)} %<small>blending, closest grip and closure</small>`
     : counting ? `relaxed<small>${ctl.params.still_gate && c.moving ? "arm moving, clenches ignored" : c.pulses ? `${c.pulses} clench${c.pulses > 1 ? "es" : ""} so far` : "waiting for a pattern"}</small>`
     : "relaxed<small>waiting for a grip</small>";
-  flashOnChange($("ctl-label"), running ? `${c.state} ${c.grip}` : "");
+  flashOnChange($("ctl-label"), running ? `${c.state} ${c.grip} ${c.locked}` : "");
   $("ctl-readout").innerHTML = running ? `<div>${Math.round(100 * c.effort)} %<small>effort</small></div>
     <div>${Math.round(100 * c.closure)} %<small>closure</small></div><div>${c.starts}<small>starts</small></div>
     <div>${c.releases}<small>releases</small></div><div>${c.opens}<small>open hand picked</small></div>

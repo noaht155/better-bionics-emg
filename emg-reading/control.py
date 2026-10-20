@@ -35,7 +35,8 @@ to relaxed, close and open move the hand for as long as their trigger stays on (
 while relaxed. Only the list of the current state runs, so a trigger can have a held rule in each, and the higher
 rule in a list wins when two fire on one step. Held 0 s acts on the first step the trigger is on. While holding, effort above hold_level also
 closes the hand as in trigger mode. A clench during which a rule's class is on belongs to
-that class, not to the clench count.
+that class, not to the clench count. Lock (Noah, 2026-10-20) freezes the hand while holding: nothing closes, opens,
+switches or releases it, and only the lock rules (lock again to undo) and unlock rules of the holding list run.
 """
 import math
 
@@ -69,7 +70,7 @@ SIGN_RULES = {"relaxed": [{"trigger": "two_point", "how": "held", "value": 0.4, 
               "holding": [{"trigger": "open", "how": "held", "value": 0.0, "action": "open"},
                           {"trigger": "two_point", "how": "repeated", "value": 2, "action": "release"}]}
 SECTIONS = ("relaxed", "holding")
-RULE_ACTIONS = ("close", "open", "release")
+RULE_ACTIONS = ("close", "open", "release", "lock", "unlock")
 MAX_REPEATS = 6
 MAX_HELD_S = 5.0
 # Trigger mode: grips by number of short clenches, from pinch_clenches up. Fist is the long clench, point comes from
@@ -157,6 +158,7 @@ class Controller:
     def set_rules(self, rules):
         check_rules(rules, self.poses)
         self.rules = split_rules(rules)
+        self.locked = False
         self._reset_rules()
 
     def _reset_rules(self):
@@ -166,6 +168,7 @@ class Controller:
 
     def reset(self):
         self.state = "idle"
+        self.locked = False
         self.grip = None
         self.closure = 0.0
         self.above = False
@@ -341,6 +344,10 @@ class Controller:
         # Only the list of the state the hand is in counts and times; a class counts as on over both lists, so a
         # sign held while holding still isn't taken for squeezing
         rules = self.rules["relaxed" if self.state == "idle" else "holding"]
+        if self.locked:
+            rules = [r for r in rules if r["action"] in ("lock", "unlock")]
+        else:
+            rules = [r for r in rules if r["action"] != "unlock"]
         triggers = sorted({r["trigger"] for r in rules})
         on = {t: float(probs.get(t, 0.0)) >= p["threshold"]
               for t in {r["trigger"] for s in SECTIONS for r in self.rules[s]} if t != "clench"}
@@ -390,6 +397,9 @@ class Controller:
         for r in events:
             if r["action"] == "release" and self.state == "active":
                 self.state, self.grip, self.closure, event = "idle", None, 0.0, "release"
+            elif r["action"] in ("lock", "unlock") and self.state == "active":
+                self.locked = r["action"] == "lock" and not self.locked
+                event = "lock" if self.locked else "unlock"
             elif r["action"] not in RULE_ACTIONS and r["action"] in self.poses:
                 # A pose while holding switches to it at the closure the hand has
                 closure = self.closure if self.state == "active" else 0.0
@@ -402,7 +412,7 @@ class Controller:
             self.run_t, self.off_t, self.counts, self.used = {}, {}, {}, {}
             break
 
-        if self.state == "active" and event is None:
+        if self.state == "active" and event is None and not self.locked:
             moving_to = {r["action"] for r in rules if r["action"] in ("open", "close") and on[r["trigger"]]
                          and self.run_t.get(r["trigger"], 0.0) >= r["value"] - EPS}
             speed = max(effort, p["hold_level"]) * p["gain"] * dt
@@ -416,7 +426,7 @@ class Controller:
                 self.closure += (effort - p["hold_level"]) * p["gain"] * dt
             self.closure = float(np.clip(self.closure, 0.0, 1.0))
         return {"state": self.state, "grip": self.grip, "closure": self.closure, "angles": self._spring(dt),
-                "event": event, "pulses": self.counts.get("clench", 0)}
+                "event": event, "pulses": self.counts.get("clench", 0), "locked": self.locked}
 
     def _choose(self, grip):
         self.state, self.grip, self.closure = "active", grip, 0.0

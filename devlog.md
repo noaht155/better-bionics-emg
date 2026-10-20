@@ -1724,6 +1724,14 @@ rest. Network fine-tuned, balanced / wrist bends read as a sign:
   days to catch drift. Next gains from new conditions (other people, mirrored, placements) and the live test in
   rules mode (wrong picks per minute, stray grips).
 
+## 2026-10-20: lock position in rules mode
+
+Rules mode gets two holding actions, `lock` and `unlock` (`control.py`). Lock freezes the hand while holding a grip:
+squeezing, the open action, pose switches and release are all ignored, and only the holding list's lock rules (fire
+again to undo) and unlock rules run. Meant for carrying something while the arm does other work. Not in the default
+mappings, added on the mapping page. Changing the mapping unlocks the hand so it can't stay frozen with no way out.
+The Control tab shows "position locked" while it's on. Not tested live yet.
+
 ## Open
 
 - Trigger mode on the arm: tune clench level and timings live, count wrong picks (short clench read as two, a grab
