@@ -1661,6 +1661,23 @@ out, trained on E and the other 3, 2 seeds, scored on its rounds 2 on, balanced 
 - Sign default changed to 20 (Noah), the smallest count with no loss, in `ml/networks.py` and the Train tab.
   Recheck when there are more sessions, steps per epoch grow with the data.
 
+## 2026-10-20: app startup
+
+Noah: after the app has been off a while, the page shows but the warnings and the hand skeleton take a while to
+appear. Timed each step on a test copy (warm start, replay, no webcam since the running app holds it):
+
+- Imports 2.3 s (scipy.signal 0.8, mediapipe 0.5, fastapi 0.3, sklearn 0.24). Hand model load 0.04 s, first
+  tracking pass 0.02 s. Page served 2.7 s after launch, first live message 0.03 s after that.
+- The running app answers the page in 28 ms and sends state every 60 ms, so nothing is slow once it's up.
+- Not measured: a cold start (files not in the disk cache), the armband connect (blocks before the page is served,
+  up to 15 s when the band can't be reached) and opening the real webcam (1.2 s to 31 s measured earlier, see
+  `camera.py`). These are the likely causes. The app now prints `armband connected in X s` and
+  `camera ready X s after start (opening it took Y s)` at every launch, to settle it.
+- The page now shows what it's waiting for: "Starting up, waiting for the recorder" in the warning bar until the
+  first state message, and the camera warning names the step (loading the hand model, opening the camera, waiting
+  for the first frame) and stays until the first frame is tracked (it used to clear when the camera opened). The
+  step also shows next to the view dropdown and on the pose canvas.
+
 ## Open
 
 - Trigger mode on the arm: tune clench level and timings live, count wrong picks (short clench read as two, a grab

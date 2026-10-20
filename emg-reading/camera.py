@@ -58,6 +58,8 @@ class Camera:
         self.on_frame = None
         self.ok = False
         self.error = None
+        # Startup step shown in the camera warning until the first frame is tracked, then None
+        self.stage = "loading the hand model"
         self.fps = 0.0
         self.size = None
         self.latest = None
@@ -85,6 +87,7 @@ class Camera:
             return self._jpeg
 
     def _run(self):
+        started = time.time()
         try:
             options = vision.HandLandmarkerOptions(base_options=BaseOptions(model_asset_path=model_path()),
                                                    running_mode=vision.RunningMode.VIDEO, num_hands=2)
@@ -92,10 +95,14 @@ class Camera:
         except Exception as e:
             self.error = f"hand model failed to load: {e}"
             return
+        self.stage = f"opening camera {self.source}"
+        opening = time.time()
         cap = open_capture(self.source)
         if not cap.isOpened():
             self.error = f"camera {self.source} not found"
             return
+        opened = time.time() - opening
+        self.stage = "waiting for the first frame"
         self.ok = True
         grabber = threading.Thread(target=self._grab, args=(cap,), daemon=True)
         grabber.start()
@@ -125,6 +132,9 @@ class Camera:
                     self.latest = track
                 if self.on_frame is not None:
                     self.on_frame(track)
+                if self.stage is not None:
+                    self.stage = None
+                    print(f"camera ready {time.time() - started:.1f} s after start (opening it took {opened:.1f} s)")
                 if time.time() < self._preview_until:
                     ok, buf = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, JPEG_QUALITY])
                     if ok:

@@ -712,6 +712,11 @@ function targetPose(elapsed) {
 // Pose match in %, from the mean joint error in degrees: 2 % off per degree
 const matchScore = (meanError) => Math.max(0, Math.round(100 - 2 * meanError));
 
+// Camera still starting or failed, as the warning bar says it
+function cameraWarning() {
+  return state.warnings.find((w) => w.code === "camera")?.text;
+}
+
 function drawPose() {
   const { ctx } = sharpen($("pose"), false);
   ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
@@ -723,7 +728,11 @@ function drawPose() {
   if (target) drawHand(ctx, target, { view, mirror: mirrored(), color: TARGET_COLOR, width: 9, alpha: 0.6 });
   if (tracked) drawHand(ctx, tracked, { view, mirror: mirrored(), color: TRACKED_COLOR, width: 5 });
   let html = "";
-  if (!tracked) {
+  const starting = cameraWarning();
+  if (!tracked && starting) {
+    if (!target) drawIdle(ctx, starting);
+    html = "<small>no hand tracking yet</small>";
+  } else if (!tracked) {
     html = "<small>no hand in view</small>";
   } else if (target) {
     const errors = config.reliable.map((j) => Math.abs(tracked[j] - target[j]));
@@ -787,6 +796,7 @@ function drawCamera() {
   // Firefox reports a size of 0 between the frames of the video stream. Clear first and keep the last size,
   // otherwise the old skeleton stays drawn after the hand is lost
   ctx.clearRect(0, 0, canvas.width, canvas.height);
+  if (config.camera) $("view-note").textContent = cameraWarning() ?? "";
   if (img.naturalWidth && canvas.width !== img.naturalWidth) {
     canvas.width = img.naturalWidth;
     canvas.height = img.naturalHeight;

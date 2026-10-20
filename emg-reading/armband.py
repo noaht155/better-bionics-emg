@@ -102,14 +102,17 @@ class Armband:
                     self._chunks.append(data)
 
     def __enter__(self):
+        # The app's page is only served after this, so a slow connect is a slow startup
+        started = time.time()
         try:
             self.open()
+            print(f"{self.source} connected in {time.time() - started:.1f} s")
         except ConnectionError as e:
             if not self._optional:
                 raise
             # The band's WiFi isn't joined yet after it was switched on: the app starts without it and its
             # Connection tab connects it
-            print(f"{e}, starting without it")
+            print(f"{e} after {time.time() - started:.1f} s, starting without it")
         return self
 
     def __exit__(self, *exc):

@@ -292,8 +292,8 @@ class Recorder:
             out.append(("loop_error", f"Reading the armband failed: {self.loop_error[1]}"))
         if self.camera is None:
             out.append(("camera", "No camera, joint angles aren't recorded"))
-        elif not self.camera.ok:
-            out.append(("camera", self.camera.error or "Camera starting"))
+        elif not self.camera.ok or self.camera.stage:
+            out.append(("camera", self.camera.error or f"Camera starting: {self.camera.stage or 'stopped'}"))
         else:
             edge = self._wrist_edge()
             hand = f"{self.camera.hand.capitalize()} hand"
