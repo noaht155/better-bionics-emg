@@ -1687,6 +1687,11 @@ gradient), then fades back to setup. It shows duration, cues marked bad, hum red
 detected; marked bad cues are called out in yellow because they are left out of training. It only plays on the page that watched the session end, not on a reload. The
 summary now also carries `cues`, `cues_done`, `marked_bad` and `hum_pauses` (`recorder._finish`).
 
+New System > Dev tab for testing page changes without recording: buttons that show each end card with made-up
+numbers, and a short run (a real practice run cut to N cues of at most 1.5 s, breaks left out, `dev_cues` in the
+session settings). A dev run is never saved, even without the practice box ticked. Tests of approved changes get
+archived (only shown with Show archived); the end card test was approved and archived the same day.
+
 ## Open
 
 - Trigger mode on the arm: tune clench level and timings live, count wrong picks (short clench read as two, a grab

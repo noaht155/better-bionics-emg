@@ -89,6 +89,8 @@ class SessionSettings(PlanSettings):
     postures: list[Literal[tuple(POSTURES)]] = Field(min_length=1)
     # Same run, nothing saved, for trying out the setup
     practice: bool = False
+    # Dev tab: only this many cues, kept short, never saved. 0 is a normal session
+    dev_cues: int = Field(0, ge=0, le=50)
 
 
 class HandChoice(BaseModel):

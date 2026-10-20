@@ -29,6 +29,8 @@ BAD_GRACE_S = 1.5
 BAD_NOTE_S = 3.0
 # Cues whose data is used for training. Hum on any channel during one marks it bad and pauses for a redo
 HUM_REDO_KINDS = ("hold", "finger", "free", "move", "custom", "nogrip")
+# Longest cue in a dev run (settings dev_cues)
+DEV_CUE_S = 1.5
 # EMG history kept for the signal view and the haptics
 HISTORY_S = 4
 # How long a failed armband read stays in the warning bar
@@ -169,13 +171,17 @@ class Recorder:
             if self.session is not None:
                 raise ValueError("a session is already running")
             plan = plan_for(settings)
+            if settings.get("dev_cues"):
+                # Breaks wait for Continue, a dev run skips them so it can run to the end by itself
+                plan = [dict(c, seconds=min(c["seconds"], DEV_CUE_S)) for c in plan
+                        if c["seconds"] is not None][:settings["dev_cues"]]
             if self.camera is not None:
                 self.camera.hand = settings["tracked_hand"]
             meta = {"settings": settings, "plan": plan, "rate": self.band.rate, "source": self.band.source,
                     "rows": self.band.rows, "channels": self.band.channels, "filter_version": FILTER_VERSION,
                     "calibration": json.loads(CAL_FILE.read_text()) if CAL_FILE.exists() else None,
                     "camera": self._camera_meta()}
-            writer = PracticeWriter if settings.get("practice") else SessionWriter
+            writer = PracticeWriter if settings.get("practice") or settings.get("dev_cues") else SessionWriter
             self.session = writer(meta, settings["subject"])
             self.plan = plan
             self.paused = False

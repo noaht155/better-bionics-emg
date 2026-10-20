@@ -33,6 +33,7 @@
   <button data-tab="haptics">Haptics</button>
   <button data-tab="calibrate">Calibrate</button>
   <button data-tab="cursor" class="archived">Cursor</button>
+  <button data-tab="dev">Dev</button>
   <label class="check"><input type="checkbox" id="show-archived"> Show archived</label>
 </nav>
 
@@ -499,6 +500,35 @@
     <p id="hap-error" class="error"></p>
     <canvas id="outputs" width="900" height="260"></canvas>
     <pre id="esp-log"></pre>
+  </section>
+</main>
+
+<main id="tab-dev" class="tab single" hidden>
+  <section>
+    <h1>Dev</h1>
+    <p class="muted">For trying out page changes without recording. Nothing here is saved. Tests of changes that are
+      approved move to archived, shown with Show archived.</p>
+    <div class="dev-test">
+      <h2>Short run</h2>
+      <p class="muted">A real practice run with the protocol and postures picked on the Record tab, cut to a few cues
+        of at most 1.5 s and without breaks, so the cue panel, Mark bad, Stop and the end card can be tried in
+        seconds.</p>
+      <div class="row narrow">
+        <label>Cues <input id="dev-cues" type="number" min="1" max="50" value="6"></label>
+      </div>
+      <button id="dev-run" class="primary">Start short run</button>
+      <p id="dev-error" class="error"></p>
+    </div>
+    <div class="dev-test archived">
+      <h2>End of session screen</h2>
+      <p class="muted">Shows the end card on the Record tab with made-up numbers. Approved 2026-10-20.</p>
+      <div class="controls">
+        <button data-outro="done">Completed</button>
+        <button data-outro="bad">Completed, cues marked bad</button>
+        <button data-outro="stopped">Stopped early</button>
+        <button data-outro="practice">Practice run</button>
+      </div>
+    </div>
   </section>
 </main>
 

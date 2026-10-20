@@ -8,7 +8,7 @@ const SPECTRUM_MS = 250;
 // Tabs
 
 // The setup and troubleshooting pages sit under System. Cursor is archived: only listed with Show archived on
-const SYSTEM_TABS = ["signals", "connection", "haptics", "calibrate", "cursor"];
+const SYSTEM_TABS = ["signals", "connection", "haptics", "calibrate", "cursor", "dev"];
 const SYSTEM_KEY = "system-tab";
 const ARCHIVED_KEY = "show-archived";
 
@@ -50,7 +50,7 @@ function showTab(name) {
 document.querySelectorAll("#tabs button, #subtabs button").forEach((b) => b.addEventListener("click", () => showTab(b.dataset.tab)));
 
 function applyArchived() {
-  document.querySelectorAll("#subtabs .archived").forEach((b) => { b.hidden = !showArchived(); });
+  document.querySelectorAll("#subtabs .archived, .dev-test.archived").forEach((b) => { b.hidden = !showArchived(); });
   if (!showArchived() && currentTab === "cursor") showTab("signals");
 }
 
@@ -865,6 +865,33 @@ function drawTools() {
   drawControl(t.control, t.predictor);
   drawCursor(t.cursor);
 }
+
+// Dev
+
+const DEV_SUMMARY = { completed: true, practice: false, folder: "dev/2026-10-20_120000", seconds: 1312, samples: 655000,
+  frames: 39300, hand_detected: 0.97, dropped_samples: 0, cues: 100, cues_done: 100, marked_bad: 0, hum_pauses: 0 };
+const DEV_OUTROS = {
+  done: {},
+  bad: { marked_bad: 3, hum_pauses: 1 },
+  stopped: { completed: false, seconds: 402, cues_done: 31 },
+  practice: { practice: true, folder: "practice run, nothing saved", seconds: 240, cues: 30, cues_done: 30 },
+};
+
+document.querySelectorAll("[data-outro]").forEach((b) => b.addEventListener("click", () => {
+  showTab("record");
+  showOutro({ ...DEV_SUMMARY, ...DEV_OUTROS[b.dataset.outro] });
+  $("setup").hidden = true;
+}));
+
+$("dev-run").addEventListener("click", async () => {
+  const s = readSettings();
+  // The setup form may be half filled, the run is never saved so any placement will do
+  const body = { ...s, subject: s.subject || "dev", crease_distance: s.crease_distance ?? 0,
+    crease_unit: s.crease_unit || "cm", module_side: s.module_side || "posterior",
+    postures: s.postures.length ? s.postures : Object.keys(config.postures).slice(0, 1),
+    practice: true, dev_cues: Number($("dev-cues").value) };
+  if (await postShowing("/api/session/start", body, "dev-error")) showTab("record");
+});
 
 function initTools() {
   let link = {};
