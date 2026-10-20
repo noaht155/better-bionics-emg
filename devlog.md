@@ -1692,6 +1692,38 @@ numbers, and a short run (a real practice run cut to N cues of at most 1.5 s, br
 session settings). A dev run is never saved, even without the practice box ticked. Tests of approved changes get
 archived (only shown with Show archived); the end card test was approved and archived the same day.
 
+## 2026-10-20: seven F sessions
+
+Three more F sessions (`2026-10-19_161702`, `2026-10-20_093404`, `2026-10-20_105110`; 7.5 to 14.7 min, 0 to 34
+dropped samples, placement fields empty). Each of the 7 held out, trained on E and the other 6 (the
+`epoch_sweep.py` folds, 20 epochs, 2 seeds; the F list there now has all 7), calibrated on round 1, scored on the
+rest. Network fine-tuned, balanced / wrist bends read as a sign:
+
+| Test | with open, calibrated | with open, no cal | no open, calibrated | no open, no cal | best LDA with open |
+|---|---|---|---|---|---|
+| `153635` | 92.8 % / 0 % | 93.5 % | 95.9 % / 1 % | 97.1 % | 88.0 % |
+| `092314` | 89.0 % / 4 % | 83.9 % | 96.7 % / 1 % | 93.8 % | 81.0 % |
+| `095340` | 85.6 % / 2 % | 69.9 % | 91.9 % / 2 % | 84.2 % | 82.5 % |
+| `141720` | 89.9 % / 6 % | 93.1 % | 94.5 % / 5 % | 98.5 % | 85.9 % |
+| `161702` (new) | 94.6 % / 3 % | 87.0 % | 95.4 % / 3 % | 91.5 % | 85.9 % |
+| `093404` (new) | 96.4 % / 0 % | 96.2 % | 98.6 % / 3 % | 98.4 % | 94.1 % |
+| `105110` (new) | 92.1 % / 0 % | 75.5 % | 93.9 % / 0 % | 78.0 % | 92.4 % |
+
+- Mean calibrated 91.5 % with open, 95.3 % without (worst 85.6 / 91.9 %, still `095340`).
+- More sessions didn't move the 4 old ones: calibrated with open 89.3 % mean against 89.6 % trained with 4 F
+  sessions (the 20 epoch sweep row), without open 94.8 % against 94.6 %.
+- The new sessions are just better recordings: LDA on their own calibration round alone gets 85.9 to 92.4 %, against
+  75.6 to 86.2 % on the old four. All three clear 90 % calibrated even with open.
+- Trained on E and the old 4 only, the honest first test of the new sessions: calibrated with open 93.4 / 95.7 /
+  90.1 %, so the extra sessions add 1 to 2 points calibrated. Uncalibrated they add more on today's two (89.0 to 96.2 %
+  and 60.4 to 75.5 %), partly because they share a day with each other.
+- `105110` needs the calibration round: 75.5 % without, 92.1 % with. Calibration still matters on some sessions
+  and costs up to 3 points on others (`141720`, `153635`).
+- Wrist bends read as a sign stay at 0 to 6 % with the network, 6 to 36 % with LDA on all sessions.
+- Plateau for one person and one band (Noah: expected). More F sessions of Noah won't add much; one every few
+  days to catch drift. Next gains from new conditions (other people, mirrored, placements) and the live test in
+  rules mode (wrong picks per minute, stray grips).
+
 ## Open
 
 - Trigger mode on the arm: tune clench level and timings live, count wrong picks (short clench read as two, a grab
@@ -1707,7 +1739,7 @@ archived (only shown with Show archived); the end card test was approved and arc
   movements left out of protocol C.
 - Sign network (in `ml/` with calibration since 2026-10-19): try it live against the sign LDA, and trigger mode with
   it on the Control tab (sign map, clench level against the sign session's levels); decide whether open stays in the
-  set (92 to 97 % without it, 86 to 94 % with, four F sessions). Epochs: 20 since the 2026-10-19 sweep, recheck with
+  set (seven F sessions 2026-10-20: calibrated mean 95.3 % without it, 91.5 % with, worst 91.9 / 85.6 %). Epochs: 20 since the 2026-10-19 sweep, recheck with
   more sessions. Later: one label path for grips and signs (both are held positions), without changing grip
   training results.
 - Sign research (`sign-research.md`, tests and times in its section 7): "not a sign" class for wrist flexion on the
