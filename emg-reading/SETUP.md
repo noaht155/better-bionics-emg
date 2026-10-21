@@ -21,7 +21,14 @@ On the Windows desktop all of step 1 and 2 is automated: switch the armband on, 
 the app's Connection tab (or run `powershell -ExecutionPolicy Bypass -File connect_armband.ps1`). It forgets and
 rejoins the armband's WiFi, switches to DHCP for 5 s, sets the static IP back, checks the band answers and restarts
 the stream. Windows asks for admin rights on the PC's screen each time. The app starts without the armband and
-shows a warning until it is connected. The manual steps:
+shows a warning until it is connected.
+
+On a Mac the same button finds the `Mindrove_ARB_` network, joins it and restarts the stream. The Mac has one WiFi
+adapter, so it is off the home network (and the hub) while it is on the band's; rejoin the home network from the
+WiFi menu before syncing. macOS 14.4 and newer can't scan from the app: join the band from the WiFi menu, then press
+the button.
+
+The manual steps:
 
 1. Turn the armband on and join its WiFi network (`Mindrove_ARB_...`, password `#mindrove`).
 2. Check the WiFi address with `ipconfig`. It should be `192.168.4.x`. On the desktop PC (Realtek 8852CE) the armband's DHCP reply never arrives and the address is `169.254.x.x`. The MacBook gets an address normally. If it's `169.254.x.x`, set a static IP on the WiFi adapter. Run in an admin PowerShell:

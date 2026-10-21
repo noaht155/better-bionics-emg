@@ -11,7 +11,7 @@ From the repo root, with the emg-reading venv:
 emg-reading/.venv/Scripts/python -m pytest tests
 ```
 
-138 tests, about 16 s. Run them before committing changes to `ml/`, the filter or the quality checks. Tests that need
+139 tests, about 16 s. Run them before committing changes to `ml/`, the filter or the quality checks. Tests that need
 recorded sessions (`emg-reading/data/`) or torch skip themselves where those are missing, so on the Mac or a fresh
 clone only the synthetic tests run.
 
@@ -230,6 +230,12 @@ transfer tests run the hub app on a free local port and send over real HTTP.
 | `test_session_still_recording_is_refused` | A session without an end can't be moved in |
 | `test_download_session` | A session downloaded from the hub (for a model's levels) arrives byte for byte |
 | `test_merge_keeps_both_sides` | Mappings and profiles are added by name, a name both sides have with different content stays as it is |
+
+### Mac WiFi (`tests/test_mac_wifi.py`)
+
+| Test | Checks |
+|---|---|
+| `test_mac_scan_line` | Lines of `airport -s` give the network name and signal, with spaces in the name and with or without a BSSID |
 
 ## Found by the tests
 

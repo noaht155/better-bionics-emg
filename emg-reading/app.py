@@ -445,7 +445,7 @@ def make_app(recorder, band, camera, tools, lan=True, serving=False):
                 "gesture_set": GESTURE_SET, "sign_sets": {"F": F_SIGNS}, "library": LIBRARY, "categories": CATEGORIES,
                 "cue_timing": {"grip_close_s": GRIP_CLOSE_S, "c_close_s": C_CLOSE_S},
                 "postures": POSTURES, "camera": camera is not None,
-                "tracked_hand": camera.hand if camera else None, "esp32_wifi_ip": WIFI_IP}
+                "tracked_hand": camera.hand if camera else None, "esp32_wifi_ip": WIFI_IP, "platform": sys.platform}
 
     @app.post("/api/plan")
     def plan_length(settings: PlanSettings):

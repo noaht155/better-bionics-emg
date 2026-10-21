@@ -20,6 +20,7 @@ from pathlib import Path
 import calibrate
 import check_connection
 import hub
+import mac_wifi
 from control import DEFAULT_RULES, DEFAULTS, STILL_S, Controller, check_rules, movement, split_rules, still_limit
 from cursor import DEFAULTS as CURSOR_DEFAULTS, LEVEL_SCALE as CURSOR_LEVEL_SCALE, Cursor
 from esp32_link import Esp32, self_test
@@ -88,21 +89,79 @@ class ConnectionCheck(Tool):
 
 
 class ArmbandWifi(Tool):
-    """Runs connect_armband.ps1 (forget and rejoin the armband's WiFi, DHCP, back to the static IP; Windows asks for
-    admin rights) and then reopens the armband stream, since the band needs a new start request after that."""
+    """Joins the armband's WiFi and then reopens the armband stream, since the band needs a new start request after
+    that. On Windows through connect_armband.ps1 (forget and rejoin, DHCP, back to the static IP; asks for admin
+    rights), on a Mac through mac_wifi."""
 
     def __init__(self, recorder):
         super().__init__()
         self.recorder = recorder
 
-    def start(self, dhcp_s=5):
-        if sys.platform != "win32":
-            raise ValueError("only needed on the Windows desktop, the Mac gets an address from the armband")
+    def _check(self):
         if self.recorder.band.source != "armband":
             raise ValueError(f"the app reads from {self.recorder.band.source}, not the armband")
         if self.recorder.session is not None:
             raise ValueError("a session is recording, the stream would drop")
-        self._launch(self._run, dhcp_s)
+
+    def start(self, dhcp_s=5):
+        self._check()
+        if sys.platform == "darwin":
+            self._launch(self._run_mac)
+        elif sys.platform == "win32":
+            self._launch(self._run, dhcp_s)
+        else:
+            raise ValueError("only works on Windows and macOS")
+
+    def _run_mac(self):
+        dev = mac_wifi.device()
+        band = self.recorder.band
+        lines = []
+
+        def say(line):
+            lines.append(line)
+            self.state["lines"] = list(lines)
+        now = mac_wifi.current(dev)
+        try:
+            if now and now.startswith(mac_wifi.ARMBAND_PREFIX):
+                say(f"Already on {now}")
+            else:
+                found = mac_wifi.armbands()
+                if found is None:
+                    raise RuntimeError("this macOS can't scan for networks from the app: join the Mindrove_ARB_ "
+                                       "network from the WiFi menu (password #mindrove), then press again")
+                if not found:
+                    raise RuntimeError("no Mindrove_ARB_ network in range, is the armband switched on?")
+                say(f"Found {', '.join(found)}")
+                say("Closing the armband stream before the network changes")
+                band.close()
+                say(f"Joining {found[0]}" + (f", leaving {now} (no hub until the Mac is back on it)" if now else ""))
+                mac_wifi.join(dev, found[0], mac_wifi.ARMBAND_PASSWORD)
+            say(f"Address {mac_wifi.wait_for_address(dev)}")
+            self._reopen(lines)
+        finally:
+            self._reconnect_if_lost()
+
+    def _reopen(self, lines):
+        band = self.recorder.band
+        self.state["lines"] = lines = lines + ["Reopening the armband stream"]
+        band.open()
+        before = self.recorder.received
+        time.sleep(WIFI_CHECK_S)
+        got = self.recorder.received - before
+        if not got:
+            raise RuntimeError(f"stream reopened but no samples in {WIFI_CHECK_S:g} s, switch the armband off and "
+                               "on and try again")
+        self.state["lines"] = lines + [f"Streaming: {got} samples in {WIFI_CHECK_S:g} s "
+                                       f"(about {band.rate * WIFI_CHECK_S:.0f} expected)"]
+
+    def _reconnect_if_lost(self):
+        # A failed run still tries to get the stream back; if the band can't be reached the warning bar says so
+        band = self.recorder.band
+        if not band.connected:
+            try:
+                band.open()
+            except Exception:
+                pass
 
     def _run(self, dhcp_s):
         fd, log = tempfile.mkstemp(suffix=".log")
@@ -123,24 +182,10 @@ class ArmbandWifi(Tool):
             self.state["lines"] = lines
             if proc.returncode != 0:
                 raise RuntimeError(lines[-1] if len(lines) > 1 else f"the script failed (exit code {proc.returncode})")
-            self.state["lines"] = lines = lines + ["Reopening the armband stream"]
-            band.open()
-            before = self.recorder.received
-            time.sleep(WIFI_CHECK_S)
-            got = self.recorder.received - before
-            if not got:
-                raise RuntimeError(f"stream reopened but no samples in {WIFI_CHECK_S:g} s, switch the armband off and "
-                                   "on and try again")
-            self.state["lines"] = lines + [f"Streaming: {got} samples in {WIFI_CHECK_S:g} s "
-                                           f"(about {band.rate * WIFI_CHECK_S:.0f} expected)"]
+            self._reopen(lines)
         finally:
             Path(log).unlink(missing_ok=True)
-            # A failed run still tries to get the stream back; if the band can't be reached the warning bar says so
-            if not band.connected:
-                try:
-                    band.open()
-                except Exception:
-                    pass
+            self._reconnect_if_lost()
 
 
 def _read_lines(path):

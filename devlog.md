@@ -1771,6 +1771,13 @@ desktop is the hub (`app.py --hub`, `emg-reading/hub.py`), the other computers a
   98 uV on seven channels (good pads stay under 46) and 453 uV on ch 5 (a pad losing contact level). Not
   diagnosed; needs a recording to look at. Ch 0 hum came up later too.
 
+**Armband WiFi on the Mac.** The Connection tab's Connect armband WiFi now works on macOS too (`mac_wifi.py`):
+finds the strongest `Mindrove_ARB_` network (`airport -s`, gone from macOS 14.4, then join from the WiFi menu
+first), joins it with `networksetup`, waits for a 192.168.4.x address and restarts the stream. The Mac has one WiFi
+adapter, so on the band's network it is off the home network and the hub; going back is done from the WiFi menu
+(a Back button that remembered the last network was removed, Noah: only if it's set simply per device). First
+run: joined `Mindrove_ARB_66bb04`, address 192.168.4.2, 990 of about 1000 samples in 2 s.
+
 ## Open
 
 - Hub: torch CPU build on the Mac for networks. Later, per-person consent before other people record.

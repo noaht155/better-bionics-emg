@@ -1044,6 +1044,7 @@ function initTools() {
   $("esp-ip").value = link.ip || config.esp32_wifi_ip;
   saveLink();
   showCurrentCalibration();
+  document.querySelectorAll("[data-platform]").forEach((el) => { el.hidden = el.dataset.platform !== config.platform; });
   loadSyncConfig();
   pollHubJobs();
 }

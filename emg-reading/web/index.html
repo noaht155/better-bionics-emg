@@ -588,10 +588,13 @@
     <p id="conn-error" class="error"></p>
     <pre id="conn-result"></pre>
     <h2>Armband WiFi</h2>
-    <p class="muted">After the armband is switched on: forgets and rejoins its WiFi, switches the adapter to DHCP for
-      5 s so the band sees an address request, then back to the static 192.168.4.2, and restarts the stream. Windows
-      desktop only, asks for admin rights on the PC's screen. About 15 s.</p>
-    <div class="row">
+    <p class="muted" data-platform="win32">After the armband is switched on: forgets and rejoins its WiFi, switches
+      the adapter to DHCP for 5 s so the band sees an address request, then back to the static 192.168.4.2, and
+      restarts the stream. Asks for admin rights on the PC's screen. About 15 s.</p>
+    <p class="muted" data-platform="darwin">After the armband is switched on: finds its network, joins it, waits for
+      an address from the band and restarts the stream. The Mac has one WiFi adapter, so it leaves the home network
+      and the hub; rejoin the home network from the WiFi menu to sync. About 10 s.</p>
+    <div class="row" data-platform="win32">
       <label>DHCP s (0 skips it) <input id="wifi-dhcp" type="number" min="0" max="60" step="1" value="5"></label>
     </div>
     <button id="wifi-start">Connect armband WiFi</button>
