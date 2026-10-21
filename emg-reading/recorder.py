@@ -46,8 +46,10 @@ def _folder_text(session):
 
 
 class Recorder:
-    def __init__(self, band, camera=None):
+    def __init__(self, band, camera=None, hub=False):
         self.band = band
+        # Started with --hub: no camera and no armband on purpose, their warnings would only be noise
+        self.hub = hub
         self.camera = camera
         # The recording setup picked on the start page (devices.json), stored with every session for its camera delay
         self.setup = None
@@ -306,13 +308,16 @@ class Recorder:
     # What the browser gets
 
     def warnings(self):
+        if self.hub and getattr(self.band, "connected", True) is False:
+            return []
         out = self.quality.warnings()
         if getattr(self.band, "connected", True) is False:
             out.append(("armband", "Armband not connected: switch it on, then Connect armband WiFi on the Connection tab"))
         if self.loop_error is not None and time.time() - self.loop_error[0] < ERROR_SHOWN_S:
             out.append(("loop_error", f"Reading the armband failed: {self.loop_error[1]}"))
         if self.camera is None:
-            out.append(("camera", "No camera, joint angles aren't recorded"))
+            if not self.hub:
+                out.append(("camera", "No camera, joint angles aren't recorded"))
         elif not self.camera.on:
             if self._camera_needed() and self.session.meta["settings"].get("protocol") not in SIGN_PROTOCOLS:
                 out.append(("camera", "Hand tracking is off, this cue's joint angles aren't recorded"))

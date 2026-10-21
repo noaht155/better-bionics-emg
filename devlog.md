@@ -1819,7 +1819,7 @@ recording on the Mac (dropped samples) is not checked yet. With tracking off, "H
 cues the camera labels, except in sign sessions (E, F), which train on the cue labels only.
 
 **Hub starts minimal** (Noah: the hub only trains). `--hub` now starts without the camera and without connecting the
-armband, the Connection tab can still connect it. Recording on the desktop is done without `--hub`. Test copy on
+armband, the Connection tab can still connect it; their warnings are hidden until the band is connected. Recording on the desktop is done without `--hub`. Test copy on
 the MacBook: 0.5 % of a core.
 
 **First MacBook session** (`2026-10-21_141651_noah`, protocol F, tracking off, 8.3 min, completed):

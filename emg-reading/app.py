@@ -1098,7 +1098,7 @@ def main():
         camera = Camera(int(args.camera) if args.camera.isdigit() else args.camera, args.hand).start()
     # A reader connected later from the Connection tab ends with the app, its output pipe closes
     with contextlib.nullcontext(band) if args.hub else band:
-        recorder = Recorder(band, camera)
+        recorder = Recorder(band, camera, args.hub)
         recorder.start()
         tools = Tools(recorder)
         print(f"EMG from {band.source}, open http://localhost:{args.port}")
