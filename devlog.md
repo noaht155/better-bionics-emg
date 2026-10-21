@@ -1846,8 +1846,8 @@ balanced over the signs and rest. Means of the 2 seeds:
 | 2026-10-20_105110 | 96.5 % | 95.5 % | 95.8 % | 94.7 % (7) | 84.5 / 75.9 % |
 | 2026-10-21_141651 (MacBook) | 96.2 % | 97.2 % | 97.3 % | 97.8 % (8) | 62.2 / 91.8 % |
 
-- Calibrated, more sessions barely matter: at most 1.6 points from one session to all, about the seed spread
-  (up to 1.9). Even trained on one session the MacBook session reaches 96.2 %. The rise from session to session
+- Calibrated, more sessions barely matter: at most 1.8 points between any two k for a session, about the seed spread
+  (up to 1.8). Even trained on one session the MacBook session reaches 96.2 %. The rise from session to session
   (94 to 98 %) comes with the held-out session, not with the amount of training data: the later sessions are
   easier to classify (signs held more consistently, or the placement), not the model learning more.
 - Without calibration there is no steady trend: the MacBook session went from 62 to 92 % with more sessions, the
