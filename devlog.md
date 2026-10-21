@@ -1818,6 +1818,10 @@ of one core with tracking, 4 % without (the i5-7360U has 2 cores, 4 threads). Wh
 recording on the Mac (dropped samples) is not checked yet. With tracking off, "Hand tracking is off" warns during
 cues the camera labels, except in sign sessions (E, F), which train on the cue labels only.
 
+**Hub starts minimal** (Noah: the hub only trains). `--hub` now starts without the camera and without connecting the
+armband, the Connection tab can still connect it. Recording on the desktop is done without `--hub`. Test copy on
+the MacBook: 0.5 % of a core.
+
 **First MacBook session** (`2026-10-21_141651_noah`, protocol F, tracking off, 8.3 min, completed):
 - Lost samples: 99 of 249,036 (0.04 %), 71 gaps of 1 to 3 samples spread through the session. Lost samples aren't NaN, they are just missing; the filter runs across the gap. Arrival stamps
   jitter up to 0.38 s behind the package-number fit (WiFi bursts), the fit takes that out.

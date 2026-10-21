@@ -111,7 +111,7 @@ On the desktop, once per device, then start the app as the hub:
 .venv\Scripts\python app.py --hub
 ```
 
-`add-device` prints a token once, only its hash is kept in `hub.json`. `hub.py remove-device mac` stops it working straight away, `hub.py devices` lists them. With `--hub` the app listens on every network, but other computers only get the hub's requests and the Train tab's, with a valid token; the armband, haptics, camera and live page stay this computer's. Windows asks once whether Python may accept connections; allow it for the network the Tailscale adapter is on.
+`add-device` prints a token once, only its hash is kept in `hub.json`. `hub.py remove-device mac` stops it working straight away, `hub.py devices` lists them. With `--hub` the app listens on every network, but other computers only get the hub's requests and the Train tab's, with a valid token; the armband, haptics, camera and live page stay this computer's. The hub only trains: it starts without the camera and without connecting the armband, record on the desktop without `--hub`. Windows asks once whether Python may accept connections; allow it for the network the Tailscale adapter is on.
 
 On the device, System > Sync: the hub's address (`http://<desktop tailnet name>:8000`) and the token, then Connect.
 
