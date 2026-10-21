@@ -1513,7 +1513,7 @@ magenta gradient (wordmark, active tab, progress bars, primary hover, pill switc
 JetBrains Mono for labels, tabs and table headers. Warnings keep solid yellow `#ffc233` and red `#ff3b3b` fills, the
 only filled colour on the page. Canvases read the same tokens (`COLORS` in `app.js`). The tracked hand and live
 signals went white instead of blue so a lost channel (red) can't be mistaken for the pink accent; the colour notes on
-Train and Control were updated to match. Rules for new UI in CLAUDE.md "Visual style".
+Train and Control were updated to match. New UI uses only these tokens, no hard-coded colours.
 Then motion where it shows a change of state, never on the data: a live dot in the tab bar (pulses while state
 arrives, "no data" after 1 s without it or with the no_data warning), the cue text slides in on a new cue and the cue
 bar pulses in its last second, new warnings slide in (the bar is now rebuilt only when a warning changes, not 20 times
