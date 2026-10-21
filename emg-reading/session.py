@@ -11,6 +11,7 @@ All times are time.time() on the recording PC. The armband's timestamp row is th
 the samples arrived, so EMG and camera share one clock. Use load_session() to read a folder back.
 """
 import json
+import socket
 import subprocess
 import threading
 import time
@@ -46,8 +47,9 @@ class SessionWriter:
         stamp = time.strftime("%Y-%m-%d_%H%M%S")
         self.folder = DATA_DIR / f"{stamp}_{subject}"
         self.folder.mkdir(parents=True)
+        # device: the computer it was recorded on, sessions from several computers end up on the hub
         self.meta = dict(meta, subject=subject, started=time.time(), app_version=app_version(),
-                         camera_columns=CAMERA_COLUMNS)
+                         device=socket.gethostname(), camera_columns=CAMERA_COLUMNS)
         self._lock = threading.Lock()
         self._board = open(self.folder / "board.f64", "ab")
         self._camera = open(self.folder / "camera.f64", "ab")

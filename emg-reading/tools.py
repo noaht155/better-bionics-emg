@@ -19,6 +19,7 @@ from pathlib import Path
 
 import calibrate
 import check_connection
+import hub
 from control import DEFAULT_RULES, DEFAULTS, STILL_S, Controller, check_rules, movement, split_rules, still_limit
 from cursor import DEFAULTS as CURSOR_DEFAULTS, LEVEL_SCALE as CURSOR_LEVEL_SCALE, Cursor
 from esp32_link import Esp32, self_test
@@ -29,7 +30,7 @@ from haptics import OUTPUTS, UPDATE_HZ, channel_levels, effort, output_duties
 # The ml package sits next to emg-reading/ in the repo
 REPO = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO))
-from ml import gesture_model  # noqa: E402
+from ml import NETWORK_DIR, gesture_model  # noqa: E402
 
 # Lines of a network job's output kept for the page
 # Output lines kept for the page's log, the newest are the ones shown first
@@ -498,10 +499,12 @@ class Trainer(Tool):
         super().__init__()
         self.predictor = predictor
 
-    def start(self, folders, options):
-        self._launch(self._run, folders, options)
+    def start(self, folders, options, use=True):
+        """use: make the new model the live one. Not for a job a device started on the hub, the hub's armband
+        isn't the one that device's wearer has on."""
+        self._launch(self._run, folders, options, use)
 
-    def _run(self, folders, options):
+    def _run(self, folders, options, use):
         self.state.update(step=f"loading {len(folders)} sessions", log=[], share=0.0)
 
         def log(text, share):
@@ -512,7 +515,8 @@ class Trainer(Tool):
         self.state.update(step=None, model=path.name, lines=[
             f"{model['windows']} labelled windows from {len(model['sessions'])} sessions, "
             f"classes {', '.join(model['classes'])}"] + gesture_model.report(result) + [f"saved {path.name}"])
-        self.predictor.use(path)
+        if use:
+            self.predictor.use(path)
 
 
 class NetworkJob(Tool):
@@ -579,6 +583,89 @@ def job_progress(line, progress):
     return progress
 
 
+def model_path(name):
+    """Where a model file of this name goes, refused unless it is a plain LDA or network file name."""
+    if Path(name).name != name or Path(name).suffix not in (".joblib", ".pt"):
+        raise ValueError(f"not a model name: {name}")
+    return (NETWORK_DIR if name.endswith(".pt") else gesture_model.MODEL_DIR) / name
+
+
+class Sync(Tool):
+    """System > Sync on a device: sends this computer's ended sessions to the hub, and downloads the models picked
+    there together with the session each one takes its levels from (hub.py)."""
+
+    def send(self):
+        self._launch(self._send)
+
+    def fetch(self, names, control_files):
+        """control_files: {"mappings": path, "presets": path}, swapped both ways after the models."""
+        self._launch(self._fetch, names, control_files)
+
+    def _counter(self, total):
+        done = 0
+
+        def step(n):
+            nonlocal done
+            done += n
+            self.state["share"] = min(1.0, done / total) if total else 1.0
+        return step
+
+    def _log(self, line):
+        self.state["lines"] = self.state["lines"] + [line]
+
+    def _send(self):
+        client = hub.client()
+        self.state.update(step="asking the hub which sessions it has", share=0.0, lines=[])
+        theirs = client.request("GET", "/api/hub/sessions")
+        mine = hub.ended_sessions()
+        todo = [name for name in mine if name not in theirs]
+        step = self._counter(sum(sum(mine[name].values()) for name in todo))
+        for i, name in enumerate(todo):
+            self.state["step"] = f"sending {name} ({i + 1} of {len(todo)})"
+            client.send_session(DATA_DIR / name, step)
+            self._log(f"sent {name}")
+        for name in mine:
+            if name in theirs and theirs[name] != mine[name]:
+                self._log(f"left out {name}: the hub has a different session with that name")
+        if not todo:
+            self._log("nothing to send, the hub has every session")
+        self.state.update(step=None, share=1.0)
+
+    def _fetch(self, names, control_files):
+        client = hub.client()
+        self.state.update(step="asking the hub for its models", share=0.0, lines=[])
+        listing = {m["name"]: m for m in client.request("GET", "/api/hub/models")}
+        models = []
+        for name in names:
+            if name not in listing:
+                raise ValueError(f"the hub has no model {name}")
+            path = model_path(name)
+            if not path.exists():
+                models.append(listing[name])
+            elif hub.sha256(path) != listing[name]["sha256"]:
+                self._log(f"kept this computer's {name}, the hub's file with that name differs")
+        sessions = sorted({m["levels"] for m in models if m["levels"] and not (DATA_DIR / m["levels"]).exists()})
+        sizes = client.request("GET", "/api/hub/sessions") if sessions else {}
+        step = self._counter(sum(m["size"] for m in models) + sum(sum(sizes[s].values()) for s in sessions))
+        for m in models:
+            self.state["step"] = f"downloading {m['name']}"
+            client.download({"kind": "model", "name": m["name"]}, model_path(m["name"]), m["size"], m["sha256"], step)
+            self._log(f"downloaded {m['name']}")
+        for name in sessions:
+            hub.check_name(name)
+            self.state["step"] = f"downloading the session {name}, a model's levels come from it"
+            client.download_session(name, DATA_DIR, step)
+            self._log(f"downloaded the session {name}")
+        self.state["step"] = "swapping mappings and profiles with the hub"
+        mine = {kind: json.loads(path.read_text()) if path.exists() else {} for kind, path in control_files.items()}
+        answer = client.request("POST", "/api/hub/control", body=mine)
+        kept = answer["kept"] + [n for kind, path in control_files.items() for n in hub.merge_named(path, answer[kind])]
+        for name in sorted(set(kept)):
+            self._log(f"two different mappings or profiles called {name}, each computer kept its own")
+        self._log("mappings and profiles swapped")
+        self.state.update(step=None, share=1.0)
+
+
 class Tools:
     def __init__(self, recorder):
         esp_lock = threading.Lock()
@@ -592,12 +679,13 @@ class Tools:
         self.cursor = CursorTask(recorder)
         self.trainer = Trainer(self.predictor)
         self.network = NetworkJob()
+        self.sync = Sync()
 
     def snapshot(self):
         now = time.time()
         out = {}
         for name in ("check", "wifi", "calibration", "haptics", "test", "predictor", "trainer", "network", "control",
-                     "cursor"):
+                     "cursor", "sync"):
             state = dict(getattr(self, name).state)
             if state.get("until"):
                 state["left"] = max(0.0, state["until"] - now)

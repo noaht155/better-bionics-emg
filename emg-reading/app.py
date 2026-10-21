@@ -2,14 +2,17 @@
 Serves the page in web/ and streams the live state to it.
 
     python app.py [--synthetic | --replay data/2026-09-30-filter] [--camera 0 | --camera clip.mp4 | --no-camera]
-                  [--host 0.0.0.0] [--port 8000]
+                  [--host 0.0.0.0] [--port 8000] [--hub]
 
-Then open http://localhost:8000. --host 0.0.0.0 makes it reachable from a tablet on the same network.
+Then open http://localhost:8000. --host 0.0.0.0 makes it reachable from a tablet on the same network. --hub makes
+this computer the hub other computers send their sessions to and train on (hub.py): it then listens on every
+network, but only answers this computer and devices with a token.
 """
 import argparse
 import asyncio
 import importlib.util
 import json
+import socket
 import sys
 from pathlib import Path
 from typing import Literal
@@ -17,11 +20,12 @@ from typing import Literal
 import joblib
 import numpy as np
 import uvicorn
-from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
-from fastapi.responses import FileResponse, StreamingResponse
+from fastapi import FastAPI, HTTPException, Query, Request, Response, WebSocket, WebSocketDisconnect
+from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
+import hub
 from armband import Armband, Replay
 from calibrate import load_calibration
 from camera import Camera
@@ -33,7 +37,7 @@ from hand_angles import JOINTS, RELIABLE
 from processing import spectrum
 from recorder import Recorder
 from session import DATA_DIR
-from tools import POSES, Tools
+from tools import POSES, Tools, model_path
 
 # The ml package sits next to emg-reading/ in the repo
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
@@ -46,6 +50,9 @@ PRESET_FILE = gesture_model.MODEL_DIR.parent / "control_presets.json"
 MAPPING_FILE = gesture_model.MODEL_DIR.parent / "control_mappings.json"
 SEND_HZ = 20
 PREVIEW_HZ = 15
+LOOPBACK = ("127.0.0.1", "::1")
+# What the Train tab may ask the hub for through this app, as paths under /api/
+HUB_PROXY = {path.removeprefix("/api/") for path in hub.TRAIN_PATHS} | {"hub/jobs"}
 
 
 class PlanSettings(BaseModel):
@@ -214,6 +221,21 @@ class ControlMapping(BaseModel):
     protocol: Literal["grips", "F"] | None = None
 
 
+class HubSettings(BaseModel):
+    url: str = Field(pattern=r"^https?://[^\s/]+/?$")
+    # Empty keeps the token already saved
+    token: str = Field("", max_length=200)
+
+
+class ModelNames(BaseModel):
+    names: list[str] = Field(min_length=1)
+
+
+class ControlFiles(BaseModel):
+    mappings: dict
+    presets: dict
+
+
 class NetworkJobSettings(BaseModel):
     job: Literal["evaluate", "evaluate_newest", "train", "calibrate", "signs"]
     epochs: int = Field(15, ge=1, le=200)
@@ -236,6 +258,51 @@ def placement_text(settings):
     if settings.get("placement"):
         parts.append(settings["placement"])
     return ", ".join(parts)
+
+
+def levels_session(model):
+    """The session a model's effort and haptic levels come from: the one a calibrated network was calibrated on, or
+    an LDA model's or sign network's newest training session. model as gesture_model.load gives it, or
+    {"kind": "network", "info": ...} for a network."""
+    if model.get("kind") == "network" and model["info"].get("kind") != "signs":
+        return model["info"].get("calibrated_on")
+    if model.get("kind") == "network":
+        return model["info"]["sessions"][-1]
+    return (model.get("sessions") or [None])[-1]
+
+
+class Access:
+    """Who may use the app. This computer may use everything. A device with a hub token (hub.py) may use the hub's
+    requests and the Train tab's, nothing else: not the armband, the haptics or the camera. Anyone else on the
+    network only when the app was started with --host (lan), as before for a tablet. Plain ASGI rather than an http
+    middleware so it covers the websockets too."""
+
+    def __init__(self, app, lan):
+        self.app = app
+        self.lan = lan
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] not in ("http", "websocket"):
+            return await self.app(scope, receive, send)
+        path = scope["path"]
+        local = (scope.get("client") or ("",))[0] in LOOPBACK
+        authorization = dict(scope["headers"]).get(b"authorization", b"").decode("latin-1")
+        device = hub.device_for(authorization) if authorization else None
+        if path.startswith("/api/hub/") and device is None:
+            return await self.deny(scope, receive, send, 401, "unknown device, add it on the hub with hub.py")
+        if not local and device is not None and not (path.startswith("/api/hub/") or path in hub.TRAIN_PATHS):
+            return await self.deny(scope, receive, send, 403, "devices can only send and train through the hub")
+        if not local and device is None and not self.lan:
+            return await self.deny(scope, receive, send, 403, "this app only answers its own computer and devices")
+        scope.setdefault("state", {})["device"] = device
+        await self.app(scope, receive, send)
+
+    @staticmethod
+    async def deny(scope, receive, send, status, detail):
+        if scope["type"] == "websocket":
+            await send({"type": "websocket.close", "code": 1008})
+        else:
+            await JSONResponse({"detail": detail}, status_code=status)(scope, receive, send)
 
 
 def session_list():
@@ -330,8 +397,10 @@ def model_file(name):
 AUTO_EVALUATE_EPOCHS = 15
 
 
-def make_app(recorder, band, camera, tools):
+def make_app(recorder, band, camera, tools, lan=True, serving=False):
+    """lan: other computers on the network may use the page (--host). serving: started with --hub."""
     app = FastAPI()
+    app.add_middleware(Access, lan=lan)
 
     def auto_evaluate(folder):
         """Every completed session gets an honest score before anything trains on it: a network trained on all the
@@ -470,12 +539,13 @@ def make_app(recorder, band, camera, tools):
         return session_list()
 
     @app.post("/api/train")
-    def train(settings: TrainSettings):
+    def train(settings: TrainSettings, request: Request):
         folders = [session_folder(name) for name in settings.sessions]
         try:
             tools.trainer.start([str(f) for f in folders],
                                 {"log": settings.log, "accel": settings.accel, "vote": settings.vote,
-                                 "extended": settings.extended, "exclude": settings.exclude})
+                                 "extended": settings.extended, "exclude": settings.exclude},
+                                use=request.state.device is None)
         except ValueError as e:
             refuse(e)
         return {"ok": True}
@@ -676,14 +746,8 @@ def make_app(recorder, band, camera, tools):
         return {"ok": True}
 
     def model_session(model):
-        """The session a model's levels come from: the one a calibrated network was calibrated on, or an LDA
-        model's or sign network's newest training session. None if it isn't on this computer."""
-        if model.get("kind") == "network" and model["info"].get("kind") != "signs":
-            session = model["info"].get("calibrated_on")
-        elif model.get("kind") == "network":
-            session = model["info"]["sessions"][-1]
-        else:
-            session = (model.get("sessions") or [None])[-1]
+        """levels_session, None if that session isn't on this computer."""
+        session = levels_session(model)
         return session if session and (DATA_DIR / session / "session.json").exists() else None
 
     def start_model_haptics(model, link):
@@ -700,6 +764,179 @@ def make_app(recorder, band, camera, tools):
             return f"haptics not started: {e}"
         tools.haptics.state["with_model"] = True
         return f"haptics starting with levels from {session}, see the Haptics tab"
+
+    # The hub's side, for devices (hub.py). Access only lets these through with a device token
+
+    @app.get("/api/hub/hello")
+    def hub_hello(request: Request):
+        return {"device": request.state.device, "hub": socket.gethostname()}
+
+    @app.get("/api/hub/sessions")
+    def hub_sessions():
+        return hub.ended_sessions()
+
+    @app.get("/api/hub/sessions/{name}/hashes")
+    def hub_session_hashes(name: str):
+        folder = session_folder(name)
+        return {file: hub.sha256(folder / file) for file in hub.file_sizes(folder)}
+
+    @app.get("/api/hub/incoming/{name}")
+    def hub_received(name: str):
+        try:
+            return hub.received(name)
+        except ValueError as e:
+            refuse(e)
+
+    @app.put("/api/hub/incoming/{name}/{file}")
+    async def hub_receive(name: str, file: str, request: Request, offset: int = Query(ge=0)):
+        data = await request.body()
+        if len(data) > hub.CHUNK:
+            refuse("chunk too big")
+        try:
+            return {"size": hub.receive(name, file, offset, data)}
+        except ValueError as e:
+            refuse(e)
+
+    @app.delete("/api/hub/incoming/{name}")
+    def hub_discard(name: str):
+        try:
+            hub.discard(name)
+        except ValueError as e:
+            refuse(e)
+        return {"ok": True}
+
+    @app.post("/api/hub/incoming/{name}/done")
+    def hub_finish(name: str, hashes: dict[str, str]):
+        try:
+            folder = hub.finish(name, hashes)
+        except ValueError as e:
+            refuse(e)
+        # Same as a session recorded here: scored before anything trains on it
+        auto_evaluate(folder)
+        return {"ok": True}
+
+    @app.get("/api/hub/models")
+    def hub_models():
+        """The models a device can run (LDA, calibrated and sign networks), each with the session its levels come
+        from if the hub has it."""
+        live = [(m, {"sessions": m["sessions"]}) for m in model_list()]
+        live += [(n, {"kind": "network", "info": n}) for n in network_list()
+                 if n.get("kind") in ("calibrated", "signs")]
+        out = []
+        for entry, model in live:
+            path = model_file(entry["name"])
+            out.append(dict(entry, size=path.stat().st_size, sha256=hub.sha256(path), levels=model_session(model)))
+        return out
+
+    @app.get("/api/hub/file")
+    def hub_file(kind: Literal["model", "session"], name: str, file: str = "", offset: int = Query(0, ge=0),
+                 length: int = Query(hub.CHUNK, ge=1, le=hub.CHUNK)):
+        if kind == "model":
+            path = model_file(name)
+        elif file in hub.SESSION_FILES:
+            path = session_folder(name) / file
+        else:
+            refuse("not a session file")
+        with open(path, "rb") as f:
+            f.seek(offset)
+            return Response(f.read(length), media_type="application/octet-stream")
+
+    def read_named(path):
+        return json.loads(path.read_text()) if path.exists() else {}
+
+    @app.post("/api/hub/control")
+    def hub_control(theirs: ControlFiles):
+        """Takes the device's mappings and profiles the hub doesn't have, answers with all of the hub's."""
+        kept = hub.merge_named(MAPPING_FILE, theirs.mappings) + hub.merge_named(PRESET_FILE, theirs.presets)
+        return {"mappings": read_named(MAPPING_FILE), "presets": read_named(PRESET_FILE), "kept": kept}
+
+    @app.get("/api/hub/jobs")
+    def hub_jobs():
+        """The Train tab's jobs, which the hub's own page gets over the websocket."""
+        snapshot = tools.snapshot()
+        return {"trainer": snapshot["trainer"], "network": snapshot["network"]}
+
+    # A device's side: System > Sync, and the Train tab when it trains on the hub
+
+    @app.get("/api/sync/config")
+    def sync_config():
+        config = hub.load()
+        return {"url": config.get("url"), "token_set": bool(config.get("token")), "serving": serving,
+                "devices": hub.devices(), "name": socket.gethostname()}
+
+    @app.post("/api/sync/config")
+    def set_sync_config(settings: HubSettings):
+        """Saved only once the hub answers with it."""
+        config = hub.load()
+        token = settings.token.strip() or config.get("token")
+        if not token:
+            refuse("paste the token the hub gave this device")
+        try:
+            hello = hub.Hub(settings.url, token).request("GET", "/api/hub/hello", timeout=10)
+        except ValueError as e:
+            refuse(e)
+        hub.save(dict(config, url=settings.url.rstrip("/"), token=token))
+        return hello
+
+    @app.get("/api/sync/status")
+    def sync_status():
+        """What this computer and the hub each have: sessions to send, models to download."""
+        try:
+            client = hub.client()
+            hello = client.request("GET", "/api/hub/hello")
+            theirs = client.request("GET", "/api/hub/sessions")
+            models = client.request("GET", "/api/hub/models")
+        except ValueError as e:
+            refuse(e)
+        sessions = []
+        for path in sorted(DATA_DIR.glob("*/session.json"), reverse=True):
+            folder = path.parent
+            if not hub.SESSION_NAME.match(folder.name):
+                continue
+            sizes = hub.file_sizes(folder)
+            if not hub.ended(folder):
+                where = "recording"
+            elif folder.name not in theirs:
+                where = "not sent"
+            else:
+                where = "on the hub" if theirs[folder.name] == sizes else "name taken on the hub"
+            sessions.append({"name": folder.name, "where": where, "bytes": sum(sizes.values())})
+        for m in models:
+            path = model_path(m["name"])
+            m["here"] = "no" if not path.exists() else "yes" if hub.sha256(path) == m["sha256"] else "differs"
+            m["levels_here"] = bool(m["levels"]) and (DATA_DIR / m["levels"] / "session.json").exists()
+        return {"hub": hello, "sessions": sessions, "models": models}
+
+    @app.post("/api/sync/send")
+    def sync_send():
+        try:
+            tools.sync.send()
+        except ValueError as e:
+            refuse(e)
+        return {"ok": True}
+
+    @app.post("/api/sync/fetch")
+    def sync_fetch(choice: ModelNames):
+        try:
+            tools.sync.fetch(choice.names, {"mappings": MAPPING_FILE, "presets": PRESET_FILE})
+        except ValueError as e:
+            refuse(e)
+        return {"ok": True}
+
+    @app.api_route("/api/hub-proxy/{path:path}", methods=["GET", "POST"])
+    async def hub_proxy(path: str, request: Request):
+        """The Train tab's requests, sent on to the hub when it trains there."""
+        if path not in HUB_PROXY:
+            refuse("not a Train tab request")
+        raw = await request.body()
+        try:
+            client = hub.client()
+            return await asyncio.to_thread(client.request, request.method, f"/api/{path}",
+                                           json.loads(raw) if raw else None)
+        except hub.HubError as e:
+            raise HTTPException(e.status, str(e))
+        except ValueError as e:
+            refuse(e)
 
     @app.post("/api/hand")
     def hand(choice: HandChoice):
@@ -758,9 +995,13 @@ def main():
     cam.add_argument("--camera", default="0", help="camera index or a video file (default 0)")
     cam.add_argument("--no-camera", action="store_true")
     parser.add_argument("--hand", choices=["right", "left"], default="right", help="hand the camera tracks")
-    parser.add_argument("--host", default="127.0.0.1")
+    parser.add_argument("--host", help="address to listen on (default 127.0.0.1, 0.0.0.0 with --hub)")
     parser.add_argument("--port", type=int, default=8000)
+    parser.add_argument("--hub", action="store_true", help="let devices with a token send sessions and train here")
     args = parser.parse_args()
+    # Only an explicit --host opens the page to the network. --hub alone listens everywhere, for the devices
+    lan = args.host is not None and args.host not in LOOPBACK + ("localhost",)
+    host = args.host or ("0.0.0.0" if args.hub else "127.0.0.1")
 
     band = Replay(args.replay) if args.replay else Armband(args.synthetic, optional=True)
     camera = None
@@ -771,8 +1012,12 @@ def main():
         recorder.start()
         tools = Tools(recorder)
         print(f"EMG from {band.source}, open http://localhost:{args.port}")
+        if args.hub:
+            print(f"hub for {', '.join(hub.devices()) or 'no devices yet (python hub.py add-device NAME)'}, "
+                  f"at http://{socket.gethostname()}:{args.port}")
         try:
-            uvicorn.run(make_app(recorder, band, camera, tools), host=args.host, port=args.port, log_level="warning")
+            uvicorn.run(make_app(recorder, band, camera, tools, lan, args.hub), host=host, port=args.port,
+                        log_level="warning")
         finally:
             # Leaving the haptics thread running would leave the motors on until the ESP32 watchdog fires
             tools.haptics.stop()

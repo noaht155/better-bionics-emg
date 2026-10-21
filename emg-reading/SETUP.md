@@ -83,6 +83,27 @@ Open http://localhost:8000, fill in the form and start. The first run downloads 
 
 The other tabs run the existing programs on the app's armband stream: Signals (`live_plot.py`, f and s work there too), Calibrate (`calibrate.py`), Haptics (`haptics.py`, plus the `esp32_link.py` output test) and Connection (`check_connection.py`). The scripts still work on their own. Stop the app first, they would both try to open the armband. Haptics running during a recording is logged in the session's events.
 
+## Recording on another computer (hub)
+
+Any computer with the app and an armband can record. The desktop with the GPU is the hub: the other computers (devices) send it their sessions, train on it from their Train tab and download its models. Both need to be on the tailnet.
+
+On the desktop, once per device, then start the app as the hub:
+
+```powershell
+.venv\Scripts\python hub.py add-device mac
+.venv\Scripts\python app.py --hub
+```
+
+`add-device` prints a token once, only its hash is kept in `hub.json`. `hub.py remove-device mac` stops it working straight away, `hub.py devices` lists them. With `--hub` the app listens on every network, but other computers only get the hub's requests and the Train tab's, with a valid token; the armband, haptics, camera and live page stay this computer's. Windows asks once whether Python may accept connections; allow it for the network the Tailscale adapter is on.
+
+On the device, System > Sync: the hub's address (`http://<desktop tailnet name>:8000`) and the token, then Connect.
+
+- **Send new sessions** uploads every ended session the hub doesn't have, in 4 MB chunks. A broken connection carries on from where it stopped on the next send. The hub keeps the files in `data/.incoming/` until every file matches its hash, then moves the session into `data/` and evaluates it like one recorded there. A session name the hub already has is never overwritten.
+- **Train tab**: pick The hub at the top. The session list, training, calibration and evaluation are then the hub's, the live test stays on this computer. An LDA trained this way isn't made live on the hub.
+- **Download ticked** fetches models from the hub, and the session each one takes its effort and haptic levels from if the device doesn't have it. It also swaps Control mappings and profiles both ways; a name both computers have with different content stays as it is on each.
+- Networks need torch on the device to run live, the CPU build is enough.
+- New sessions note the computer they were recorded on (`device` in `session.json`).
+
 ## Undo the static IP
 
 The WiFi adapter won't work on normal networks until this is reverted. Run in an admin PowerShell:

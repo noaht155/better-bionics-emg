@@ -11,7 +11,7 @@ From the repo root, with the emg-reading venv:
 emg-reading/.venv/Scripts/python -m pytest tests
 ```
 
-110 tests, about 13 s. Run them before committing changes to `ml/`, the filter or the quality checks. Tests that need
+138 tests, about 16 s. Run them before committing changes to `ml/`, the filter or the quality checks. Tests that need
 recorded sessions (`emg-reading/data/`) or torch skip themselves where those are missing, so on the Mac or a fresh
 clone only the synthetic tests run.
 
@@ -212,6 +212,24 @@ The Cursor tab's fixed map from channel levels to a dot (`emg-reading/cursor.py`
 | `test_hit_after_home_and_dwell` | A target only shows after `home_s` in the middle, counts as hit after `dwell_s` inside, and the trial keeps its path with the 8 levels per step |
 | `test_miss_on_timeout_and_every_target_once_per_block` | Doing nothing misses at `timeout_s`, and a block shows every target once |
 | `test_leaving_the_target_resets_the_dwell` | Leaving the target restarts the dwell time and counts a second entry |
+
+### Hub (`tests/test_hub.py`)
+
+Sessions recorded on other computers and sent to the hub (`emg-reading/hub.py`), and who gets into the app. The
+transfer tests run the hub app on a free local port and send over real HTTP.
+
+| Test | Checks |
+|---|---|
+| `test_tokens` | A device token is recognised, a wrong one isn't, only its hash is stored, and a removed device stops working |
+| `test_only_devices_and_this_computer_get_in` | Another computer without a token gets nothing; with one it gets the hub's and the Train tab's requests but not the armband, haptics or live websocket. The hub's requests want a token even from this computer |
+| `test_tablet_mode_still_open` | Started with `--host`, the page still opens for a tablet as before, the hub's requests still want a token |
+| `test_send_carries_on_after_a_dropped_connection` | A send that drops part way leaves nothing in `data/`, the next send carries on and the session arrives byte for byte; sending it again is refused, not overwritten |
+| `test_unknown_token_refused` | The client reports the hub's refusal of a wrong token |
+| `test_damaged_file_is_dropped` | A file that doesn't match the sender's hash keeps the session out of `data/` and is dropped so it's sent again |
+| `test_wrong_offset_and_names_refused` | A chunk sent twice can't go in twice, and names that would leave the data folder are refused |
+| `test_session_still_recording_is_refused` | A session without an end can't be moved in |
+| `test_download_session` | A session downloaded from the hub (for a model's levels) arrives byte for byte |
+| `test_merge_keeps_both_sides` | Mappings and profiles are added by name, a name both sides have with different content stays as it is |
 
 ## Found by the tests
 

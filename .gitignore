@@ -22,6 +22,9 @@ Thumbs.db
 # Per-person EMG calibration
 emg-reading/calibration.json
 
+# Hub address and device tokens (hub.py)
+emg-reading/hub.json
+
 # Recorded EMG sessions, personal data and too big for git
 emg-reading/data/
 

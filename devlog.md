@@ -1732,7 +1732,30 @@ again to undo) and unlock rules run. Meant for carrying something while the arm 
 mappings, added on the mapping page. Changing the mapping unlocks the hand so it can't stay frozen with no way out.
 The Control tab shows "position locked" while it's on. Not tested live yet.
 
+## 2026-10-20: recording on other computers, training on the desktop
+
+Recording can happen on any computer with the app and an armband, training stays on the desktop's 4070. The
+desktop is the hub (`app.py --hub`, `emg-reading/hub.py`), the other computers are devices with their own token
+(`hub.py add-device NAME`), over Tailscale. Steps in `emg-reading/SETUP.md`.
+- System > Sync on a device: sends ended sessions in 4 MB chunks that carry on after a dropped connection; a
+  session only appears in the hub's `data/` once every file matches its hash, and is then evaluated like a local
+  one. Downloads models with the session their levels come from, and swaps Control mappings and profiles both
+  ways (same name with different content: each side keeps its own). Nothing is overwritten on either side.
+- Train tab on a device: "The hub" sends the session list and every job to the hub through the app; the live test
+  stays local.
+- With `--hub` the app listens on every network, but other computers only get the hub's and Train tab's requests
+  with a valid token, never the armband, haptics or camera. `--host` (tablet) works as before.
+- New sessions store `device` (computer name) in `session.json`.
+- Measured on the desktop with two copies of the app: a 115 MB session took 75 s with a new connection per chunk,
+  because a name that also resolves to IPv6 costs 2 s per connection on Windows (the hub listens on IPv4 only).
+  With IPv4 first and one kept connection: 6 s, byte for byte identical. Model download with its 169 MB levels
+  session and training an LDA on the hub from the device's Train tab worked the same way.
+- Not tried yet across two real computers: the Mac over Tailscale, and the Windows firewall prompt for the hub.
+
 ## Open
+
+- Hub: first real run from the Mac (Tailscale, firewall prompt on the desktop, torch CPU build on the Mac for
+  networks, mediapipe and camera on macOS). Later, per-person consent before other people record.
 
 - Trigger mode on the arm: tune clench level and timings live, count wrong picks (short clench read as two, a grab
   read as a clench), check opening still registers with the distance check on, haptic confirmation of the picked grip.
