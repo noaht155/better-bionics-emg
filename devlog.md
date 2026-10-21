@@ -1819,8 +1819,7 @@ recording on the Mac (dropped samples) is not checked yet. With tracking off, "H
 cues the camera labels, except in sign sessions (E, F), which train on the cue labels only.
 
 **First MacBook session** (`2026-10-21_141651_noah`, protocol F, tracking off, 8.3 min, completed):
-- Lost samples: 99 of 249,036 (0.04 %), 71 gaps of 1 to 3 samples spread through the session, about the desktop's
-  rate (2 in 2500). Lost samples aren't NaN, they are just missing; the filter runs across the gap. Arrival stamps
+- Lost samples: 99 of 249,036 (0.04 %), 71 gaps of 1 to 3 samples spread through the session. Lost samples aren't NaN, they are just missing; the filter runs across the gap. Arrival stamps
   jitter up to 0.38 s behind the package-number fit (WiFi bursts), the fit takes that out.
 - Hum fine this time: median 7 to 15 uV per channel, 95th percentile 22 to 30.
 - Sign LDA on this session alone, leave one posture out: forward 89.1 %, table 73.1 % balanced.
