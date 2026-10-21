@@ -892,7 +892,7 @@ function drawCamera() {
   // Firefox reports a size of 0 between the frames of the video stream. Clear first and keep the last size,
   // otherwise the old skeleton stays drawn after the hand is lost
   ctx.clearRect(0, 0, canvas.width, canvas.height);
-  if (config.camera) $("view-note").textContent = state.tracking ? cameraWarning() ?? "" : "Hand tracking is off";
+  if (config.camera) $("view-note").textContent = state.tracking === false ? "Hand tracking is off" : cameraWarning() ?? "";
   if (img.naturalWidth && canvas.width !== img.naturalWidth) {
     canvas.width = img.naturalWidth;
     canvas.height = img.naturalHeight;
