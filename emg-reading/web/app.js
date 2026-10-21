@@ -585,6 +585,11 @@ function drawCueBar(now) {
 function frameLoop(now) {
   const dt = Math.min((now - lastFrame) / 1000, 0.1);
   lastFrame = now;
+  // Nothing behind the start page shows, and drawing it made the page's animation stutter on the Mac
+  if (!$("landing").hidden) {
+    requestAnimationFrame(frameLoop);
+    return;
+  }
   try {
     drawTarget(dt);
     drawCueBar(now);
@@ -896,7 +901,7 @@ function showView() {
   const v = $("view").value;
   for (const name of ["pose", "emg", "camera", "model"]) $(`view-${name}`).hidden = name !== v;
   // Only pull the video while it's shown, the server stops encoding frames when nobody asks
-  $("video").src = v === "camera" && config.camera ? `/video.mjpg?${Date.now()}` : "";
+  $("video").src = v === "camera" && config.camera && $("landing").hidden ? `/video.mjpg?${Date.now()}` : "";
   $("view-note").textContent = v === "camera" && !config.camera ? "started with --no-camera" : "";
 }
 
@@ -929,12 +934,114 @@ function connect() {
   };
 }
 
+// Start page: pick the recording setup (devices.json). It sets the camera, and the camera delay every session stores
+
+const DEVICE_KEY = "last-device";
+const DEVICE_ICONS = {
+  desktop: '<rect x="6" y="8" width="52" height="34" rx="2"/><path d="M26 42v8M38 42v8M20 54h24"/>',
+  laptop: '<rect x="12" y="12" width="40" height="28" rx="2"/><path d="M4 48h56l-4-8H8z"/>',
+};
+const reducedMotion = () => matchMedia("(prefers-reduced-motion: reduce)").matches;
+// The picked card shows for this long before the page lifts away, then the lift itself
+const PICK_HOLD_MS = 550, LEAVE_MS = 600;
+let currentSetup = null;
+
+function delayText(setup) {
+  return setup.label_shift_s != null ? `delay ${Math.round(setup.label_shift_s * 1000)} ms`
+    : `delay not measured, ${Math.round(config.fixed_delay_s * 1000)} ms stand-in`;
+}
+
+function showDevice(setup) {
+  currentSetup = setup;
+  $("device-chip").hidden = !setup;
+  if (setup) $("device-chip").textContent = setup.name;
+  $("setup-device").textContent = setup ? `Device: ${setup.name}, ${setup.camera_name}, ${delayText(setup)}`
+    : "No device picked, only practice runs";
+  showSavedDelay(setup);
+}
+
+async function openLanding() {
+  const list = await (await fetch("/api/devices")).json();
+  showDevice(list.setups.find((s) => s.id === list.current) || null);
+  // A page opened during a recording goes straight to it
+  if (list.recording) {
+    closeLanding();
+    return;
+  }
+  let last = null;
+  try { last = localStorage.getItem(DEVICE_KEY); } catch { /* nothing remembered */ }
+  const here = list.setups.filter((s) => s.here);
+  const preferred = list.current || (here.some((s) => s.id === last) ? last : here[0]?.id);
+  const box = $("landing-devices");
+  box.innerHTML = "";
+  list.setups.forEach((setup, i) => {
+    const card = document.createElement("button");
+    card.className = "device-card";
+    card.style.setProperty("--i", i);
+    card.disabled = !setup.here;
+    const plugged = !list.cameras || list.cameras.includes(setup.camera_name);
+    const caption = !setup.here ? `on ${setup.computer}`
+      : plugged ? delayText(setup) : `${setup.camera_name} not plugged in`;
+    card.innerHTML = `<svg viewBox="0 0 64 60" aria-hidden="true">${DEVICE_ICONS[setup.icon] || DEVICE_ICONS.desktop}</svg>
+      <strong></strong><span class="device-camera"></span><small></small>`;
+    card.querySelector("strong").textContent = setup.name;
+    card.querySelector(".device-camera").textContent = setup.camera_name;
+    card.querySelector("small").textContent = setup.id === preferred && setup.here ? `last used, ${caption}` : caption;
+    card.addEventListener("click", () => pickDevice(setup, card));
+    box.append(card);
+    if (setup.id === preferred && setup.here) requestAnimationFrame(() => card.focus({ preventScroll: true }));
+  });
+  $("landing-note").textContent = here.length ? ""
+    : `No device in devices.json belongs to this computer (${list.computer}). Add one to record; practice runs work without.`;
+  $("landing-error").textContent = "";
+  const landing = $("landing");
+  landing.classList.remove("chosen", "leaving");
+  landing.hidden = false;
+  // Restart the entrance each time the page opens
+  landing.classList.remove("entering");
+  void landing.offsetWidth;
+  landing.classList.add("entering");
+}
+
+function closeLanding() {
+  $("landing").hidden = true;
+  // The camera preview waits for the start page to close
+  if (currentTab === "record") showView();
+}
+
+async function pickDevice(setup, card) {
+  const landing = $("landing");
+  if (landing.classList.contains("chosen")) return;
+  const picked = await postShowing("/api/devices/select", { id: setup.id }, "landing-error");
+  if (!picked) return;
+  try { localStorage.setItem(DEVICE_KEY, picked.id); } catch { /* private window */ }
+  showDevice(picked);
+  if (reducedMotion()) {
+    closeLanding();
+    return;
+  }
+  card.classList.add("picked");
+  landing.classList.add("chosen");
+  setTimeout(() => {
+    landing.classList.add("leaving");
+    setTimeout(closeLanding, LEAVE_MS);
+  }, PICK_HOLD_MS);
+}
+
+$("device-chip").addEventListener("click", openLanding);
+$("setup-device-change").addEventListener("click", openLanding);
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape" && !$("landing").hidden && currentSetup) closeLanding();
+});
+
 async function init() {
   config = await (await fetch("/api/config")).json();
   $("source").textContent = `EMG from ${config.source}, ${config.channels.length} channels at ${config.rate} Hz`
     + (config.calibration ? ", calibration loaded" : ", no calibration");
   loadSettings();
   initTools();
+  showDevice(null);
+  openLanding();
   if (!config.camera) $("view").value = "pose";
   showView();
   connect();

@@ -1,5 +1,6 @@
 """Open the armband (or the synthetic board) and read its live EMG channels.
 Replay plays back recorded raw data in real time instead."""
+import queue
 import subprocess
 import sys
 import threading
@@ -7,7 +8,7 @@ import time
 from pathlib import Path
 
 import numpy as np
-from mindrove.board_shim import BoardShim, BoardIds, MindRoveInputParams
+from mindrove.board_shim import BoardShim, BoardIds, MindRoveInputParams, MindroveConfigMode
 from mindrove.exit_codes import MindRoveError
 
 from channels import live_channels
@@ -66,7 +67,7 @@ class Armband:
         self.close()
         proc = subprocess.Popen([sys.executable, "-u", str(Path(__file__).resolve()), "--reader",
                                  "synthetic" if self.source == "synthetic" else "armband"],
-                                stdout=subprocess.PIPE, cwd=Path(__file__).parent)
+                                stdin=subprocess.PIPE, stdout=subprocess.PIPE, cwd=Path(__file__).parent)
         timer = threading.Timer(OPEN_TIMEOUT_S, proc.kill)
         timer.start()
         status = proc.stdout.readline().decode().strip()
@@ -78,6 +79,20 @@ class Armband:
         with self._lock:
             self._proc = proc
         threading.Thread(target=self._receive, args=(proc,), daemon=True).start()
+
+    def set_mode(self, mode):
+        """Switch the band to "EEG" (normal recording) or "TEST" (internal 2 Hz square wave on all channels).
+        Returns time.time() when the command left for the reader, which sends it on at once."""
+        if mode not in ("EEG", "TEST"):
+            raise ValueError(f"unknown mode {mode}")
+        with self._lock:
+            proc = self._proc
+        if proc is None:
+            raise ConnectionError("armband not connected")
+        sent = time.time()
+        proc.stdin.write(f"{mode}\n".encode())
+        proc.stdin.flush()
+        return sent
 
     def close(self):
         with self._lock:
@@ -121,7 +136,8 @@ class Armband:
 
 def _reader(source):
     """The reader process: opens the board, then writes every new block to stdout as a 4-byte sample count and
-    the rows x samples float64 values. Ends when the app stops reading."""
+    the rows x samples float64 values. Ends when the app stops reading. Lines on stdin switch the mode
+    (Armband.set_mode); they are applied between reads so the library is only called from this thread."""
     board_id = BoardIds.SYNTHETIC_BOARD if source == "synthetic" else BoardIds.MINDROVE_WIFI_BOARD
     BoardShim.disable_board_logger()
     board = BoardShim(board_id, MindRoveInputParams())
@@ -135,13 +151,28 @@ def _reader(source):
         return
     out.write(b"ok\n")
     out.flush()
+    modes = queue.Queue()
+
+    def listen():
+        for line in sys.stdin:
+            modes.put(line.strip())
+    threading.Thread(target=listen, daemon=True).start()
     while True:
         data = board.get_board_data()
         if data.shape[1]:
             out.write(data.shape[1].to_bytes(4, "little"))
             out.write(np.ascontiguousarray(data, dtype=np.float64).tobytes())
             out.flush()
-        time.sleep(READ_S)
+        # Waiting on the queue instead of sleeping sends a mode switch on at once, the delay test times it
+        try:
+            mode = modes.get(timeout=READ_S)
+        except queue.Empty:
+            continue
+        try:
+            board.config_board(getattr(MindroveConfigMode, f"{mode}_MODE"))
+        except MindRoveError:
+            # The delay test sees no step for this switch, the stream itself carries on
+            pass
 
 
 class Replay(Armband):

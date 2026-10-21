@@ -1,0 +1,27 @@
+{
+  "default": "desktop-brio",
+  "setups": [
+    {
+      "id": "desktop-brio",
+      "name": "Desktop",
+      "icon": "desktop",
+      "computer": "DESKTOP-SP90LS2",
+      "camera": 0,
+      "camera_name": "Brio 100",
+      "label_shift_s": 0.028,
+      "measured": "2026-10-08",
+      "note": "LED test 37 ms, armband round trip 17 ms"
+    },
+    {
+      "id": "mac-facetime",
+      "name": "MacBook",
+      "icon": "laptop",
+      "computer": "Noahs-MacBook-Pro",
+      "camera": 0,
+      "camera_name": "FaceTime HD Camera",
+      "label_shift_s": 0.0434,
+      "measured": "2026-10-21",
+      "note": "screen flash 51.5 ms (camera + screen, to light 88, to dark 15), armband round trip 16.2 ms"
+    }
+  ]
+}

@@ -862,6 +862,74 @@ function drawWifi(t) {
   $("wifi-result").textContent = (t.lines || []).join("\n") + (t.running ? "\n..." : "");
 }
 
+// Delay: armband round trip, and the camera from screen flashes. Each change is held 0.4 to 0.8 s, so the flashing
+// stays under 3 a second
+const FLASH_CHANGES = 60, FLASH_HOLD_MS = [400, 800], FLASH_LEAD_MS = 1000;
+
+$("rtt-start").addEventListener("click", () => postShowing("/api/delay/round-trip", { switches: 80 }, "rtt-error"));
+
+let flashRun = null;
+
+$("flash-start").addEventListener("click", async () => {
+  if (!(await postShowing("/api/delay/flash/start", { page_ms: Date.now() }, "flash-error"))) return;
+  const screen = $("flash-screen");
+  screen.classList.remove("light");
+  screen.hidden = false;
+  try { await screen.requestFullscreen(); } catch { /* the fixed layer covers the window anyway */ }
+  // rAF times are on the page's monotonic clock; this ties them to the wall clock the camera frames use
+  const offset = Date.now() - (performance.timeOrigin + performance.now());
+  const run = { switches: [], light: false, due: performance.now() + FLASH_LEAD_MS };
+  flashRun = run;
+  const step = (ts) => {
+    if (flashRun !== run) return;
+    if (ts >= run.due) {
+      run.light = !run.light;
+      screen.classList.toggle("light", run.light);
+      run.switches.push([(performance.timeOrigin + ts + offset) / 1000, run.light]);
+      run.due = ts + FLASH_HOLD_MS[0] + Math.random() * (FLASH_HOLD_MS[1] - FLASH_HOLD_MS[0]);
+      if (run.switches.length >= FLASH_CHANGES) {
+        setTimeout(endFlashes, FLASH_HOLD_MS[0]);
+        return;
+      }
+    }
+    requestAnimationFrame(step);
+  };
+  requestAnimationFrame(step);
+});
+
+function endFlashes() {
+  const run = flashRun;
+  if (!run) return;
+  flashRun = null;
+  $("flash-screen").hidden = true;
+  if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
+  // Stopped early: the server is told so and reports it
+  const done = run.switches.length >= FLASH_CHANGES;
+  postShowing("/api/delay/flash/finish", { switches: done ? run.switches : [] }, "flash-error");
+}
+
+document.addEventListener("fullscreenchange", () => { if (!document.fullscreenElement) endFlashes(); });
+document.addEventListener("keydown", (e) => { if (e.key === "Escape") endFlashes(); });
+
+function drawDelayTool(t, name) {
+  $(`${name}-start`).disabled = t.running;
+  if (t.error) $(`${name}-error`).textContent = t.error;
+  $(`${name}-result`).textContent = (t.lines || []).join("\n") + (t.running ? "\n..." : "");
+}
+
+$("delay-save").addEventListener("click", async () => {
+  const setup = await postShowing("/api/delay/save", undefined, "delay-save-error");
+  if (setup) showDevice(setup);
+});
+
+function showSavedDelay(setup) {
+  $("delay-save").disabled = !setup;
+  $("delay-save").textContent = setup ? `Save for ${setup.name}` : "Pick a device first";
+  $("delay-saved").textContent = !setup ? "" : setup.label_shift_s != null
+    ? `${setup.name} has ${Math.round(setup.label_shift_s * 1000)} ms, measured ${setup.measured}.`
+    : `${setup.name} isn't measured yet, its sessions use ${Math.round(config.fixed_delay_s * 1000)} ms.`;
+}
+
 function drawConnection(t) {
   $("conn-start").disabled = t.running;
   progress("conn-bar", t);
@@ -905,6 +973,9 @@ function drawTools() {
   drawHaptics(t.haptics, t.test);
   drawConnection(t.check);
   drawWifi(t.wifi);
+  drawDelayTool(t.round_trip, "rtt");
+  progress("rtt-bar", t.round_trip);
+  drawDelayTool(t.flash, "flash");
   const jobs = trainOnHub() ? hubJobs || IDLE_JOBS : t;
   drawTrain(jobs.trainer);
   drawPredictor(t.predictor);

@@ -18,6 +18,7 @@ from pathlib import Path
 
 import numpy as np
 
+import devices
 from gestures import GESTURE_SET, settle_s
 from channels import mirrored
 from hand_angles import JOINTS, RELIABLE
@@ -29,8 +30,9 @@ RATE = 500
 WINDOW = 100
 STEP = 25
 # Camera frames reach the PC 37 ms after they are taken (LED test 2026-10-07) and EMG samples arrive up to 17 ms
-# late (armband round trip 2026-10-08), so the true shift is 20 to 37 ms; the middle is off by at most 9 ms. Used for
-# every session: the tap delays in session.json (96 to 168 ms) were biased and are no longer read
+# late (armband round trip 2026-10-08), so the true shift is 20 to 37 ms; the middle is off by at most 9 ms. Each
+# setup has its own measured shift in devices.json; this one stands in for a setup not measured yet. The tap delays
+# in session.json (96 to 168 ms) were biased and are no longer read
 CAMERA_DELAY_S = 0.028
 # A camera frame further than this from a window's end doesn't label it
 MAX_FRAME_GAP_S = 0.1
@@ -55,18 +57,30 @@ def good_sessions(data_dir=DATA_DIR):
     return out
 
 
+def label_shift(meta):
+    """The camera delay taken off a session's frame times: its setup's measured shift (devices.json)."""
+    setup = devices.of_session(meta)
+    measured = setup and setup.get("label_shift_s")
+    return measured if measured is not None else CAMERA_DELAY_S
+
+
 def camera_times(cam, meta):
     """Frame times on the EMG clock. Frames arrive in pairs from Media Foundation, so the arrival time jitters by
     up to a frame. The camera itself runs at a steady rate and every grabbed frame has a number, so a straight line
-    of arrival time against frame number gives clean times. Then the fixed camera delay is taken off."""
+    of arrival time against frame number gives clean times. Then the setup's camera delay is taken off."""
     t, frame = cam["t"], cam["frame"]
     if len(t) < 10:
         return t
+    return fitted_frame_times(t, frame) - label_shift(meta)
+
+
+def fitted_frame_times(t, frame):
+    """Arrival times t of grabbed frames numbered frame, as a straight line through the earliest arrivals. The
+    delay test (emg-reading/delay.py) uses the same times, so its number is the one the labels need."""
     a, b = np.polyfit(frame, t, 1)
     fitted = a * frame + b
     # Arrival is never early, only late, so the line is moved down to the earliest arrivals
-    fitted += np.percentile(t - fitted, 5)
-    return fitted - CAMERA_DELAY_S
+    return fitted + np.percentile(t - fitted, 5)
 
 
 def _repetitions(segs):
@@ -138,12 +152,14 @@ def load(folder):
     folder = Path(folder)
     CACHE.mkdir(exist_ok=True)
     path = CACHE / f"{folder.name}.npz"
+    # A setup measured later changes its sessions' angle labels, so the shift is part of the version
+    version = f"{VERSION}-d{label_shift(json.loads((folder / 'session.json').read_text())) * 1000:.1f}"
     if path.exists():
         cached = np.load(path, allow_pickle=False)
-        if str(cached["version"]) == VERSION:
+        if str(cached["version"]) == version:
             return {k: cached[k] for k in cached.files if k != "version"}
     out = build(folder)
-    np.savez(path, version=VERSION, **{k: (v if not isinstance(v, str) else np.array(v)) for k, v in out.items()})
+    np.savez(path, version=version, **{k: (v if not isinstance(v, str) else np.array(v)) for k, v in out.items()})
     return out
 
 

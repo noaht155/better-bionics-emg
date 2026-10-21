@@ -1,7 +1,7 @@
 """Webcam capture and hand tracking (MediaPipe hand landmarker) in a background thread.
 
 Each frame is stamped with time.time() as soon as it is read, the same clock as the EMG. What is left is the
-camera's own delay, fixed in ml/dataset.py (CAMERA_DELAY_S, from an LED test and the armband round trip).
+camera's own delay, measured once per setup (devices.json) and taken off in ml/dataset.py.
 """
 import os
 import threading
@@ -68,6 +68,8 @@ class Camera:
         self._lock = threading.Lock()
         # Newest (time, index, frame) from the grabbing thread
         self._frame = (0.0, -1, None)
+        # (time, index, mean brightness) of every grabbed frame while the delay test runs, else None
+        self._probe = None
         self._new_frame = threading.Condition()
         self._stop = threading.Event()
         self._thread = threading.Thread(target=self._run, daemon=True)
@@ -79,6 +81,26 @@ class Camera:
     def stop(self):
         self._stop.set()
         self._thread.join(timeout=2)
+
+    def switch(self, source):
+        """Opens another camera in place of this one, for the setup picked on the start page."""
+        if source == self.source and self.ok:
+            return
+        self.stop()
+        self.source = source
+        self.ok, self.error, self.stage, self.fps, self.size = False, None, "loading the hand model", 0.0, None
+        with self._lock:
+            self.latest, self._jpeg = None, None
+        self._frame = (0.0, -1, None)
+        self._stop = threading.Event()
+        self._thread = threading.Thread(target=self._run, daemon=True)
+        self._thread.start()
+
+    def probe(self, on):
+        """Start logging every grabbed frame's mean brightness (on), or stop and return the log as an array of
+        (time, index, brightness) rows."""
+        log, self._probe = self._probe, [] if on else None
+        return None if on else np.array(log or [], dtype=float).reshape(-1, 3)
 
     def jpeg(self):
         """Newest frame as JPEG for the preview, or None."""
@@ -171,6 +193,9 @@ class Camera:
                 with self._new_frame:
                     self._new_frame.notify_all()
                 return
+            probe = self._probe
+            if probe is not None:
+                probe.append((t, index, sum(cv2.mean(frame)[:3]) / 3))
             with self._new_frame:
                 self._frame = (t, index, frame)
                 self._new_frame.notify_all()

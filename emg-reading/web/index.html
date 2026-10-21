@@ -11,6 +11,24 @@
 <link rel="stylesheet" href="/web/style.css">
 </head>
 <body>
+<div id="landing">
+  <svg width="0" height="0" aria-hidden="true">
+    <defs>
+      <linearGradient id="device-gradient" x1="0" x2="1">
+        <stop offset="0" style="stop-color: var(--accent-orange)"/>
+        <stop offset="0.5" style="stop-color: var(--accent)"/>
+        <stop offset="1" style="stop-color: var(--accent-magenta)"/>
+      </linearGradient>
+    </defs>
+  </svg>
+  <div class="landing-inner">
+    <h1 class="landing-mark">Better Bionics</h1>
+    <p class="landing-sub">Select device</p>
+    <div id="landing-devices"></div>
+    <p id="landing-note" class="muted"></p>
+    <p id="landing-error" class="error"></p>
+  </div>
+</div>
 <div id="warnings"><div>Starting up, waiting for the recorder</div></div>
 
 <nav id="tabs">
@@ -23,6 +41,7 @@
   <span id="tab-ink"></span>
   </div>
   <span id="live-dot">live</span>
+  <button id="device-chip" hidden title="Change device"></button>
   <span id="battery-chip" hidden></span>
   <span id="rec-badge" hidden>recording</span>
 </nav>
@@ -43,6 +62,10 @@
     <form id="setup">
       <h1>New session</h1>
       <p id="source" class="muted">Connecting to the recorder</p>
+      <div class="device-line">
+        <span id="setup-device" class="muted">No device picked</span>
+        <button type="button" id="setup-device-change">Change</button>
+      </div>
       <h2>Subject and placement</h2>
       <label>Subject id <input name="subject" required pattern="[A-Za-z0-9_\-]{1,32}"></label>
       <div class="row">
@@ -553,7 +576,7 @@
 <main id="tab-dev" class="tab single" hidden>
   <section>
     <h1>Dev</h1>
-    <p class="muted">For trying out page changes without recording. Nothing here is saved. Tests of changes that are
+    <p class="muted">For trying out page changes without recording. Nothing here is saved, except a delay test's result. Tests of changes that are
       approved move to archived, shown with Show archived.</p>
     <div class="dev-test">
       <h2>Short run</h2>
@@ -565,6 +588,26 @@
       </div>
       <button id="dev-run" class="primary">Start short run</button>
       <p id="dev-error" class="error"></p>
+    </div>
+    <div class="dev-test">
+      <h2>Delay test</h2>
+      <p class="muted">Measures the camera and armband delay of the picked device once, without the ESP32, and saves the
+        label shift in <code>devices.json</code> for that device; commit it with a devlog entry. <span
+        id="delay-saved"></span></p>
+      <p class="muted">Armband round trip: switches the band between its test signal and normal recording 80 times and
+        times each switch in the EMG. The band only has to be on and streaming, worn or not, no haptics. About 40 s.</p>
+      <button id="rtt-start">Measure round trip</button>
+      <div class="bar"><div id="rtt-bar"></div></div>
+      <p id="rtt-error" class="error"></p>
+      <pre id="rtt-result"></pre>
+      <p class="muted">Camera: the screen flashes black and white 60 times, each held at least 0.4 s (under 3 flashes a
+        second). Hold a mirror so the camera sees the screen filling most of the picture, in a dim room. The screen's
+        own delay is included, so the camera is at most this late. Esc stops it. About 40 s.</p>
+      <button id="flash-start">Start flashes</button>
+      <p id="flash-error" class="error"></p>
+      <pre id="flash-result"></pre>
+      <div class="controls"><button id="delay-save" class="primary">Save for this device</button></div>
+      <p id="delay-save-error" class="error"></p>
     </div>
     <div class="dev-test archived">
       <h2>End of session screen</h2>
@@ -578,6 +621,8 @@
     </div>
   </section>
 </main>
+
+<div id="flash-screen" hidden></div>
 
 <main id="tab-connection" class="tab single" hidden>
   <section>

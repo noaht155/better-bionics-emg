@@ -1778,11 +1778,46 @@ adapter, so on the band's network it is off the home network and the hub; going 
 (a Back button that remembered the last network was removed, Noah: only if it's set simply per device). First
 run: joined `Mindrove_ARB_66bb04`, address 192.168.4.2, 990 of about 1000 samples in 2 s.
 
+**Delay test without the ESP32** (System > Dev, `delay.py`; the ESP32 now drives the motors). Run once per
+recording setup, not per session; "Save for this device" writes the label shift into `devices.json`.
+- Armband round trip: same method as 2026-10-08, now in the app. The reader process takes TEST/EEG mode commands on
+  stdin and sends them on at once (it waits on the command queue instead of sleeping 10 ms between reads, which
+  would have added up to 10 ms). 80 switches at 0.3 to 0.6 s gaps, always back to EEG at the end.
+- Camera: the page flashes the screen black and white 60 times (each held 0.4 to 0.8 s, under 3 flashes a second),
+  the camera films it in a mirror, first frame past half brightness on the fitted frame times
+  (`ml.dataset.fitted_frame_times`, split out of `camera_times`, same numbers). Includes the screen's own delay, so
+  it is an upper bound on the camera; to light and to dark are reported apart like the LED test.
+- Label shift = camera - round trip / 2, the same rule as the 28 ms. Analysis tested on made-up streams
+  (`tests/test_delay.py`).
+- First run, MacBook + FaceTime camera: round trip 16.2 ms median over 80 of 80 switches (desktop 16.8), but
+  10 to 90 % spread 0.7 to 67 ms (desktop 15.5 to 18). Under 11 ms is impossible (the band pauses that long at a
+  switch), so the stamps on the Mac aren't plain arrival times or the WiFi jitters a lot; not looked into, the
+  median agrees with the desktop. Flashes: 60 of 60 seen at 30 fps, to light 88 ms, to dark 15 ms, the opposite way
+  round from the LED (on earlier). The first version took the median of all 60, which with two clusters lands in
+  the gap (46 ms, saved as a 38.3 ms shift); corrected to the mean of the two directions' medians
+  (`delay.camera_delay`): camera + screen 51.5 ms, label shift 43.4 ms in `devices.json`, 15 ms more than the
+  desktop. Cause of the 73 ms light/dark gap unknown (camera exposure in the dark is a guess).
+
+**Recording setups and the start page** (Noah: the delay belongs to the device, measured once). `devices.json`
+(committed) lists setups, a computer plus a camera, each with its camera index, label shift and when it was
+measured: Desktop + Brio 100 at 28 ms, MacBook + FaceTime camera 43.4 ms (above). The app opens on a start page
+(Better Bionics wordmark, "Select device", one card per setup); only this computer's setups can be picked, matched
+on a name that doesn't change with the network (`scutil --get LocalHostName` on a Mac, its hostname is
+`Noahs-MBP.cogeco.local` at home). Picking one switches the camera live and the recorder stores the setup in
+`session.json`; real sessions refuse to start without one, practice runs don't. `ml/dataset.py` looks each
+session's shift up in `devices.json` by setup id (sessions from before: the desktop's 28 ms; not measured: 28 ms),
+so measuring a setup later fixes its older sessions. The shift is part of the cache version, so every cached
+session rebuilds once. The start page's entrance and exit run about 1 s, the one exception to the 200 ms motion rule
+(Noah). The camera is still chosen by index; on a Mac the page checks the setup's camera is plugged in by name.
+
 ## Open
 
 - Hub: torch CPU build on the Mac for networks. Later, per-person consent before other people record.
 - Mac hum (ch 0 and ch 5): record it and look at the raw data (spectrum per channel, which channels, steady or
   coming and going).
+- Delay test: run it on the desktop too. Its flash result minus the LED test's 37 ms is that screen's own delay,
+  which shows how far the flash method overestimates (the MacBook's 43 ms shift includes its screen). Rerun the
+  MacBook once to check the 88 / 15 ms light and dark split repeats.
 
 - Trigger mode on the arm: tune clench level and timings live, count wrong picks (short clench read as two, a grab
   read as a clench), check opening still registers with the distance check on, haptic confirmation of the picked grip.

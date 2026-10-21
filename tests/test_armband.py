@@ -61,3 +61,12 @@ def test_context_manager_closes_the_reader():
         proc = b._proc
         assert b.connected
     assert proc.poll() is not None
+
+
+def test_mode_switch_keeps_streaming(band):
+    # The synthetic board refuses mode commands; the reader has to carry on streaming
+    band.open()
+    band.set_mode("TEST")
+    band.set_mode("EEG")
+    band.read_all()
+    assert wait_for_samples(band) > 0 and band.connected

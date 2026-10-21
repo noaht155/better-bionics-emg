@@ -25,6 +25,7 @@ from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
+import devices
 import hub
 from armband import Armband, Replay
 from calibrate import load_calibration
@@ -107,6 +108,25 @@ class HandChoice(BaseModel):
 class WifiSettings(BaseModel):
     # How long the adapter stays on DHCP, 0 skips it (connect_armband.ps1)
     dhcp_s: int = Field(5, ge=0, le=60)
+
+
+class DeviceChoice(BaseModel):
+    id: str = Field(max_length=64)
+
+
+class RoundTripSettings(BaseModel):
+    switches: int = Field(80, ge=10, le=200, multiple_of=2)
+
+
+class FlashStart(BaseModel):
+    # The page's clock, ms since 1970, to check it runs on this computer
+    page_ms: float
+
+
+class FlashTimes(BaseModel):
+    # (time.time() seconds, screen turned light) of every flash change, from the page's clock
+    # Empty when the page stopped early
+    switches: list[tuple[float, bool]] = Field(max_length=1000)
 
 
 class CalibrationSettings(BaseModel):
@@ -445,7 +465,30 @@ def make_app(recorder, band, camera, tools, lan=True, serving=False):
                 "gesture_set": GESTURE_SET, "sign_sets": {"F": F_SIGNS}, "library": LIBRARY, "categories": CATEGORIES,
                 "cue_timing": {"grip_close_s": GRIP_CLOSE_S, "c_close_s": C_CLOSE_S},
                 "postures": POSTURES, "camera": camera is not None,
-                "tracked_hand": camera.hand if camera else None, "esp32_wifi_ip": WIFI_IP, "platform": sys.platform}
+                "tracked_hand": camera.hand if camera else None, "esp32_wifi_ip": WIFI_IP, "platform": sys.platform,
+                "fixed_delay_s": dataset.CAMERA_DELAY_S}
+
+    @app.get("/api/devices")
+    def device_list():
+        """The setups in devices.json for the start page, each marked whether it belongs to this computer."""
+        return {"computer": devices.computer_name(), "cameras": devices.cameras(),
+                "current": recorder.setup["id"] if recorder.setup else None, "recording": recorder.session is not None,
+                "setups": [dict(s, here=devices.here(s)) for s in devices.setups()]}
+
+    @app.post("/api/devices/select")
+    def select_device(choice: DeviceChoice):
+        setup = devices.find(choice.id)
+        if setup is None:
+            refuse(f"no setup {choice.id}")
+        if not devices.here(setup):
+            refuse(f"{setup['name']} is the setup of {setup['computer']}, this is {devices.computer_name()}")
+        if recorder.session is not None:
+            refuse("a session is recording")
+        # A video file (--camera clip.mp4) is for testing and stays
+        if camera is not None and isinstance(camera.source, int):
+            camera.switch(setup["camera"])
+        recorder.setup = setup
+        return setup
 
     @app.post("/api/plan")
     def plan_length(settings: PlanSettings):
@@ -489,6 +532,37 @@ def make_app(recorder, band, camera, tools, lan=True, serving=False):
         except ValueError as e:
             refuse(e)
         return {"ok": True}
+
+    @app.post("/api/delay/round-trip")
+    def delay_round_trip(settings: RoundTripSettings):
+        try:
+            tools.round_trip.start(settings.switches)
+        except ValueError as e:
+            refuse(e)
+        return {"ok": True}
+
+    @app.post("/api/delay/flash/start")
+    def delay_flash_start(settings: FlashStart):
+        try:
+            tools.flash.start(settings.page_ms)
+        except ValueError as e:
+            refuse(e)
+        return {"ok": True}
+
+    @app.post("/api/delay/flash/finish")
+    def delay_flash_finish(times: FlashTimes):
+        try:
+            tools.flash.finish(times.switches)
+        except ValueError as e:
+            refuse(e)
+        return {"ok": True}
+
+    @app.post("/api/delay/save")
+    def delay_save():
+        try:
+            return tools.save_delay()
+        except ValueError as e:
+            refuse(e)
 
     @app.post("/api/calibrate")
     def calibrate(settings: CalibrationSettings):

@@ -11,7 +11,7 @@ From the repo root, with the emg-reading venv:
 emg-reading/.venv/Scripts/python -m pytest tests
 ```
 
-139 tests, about 16 s. Run them before committing changes to `ml/`, the filter or the quality checks. Tests that need
+149 tests, about 16 s. Run them before committing changes to `ml/`, the filter or the quality checks. Tests that need
 recorded sessions (`emg-reading/data/`) or torch skip themselves where those are missing, so on the Mac or a fresh
 clone only the synthetic tests run.
 
@@ -133,6 +133,7 @@ These decide when the recorder marks a cue bad and redoes it.
 | `test_close_and_reopen` | Closing stops the data and marks the band not connected; opening again streams again |
 | `test_reader_dying_leaves_the_app_running` | A reader killed from outside (a library crash) leaves the app running, reads as not connected with no data, and a new reader can be opened |
 | `test_context_manager_closes_the_reader` | Leaving `with Armband()` ends the reader process |
+| `test_mode_switch_keeps_streaming` | Mode commands for the delay test reach the reader; a board that refuses them (the synthetic one) keeps streaming |
 
 ### Control layer (`tests/test_control.py`)
 
@@ -236,6 +237,30 @@ transfer tests run the hub app on a free local port and send over real HTTP.
 | Test | Checks |
 |---|---|
 | `test_mac_scan_line` | Lines of `airport -s` give the network name and signal, with spaces in the name and with or without a BSSID |
+
+### Delay test (`tests/test_delay.py`)
+
+The delay test's analysis (System > Dev, `emg-reading/delay.py`) on made-up streams with known delays, so a wrong number from
+the tab is the setup's fault, not the analysis'.
+
+| Test | Checks |
+|---|---|
+| `test_round_trip_found_for_each_switch` | Mode switches that show up 17 ms after they were sent are found once each and timed to one sample |
+| `test_round_trip_ignores_emg_and_lost_switches` | Noise of a few hundred uV on a large offset is never taken for a switch |
+| `test_screen_delay_from_frames` | Flashes filmed 60 ms late, with frames that sometimes arrive a frame later, measure 60 ms to one frame |
+| `test_screen_delay_refuses_unseen_flashes` | A camera that doesn't see the flashes gives an error, not a number |
+| `test_camera_delay_between_two_directions` | Changes to light and to dark far apart (88 and 15 ms on the MacBook) give their mean, not a number in the gap a median over all of them lands in |
+
+### Recording setups (`tests/test_devices.py`)
+
+Each session's angle labels are shifted by the camera delay of the setup it was recorded on (`emg-reading/devices.json`).
+
+| Test | Checks |
+|---|---|
+| `test_committed_setups_are_complete` | The committed setups have unique ids, every field the start page and training read, and the default exists |
+| `test_shift_follows_the_setup` | A session from before setups gets the default setup's shift, a setup not measured yet the 28 ms stand-in |
+| `test_measuring_later_fixes_older_sessions` | Saving a measured shift for a setup changes the shift of sessions already recorded on it |
+| `test_setup_belongs_to_its_computer` | A setup is offered on its own computer only, the name compared without case |
 
 ## Found by the tests
 

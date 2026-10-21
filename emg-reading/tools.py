@@ -17,8 +17,12 @@ import time
 from collections import deque
 from pathlib import Path
 
+import numpy as np
+
 import calibrate
 import check_connection
+import delay
+import devices
 import hub
 import mac_wifi
 from control import DEFAULT_RULES, DEFAULTS, STILL_S, Controller, check_rules, movement, split_rules, still_limit
@@ -44,6 +48,11 @@ CHECK_S = 5.0
 COUNTDOWN_S = 3
 WIFI_SCRIPT = Path(__file__).with_name("connect_armband.ps1")
 WIFI_CHECK_S = 2.0
+# Random gaps between mode switches, so a switch never lines up with the band's packet rhythm
+DELAY_GAP_S = (0.3, 0.6)
+# The page's clock and this computer's agree to a few ms when the page runs here
+DELAY_CLOCK_S = 0.05
+DELAY_FLASH_TIMEOUT_S = 120
 
 
 class Tool:
@@ -186,6 +195,117 @@ class ArmbandWifi(Tool):
         finally:
             Path(log).unlink(missing_ok=True)
             self._reconnect_if_lost()
+
+
+class RoundTrip(Tool):
+    """Delay test (System > Dev), armband half: switches the band between TEST and EEG mode at random gaps and times
+    each switch's return in the EMG stamps (delay.round_trips). Ends in EEG mode whatever happens. Results go to the
+    shared measured dict until they are saved to the setup (Tools.save_delay)."""
+
+    def __init__(self, recorder, haptics, measured):
+        super().__init__()
+        self.recorder = recorder
+        self.haptics = haptics
+        self.measured = measured
+
+    def start(self, switches):
+        if self.recorder.band.source != "armband":
+            raise ValueError(f"the app reads from {self.recorder.band.source}, not the armband")
+        if not self.recorder.band.connected:
+            raise ValueError("armband not connected")
+        if self.recorder.session is not None:
+            raise ValueError("a session is recording")
+        if self.haptics.state["running"]:
+            raise ValueError("stop the haptics first, the test signal would drive the outputs")
+        self._launch(self._run, switches)
+
+    def _run(self, count):
+        band = self.recorder.band
+        gaps = np.random.uniform(DELAY_GAP_S[0], DELAY_GAP_S[1], count)
+        total = gaps.sum() + 1.0
+        self.state.update(until=time.time() + total, total=total)
+        captured = {}
+        capture = threading.Thread(target=lambda: captured.update(data=self.recorder.capture(total)), daemon=True)
+        capture.start()
+        sent = []
+        try:
+            time.sleep(0.5)
+            for i, gap in enumerate(gaps):
+                sent.append(band.set_mode("TEST" if i % 2 == 0 else "EEG"))
+                time.sleep(gap)
+        finally:
+            band.set_mode("EEG")
+        capture.join()
+        trips = delay.round_trips(captured["data"], band.rows, sent)
+        if len(trips) < count // 2:
+            raise RuntimeError(f"only {len(trips)} of {count} switches came back, is the armband streaming?")
+        lo, hi = np.percentile(trips, [10, 90]) * 1000
+        line = (f"Round trip {np.median(trips) * 1000:.1f} ms median over {len(trips)} of {count} switches "
+                f"(10 to 90 %: {lo:.1f} to {hi:.1f} ms)")
+        self.measured["round_trip"] = (float(np.median(trips)), line)
+        self.state["lines"] = [line] + _delay_summary(self.measured)
+
+
+class ScreenFlash(Tool):
+    """Delay test (System > Dev), camera half: logs the brightness of every camera frame while the page flashes the
+    screen, then times each flash in the frames (delay.screen_delays). The page sends its flash times when done."""
+
+    def __init__(self, recorder, measured):
+        super().__init__()
+        self.recorder = recorder
+        self.measured = measured
+        self._done = threading.Event()
+        self._switches = None
+
+    def start(self, page_ms):
+        camera = self.recorder.camera
+        if camera is None or not camera.ok:
+            raise ValueError("no camera")
+        if self.recorder.session is not None:
+            raise ValueError("a session is recording")
+        # The flash times come from the page's clock, they only mean something on the computer with the camera
+        if abs(page_ms / 1000 - time.time()) > DELAY_CLOCK_S:
+            raise ValueError("open this page on the computer the camera is plugged into")
+        self._done.clear()
+        self._switches = None
+        self._launch(self._run, camera)
+
+    def finish(self, switches):
+        if not self.state["running"]:
+            raise ValueError("the flash test isn't running")
+        self._switches = switches
+        self._done.set()
+
+    def _run(self, camera):
+        camera.probe(True)
+        try:
+            finished = self._done.wait(DELAY_FLASH_TIMEOUT_S)
+        finally:
+            log = camera.probe(False)
+        if not finished or not self._switches:
+            raise RuntimeError("the page stopped before the flashes were done")
+        on, off = delay.screen_delays(log, self._switches)
+        both = np.concatenate([on, off])
+        if len(both) < len(self._switches) // 2:
+            raise RuntimeError(f"only {len(both)} of {len(self._switches)} flashes seen, hold the mirror so the "
+                               "camera sees the screen")
+        camera_s = delay.camera_delay(on, off)
+        line = (f"Camera + screen {camera_s * 1000:.1f} ms over {len(both)} of {len(self._switches)} flashes (to light "
+                f"{_ms(on)}, to dark {_ms(off)}, the mean of the two), {camera.fps:.0f} fps")
+        self.measured["camera"] = (camera_s, line)
+        self.state["lines"] = [line] + _delay_summary(self.measured)
+
+
+def _ms(delays):
+    return f"{np.median(delays) * 1000:.0f} ms" if len(delays) else "none seen"
+
+
+def _delay_summary(measured):
+    if "camera" not in measured or "round_trip" not in measured:
+        return ["Run the other half too for the label shift"]
+    cam, trip = measured["camera"][0], measured["round_trip"][0]
+    return [f"Label shift {(cam - trip) * 1000:.0f} to {cam * 1000:.0f} ms, middle "
+            f"{delay.label_shift(cam, trip) * 1000:.0f} ms"]
 
 
 def _read_lines(path):
@@ -725,12 +845,29 @@ class Tools:
         self.trainer = Trainer(self.predictor)
         self.network = NetworkJob()
         self.sync = Sync()
+        self.recorder = recorder
+        # The delay test's two halves, (seconds, result line) each, until saved to the setup
+        self.measured = {}
+        self.round_trip = RoundTrip(recorder, self.haptics, self.measured)
+        self.flash = ScreenFlash(recorder, self.measured)
+
+    def save_delay(self):
+        """Writes the measured label shift into the current setup's entry in devices.json."""
+        setup = self.recorder.setup
+        if setup is None:
+            raise ValueError("pick the device first")
+        if "camera" not in self.measured or "round_trip" not in self.measured:
+            raise ValueError("measure both the round trip and the camera first")
+        cam, trip = self.measured["camera"][0], self.measured["round_trip"][0]
+        note = f"screen flash {cam * 1000:.1f} ms (camera + screen), armband round trip {trip * 1000:.1f} ms"
+        self.recorder.setup = devices.save_shift(setup["id"], delay.label_shift(cam, trip), note)
+        return self.recorder.setup
 
     def snapshot(self):
         now = time.time()
         out = {}
         for name in ("check", "wifi", "calibration", "haptics", "test", "predictor", "trainer", "network", "control",
-                     "cursor", "sync"):
+                     "cursor", "sync", "round_trip", "flash"):
             state = dict(getattr(self, name).state)
             if state.get("until"):
                 state["left"] = max(0.0, state["until"] - now)

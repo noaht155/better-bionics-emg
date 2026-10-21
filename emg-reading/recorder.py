@@ -47,6 +47,8 @@ class Recorder:
     def __init__(self, band, camera=None):
         self.band = band
         self.camera = camera
+        # The recording setup picked on the start page (devices.json), stored with every session for its camera delay
+        self.setup = None
         # Called with the folder of every completed session once it is fully written (camera delay included)
         self.on_saved = None
         self.quality = SignalQuality(band.channels, band.rate)
@@ -175,13 +177,17 @@ class Recorder:
                 # Breaks wait for Continue, a dev run skips them so it can run to the end by itself
                 plan = [dict(c, seconds=min(c["seconds"], DEV_CUE_S)) for c in plan
                         if c["seconds"] is not None][:settings["dev_cues"]]
+            practice = settings.get("practice") or settings.get("dev_cues")
+            if self.setup is None and not practice:
+                raise ValueError("pick the device on the start page first")
             if self.camera is not None:
                 self.camera.hand = settings["tracked_hand"]
+            setup = self.setup and {k: self.setup[k] for k in ("id", "name", "camera_name", "label_shift_s")}
             meta = {"settings": settings, "plan": plan, "rate": self.band.rate, "source": self.band.source,
                     "rows": self.band.rows, "channels": self.band.channels, "filter_version": FILTER_VERSION,
                     "calibration": json.loads(CAL_FILE.read_text()) if CAL_FILE.exists() else None,
-                    "camera": self._camera_meta()}
-            writer = PracticeWriter if settings.get("practice") or settings.get("dev_cues") else SessionWriter
+                    "camera": self._camera_meta(), "setup": setup}
+            writer = PracticeWriter if practice else SessionWriter
             self.session = writer(meta, settings["subject"])
             self.plan = plan
             self.paused = False
