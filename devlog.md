@@ -1751,6 +1751,9 @@ desktop is the hub (`app.py --hub`, `emg-reading/hub.py`), the other computers a
   With IPv4 first and one kept connection: 6 s, byte for byte identical. Model download with its 169 MB levels
   session and training an LDA on the hub from the device's Train tab worked the same way.
 - Not tried yet across two real computers: the Mac over Tailscale, and the Windows firewall prompt for the hub.
+- The Mac is a 2017 Intel one. mediapipe has no Intel Mac build after 0.10.21 (Python 3.12 at most, needs
+  numpy 1), so `requirements.txt` pins mediapipe 0.10.21, numpy 1.26.4, opencv 4.11 and scipy 1.17.1 there by
+  platform marker; everything else stays the same. The code parses as 3.12. Not run on the Mac yet.
 
 ## Open
 

@@ -2,6 +2,14 @@
 
 ## Python
 
+Python 3.14 (Apple Silicon Mac: 3.14 or newer). On a Mac `python3` is Apple's 3.9, too old: install another from python.org or Homebrew and make the venv with it, for example `python3.14 -m venv .venv`. Intel Macs need Python 3.12, because mediapipe's last Intel Mac build (0.10.21) stops there; `requirements.txt` picks the older mediapipe, numpy, opencv and scipy for them by itself. Homebrew no longer installs on Intel Macs, uv gives the venv its own 3.12 without touching `python3`:
+
+```sh
+curl -LsSf https://astral.sh/uv/install.sh | sh
+uv venv --python 3.12 .venv
+uv pip install --python .venv/bin/python -r requirements.txt
+```
+
 ```powershell
 python -m venv .venv
 .venv\Scripts\python -m pip install -r requirements.txt

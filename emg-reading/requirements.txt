@@ -1,13 +1,18 @@
 fastapi==0.142.2
-mediapipe==1.0.1
+mediapipe==1.0.1; sys_platform != "darwin" or platform_machine != "x86_64"
 mindrove==5.3.0
-numpy==2.5.3
-opencv-contrib-python==5.0.0.93
+numpy==2.5.3; sys_platform != "darwin" or platform_machine != "x86_64"
+opencv-contrib-python==5.0.0.93; sys_platform != "darwin" or platform_machine != "x86_64"
 PyQt6==6.11.0
 pyqtgraph==0.14.0
 pyserial==3.5
 pytest==9.1.1
 scikit-learn==1.9.1
-scipy==1.18.1
+scipy==1.18.1; sys_platform != "darwin" or platform_machine != "x86_64"
 uvicorn==0.54.0
 websockets==17.1
+# Intel Macs, Python 3.12: mediapipe's last build for them is 0.10.21, which needs numpy 1
+mediapipe==0.10.21; sys_platform == "darwin" and platform_machine == "x86_64"
+numpy==1.26.4; sys_platform == "darwin" and platform_machine == "x86_64"
+opencv-contrib-python==4.11.0.86; sys_platform == "darwin" and platform_machine == "x86_64"
+scipy==1.17.1; sys_platform == "darwin" and platform_machine == "x86_64"
