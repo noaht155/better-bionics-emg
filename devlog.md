@@ -1818,11 +1818,24 @@ of one core with tracking, 4 % without (the i5-7360U has 2 cores, 4 threads). Wh
 recording on the Mac (dropped samples) is not checked yet. With tracking off, "Hand tracking is off" warns during
 cues the camera labels, except in sign sessions (E, F), which train on the cue labels only.
 
+**First MacBook session** (`2026-10-21_141651_noah`, protocol F, tracking off, 8.3 min, completed):
+- Lost samples: 99 of 249,036 (0.04 %), 71 gaps of 1 to 3 samples spread through the session, about the desktop's
+  rate (2 in 2500). Lost samples aren't NaN, they are just missing; the filter runs across the gap. Arrival stamps
+  jitter up to 0.38 s behind the package-number fit (WiFi bursts), the fit takes that out.
+- Hum fine this time: median 7 to 15 uV per channel, 95th percentile 22 to 30.
+- Sign LDA on this session alone, leave one posture out: forward 89.1 %, table 73.1 % balanced.
+- Network windows build without camera frames (angle labels all NaN, as expected).
+- Sent to the hub over Tailscale (relayed, no direct connection) in about 40 s, hashes matched.
+- Sign network `ringnet_2026-10-16_112322_signs_2026-10-20_122442.pt` calibrated on its rounds 1 and 2 on the hub:
+  97.9 % balanced on the other rounds, rest taken for a sign 0 %, wrong sign at 0.8 1.0 %, wrist bends read as a
+  sign 1.2 %. The seven F sessions of 2026-10-20 had a calibrated mean of 91.5 % with open in the set.
+- Not tested: live prediction with the network on the Mac (no torch there yet).
+
 ## Open
 
 - Hub: torch CPU build on the Mac for networks. Later, per-person consent before other people record.
-- Tracking switch: record a protocol F session on the MacBook with tracking off, compare dropped samples with
-  tracking on, then merge `tracking-toggle`.
+- Tracking switch: an F session with tracking off lost 0.04 % of samples; compare with tracking on, then merge
+  `tracking-toggle`.
 - Mac hum (ch 0 and ch 5): record it and look at the raw data (spectrum per channel, which channels, steady or
   coming and going).
 - Delay test: run it on the desktop too. Its flash result minus the LED test's 37 ms is that screen's own delay,
