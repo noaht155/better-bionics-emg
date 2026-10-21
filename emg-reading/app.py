@@ -105,6 +105,10 @@ class HandChoice(BaseModel):
     hand: Literal["right", "left"]
 
 
+class TrackingChoice(BaseModel):
+    on: bool
+
+
 class WifiSettings(BaseModel):
     # How long the adapter stays on DHCP, 0 skips it (connect_armband.ps1)
     dhcp_s: int = Field(5, ge=0, le=60)
@@ -1017,6 +1021,15 @@ def make_app(recorder, band, camera, tools, lan=True, serving=False):
         if camera is not None and recorder.session is None:
             camera.hand = choice.hand
         return {"hand": camera.hand if camera else None}
+
+    @app.post("/api/tracking")
+    def tracking(choice: TrackingChoice):
+        if camera is None:
+            refuse("started with --no-camera")
+        if recorder.session is not None and choice.on != camera.on:
+            refuse("not during a session")
+        camera.set_on(choice.on)
+        return {"on": camera.on}
 
     @app.websocket("/ws")
     async def live(ws: WebSocket):

@@ -1810,9 +1810,19 @@ so measuring a setup later fixes its older sessions. The shift is part of the ca
 session rebuilds once. The start page's entrance and exit run about 1 s, the one exception to the 200 ms motion rule
 (Noah). The camera is still chosen by index; on a Mac the page checks the setup's camera is plugged in by name.
 
+**Hand tracking switch** (Record tab, "Hand tracking" on/off, remembered per browser). Off stops the camera thread
+and the hand model; turning it on starts them again, refused during a session because frame numbers restart at 0.
+Sessions recorded with it off have no camera frames and `"camera": null`, like `--no-camera`; the angle labels are
+NaN there and nothing else uses the camera. Measured on the MacBook with the synthetic board: the app at 77 to 90 %
+of one core with tracking, 4 % without (the i5-7360U has 2 cores, 4 threads). Whether tracking hurts the EMG
+recording on the Mac (dropped samples) is not checked yet. With tracking off, "Hand tracking is off" warns during
+cues the camera labels, except in sign sessions (E, F), which train on the cue labels only.
+
 ## Open
 
 - Hub: torch CPU build on the Mac for networks. Later, per-person consent before other people record.
+- Tracking switch: record a protocol F session on the MacBook with tracking off, compare dropped samples with
+  tracking on, then merge `tracking-toggle`.
 - Mac hum (ch 0 and ch 5): record it and look at the raw data (spectrum per channel, which channels, steady or
   coming and going).
 - Delay test: run it on the desktop too. Its flash result minus the LED test's 37 ms is that screen's own delay,

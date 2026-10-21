@@ -55,6 +55,8 @@ class Camera:
     def __init__(self, source=0, hand="right"):
         self.source = source
         self.hand = hand
+        # Off stops the camera and the hand model until switched back on
+        self.on = True
         self.on_frame = None
         self.ok = False
         self.error = None
@@ -86,8 +88,26 @@ class Camera:
         """Opens another camera in place of this one, for the setup picked on the start page."""
         if source == self.source and self.ok:
             return
-        self.stop()
         self.source = source
+        if self.on:
+            self._restart()
+
+    def set_on(self, on):
+        """The app took a whole CPU core on the 2017 MacBook (2026-10-21), sessions that don't need joint angles can
+        turn tracking off. Frame numbers start again from 0 on every start, so not during a session."""
+        if on == self.on:
+            return
+        self.on = on
+        if on:
+            self._restart()
+        else:
+            self.stop()
+            self.ok, self.error, self.stage, self.fps = False, None, None, 0.0
+            with self._lock:
+                self.latest, self._jpeg = None, None
+
+    def _restart(self):
+        self.stop()
         self.ok, self.error, self.stage, self.fps, self.size = False, None, "loading the hand model", 0.0, None
         with self._lock:
             self.latest, self._jpeg = None, None
