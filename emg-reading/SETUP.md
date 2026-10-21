@@ -86,6 +86,7 @@ Open http://localhost:8000, fill in the form and start. The first run downloads 
 - Each session is saved to `data/<date>_<time>_<subject>/` as it records. `session.load_session()` reads it back.
 - Tick **Practice run** to go through the same cues, camera tracking and warnings without saving anything, for checking the camera position or the setup. The tick is not remembered between page loads, so a real session is never skipped by accident.
 - The camera delay is fixed at 28 ms in `ml/dataset.py` (`CAMERA_DELAY_S`), from an LED test of the camera (37 ms) and the armband round trip (17 ms). Sessions no longer have sync taps. Older sessions still have `camera_delay_s` from their taps in `session.json`; it is not used (the taps read 96 to 168 ms). `python sync.py data/<session>` still shows an old session's taps.
+- On a Mac the first start has no camera: macOS only asks for camera permission from the main thread and the app opens the camera in its own. Run `.venv/bin/python -c "import cv2, time; c = cv2.VideoCapture(0); time.sleep(5)"` once, allow the camera for the terminal app, then start the app.
 - `--camera 1` picks another webcam, `--no-camera` records EMG only, `--host 0.0.0.0` allows a tablet on the same network.
 - `--replay data/2026-09-30-filter` plays recorded EMG instead of the armband, `--camera clip.mp4` uses a video file, for testing the app.
 

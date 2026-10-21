@@ -1755,10 +1755,27 @@ desktop is the hub (`app.py --hub`, `emg-reading/hub.py`), the other computers a
   numpy 1), so `requirements.txt` pins mediapipe 0.10.21, numpy 1.26.4, opencv 4.11 and scipy 1.17.1 there by
   platform marker; everything else stays the same. The code parses as 3.12. Not run on the Mac yet.
 
+## 2026-10-21: app on the Intel Mac
+
+- venv with Python 3.12 through uv (the system python3 is 3.15 and stays). The pinned Intel Mac versions install
+  cleanly, scikit-learn 1.9.1 runs on numpy 1.26.4. Tests: 104 passed, 12 skipped (no sessions or torch there).
+- The first start had no camera: macOS only shows the camera permission prompt from the main thread, and
+  `camera.py` opens the camera in its own thread, so OpenCV reports "not authorized" and gives up. Opening the
+  camera once from a main-thread one-liner brought up the prompt; after that the app's camera works. Only needed
+  once per terminal app (in `emg-reading/SETUP.md`).
+- Practice run on the Record tab with mediapipe 0.10.21: hand tracked, 30 fps.
+- Hub: the Mac reaches `noah-desktop:8000` over Tailscale and the token is accepted. Upload checked with a fake
+  session of zeros (`2026-10-21_130000_SYNCTEST-not-a-recording`, `completed` false so nothing trains on or
+  evaluates it): arrived, hashes matched, same sizes on both sides; deleted on both computers after.
+- Hum with the band on, first time on the Mac: the last hum the app kept before the band dropped off was 32 to
+  98 uV on seven channels (good pads stay under 46) and 453 uV on ch 5 (a pad losing contact level). Not
+  diagnosed; needs a recording to look at. Ch 0 hum came up later too.
+
 ## Open
 
-- Hub: first real run from the Mac (Tailscale, firewall prompt on the desktop, torch CPU build on the Mac for
-  networks, mediapipe and camera on macOS). Later, per-person consent before other people record.
+- Hub: torch CPU build on the Mac for networks. Later, per-person consent before other people record.
+- Mac hum (ch 0 and ch 5): record it and look at the raw data (spectrum per channel, which channels, steady or
+  coming and going).
 
 - Trigger mode on the arm: tune clench level and timings live, count wrong picks (short clench read as two, a grab
   read as a clench), check opening still registers with the distance check on, haptic confirmation of the picked grip.
