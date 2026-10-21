@@ -3,6 +3,8 @@
 
 const $ = (id) => document.getElementById(id);
 const SETTINGS_KEY = "recorder-settings";
+// Per computer, not per session: the slow MacBook records sign sessions with tracking off
+const TRACKING_KEY = "recorder-tracking";
 const SERIOUS = new Set(["no_data", "contact", "hum", "camera", "loop_error"]);
 // Canvas colours come from the tokens in style.css, so canvases and the page stay one scheme
 const cssVar = (name) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
@@ -127,8 +129,22 @@ function loadSettings() {
       post("/api/hand", { hand }).then((r) => { if (r.hand) form.tracked_hand.value = r.hand; }).catch(() => {});
     }
   }
+  let tracking = "on";
+  try { tracking = localStorage.getItem(TRACKING_KEY) || "on"; } catch { /* private window */ }
+  form.tracking.value = tracking;
+  form.tracking.disabled = !config.camera;
+  if (config.camera && tracking === "off") setTracking(false);
   showProtocolFields();
   updateDuration();
+}
+
+// Refused during a session: the select goes back to what the server has
+function setTracking(on) {
+  postShowing("/api/tracking", { on }, "setup-error").then((r) => {
+    const value = (r ? r.on : !on) ? "on" : "off";
+    $("setup").tracking.value = value;
+    try { localStorage.setItem(TRACKING_KEY, value); } catch { /* private window */ }
+  });
 }
 
 function readSettings() {
@@ -307,6 +323,7 @@ $("setup").addEventListener("input", (e) => {
       localStorage.setItem(SETTINGS_KEY, JSON.stringify({ ...saved, tracked_hand: e.target.value }));
     } catch { /* private window */ }
   }
+  if (e.target.name === "tracking") setTracking(e.target.value === "on");
   $("start-button").textContent = $("practice").checked ? "Start practice run" : "Start recording";
 });
 
@@ -875,7 +892,7 @@ function drawCamera() {
   // Firefox reports a size of 0 between the frames of the video stream. Clear first and keep the last size,
   // otherwise the old skeleton stays drawn after the hand is lost
   ctx.clearRect(0, 0, canvas.width, canvas.height);
-  if (config.camera) $("view-note").textContent = cameraWarning() ?? "";
+  if (config.camera) $("view-note").textContent = state.tracking === false ? "Hand tracking is off" : cameraWarning() ?? "";
   if (img.naturalWidth && canvas.width !== img.naturalWidth) {
     canvas.width = img.naturalWidth;
     canvas.height = img.naturalHeight;

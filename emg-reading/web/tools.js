@@ -935,7 +935,7 @@ function drawConnection(t) {
   progress("conn-bar", t);
   if (t.error) $("conn-error").textContent = t.error;
   $("conn-result").textContent = (t.lines || []).join("\n");
-  const cam = config.camera ? `camera at ${state.camera_fps ?? 0} fps` : "no camera";
+  const cam = !config.camera ? "no camera" : state.tracking === false ? "hand tracking off" : `camera at ${state.camera_fps ?? 0} fps`;
   $("conn-source").textContent = `EMG from ${config.source}, ${config.channels.length} channels at ${config.rate} Hz, ${cam}`;
 }
 

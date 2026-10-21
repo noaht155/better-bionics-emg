@@ -1810,9 +1810,62 @@ so measuring a setup later fixes its older sessions. The shift is part of the ca
 session rebuilds once. The start page's entrance and exit run about 1 s, the one exception to the 200 ms motion rule
 (Noah). The camera is still chosen by index; on a Mac the page checks the setup's camera is plugged in by name.
 
+**Hand tracking switch** (Record tab, "Hand tracking" on/off, remembered per browser). Off stops the camera thread
+and the hand model; turning it on starts them again, refused during a session because frame numbers restart at 0.
+Sessions recorded with it off have no camera frames and `"camera": null`, like `--no-camera`; the angle labels are
+NaN there and nothing else uses the camera. Measured on the MacBook with the synthetic board: the app at 77 to 90 %
+of one core with tracking, 4 % without (the i5-7360U has 2 cores, 4 threads). Whether tracking hurts the EMG
+recording on the Mac (dropped samples) is not checked yet. With tracking off, "Hand tracking is off" warns during
+cues the camera labels, except in sign sessions (E, F), which train on the cue labels only.
+
+**Hub starts minimal** (Noah: the hub only trains). `--hub` now starts without the camera and without connecting the
+armband, the Connection tab can still connect it; their warnings are hidden until the band is connected. Recording on the desktop is done without `--hub`. Test copy on
+the MacBook: 0.5 % of a core.
+
+**First MacBook session** (`2026-10-21_141651_noah`, protocol F, tracking off, 8.3 min, completed):
+- Lost samples: 99 of 249,036 (0.04 %), 71 gaps of 1 to 3 samples spread through the session. Lost samples aren't NaN, they are just missing; the filter runs across the gap. Arrival stamps
+  jitter up to 0.38 s behind the package-number fit (WiFi bursts), the fit takes that out.
+- Hum fine this time: median 7 to 15 uV per channel, 95th percentile 22 to 30.
+- Sign LDA on this session alone, leave one posture out: forward 89.1 %, table 73.1 % balanced.
+- Network windows build without camera frames (angle labels all NaN, as expected).
+- Sent to the hub over Tailscale (relayed, no direct connection) in about 40 s, hashes matched.
+- Sign network `ringnet_2026-10-16_112322_signs_2026-10-20_122442.pt` calibrated on its rounds 1 and 2 on the hub:
+  97.9 % balanced on the other rounds, rest taken for a sign 0 %, wrong sign at 0.8 1.0 %, wrist bends read as a
+  sign 1.2 %. The seven F sessions of 2026-10-20 had a calibrated mean of 91.5 % with open in the set.
+- Not tested: live prediction with the network on the Mac (no torch there yet).
+
+**Sign network learning curve** (`diagnostics/signs/learning_curve.py` on the desktop, rows in
+`diagnostics/out/signs/learning_curve.csv`). Each of the last 4 sign sessions held out, trained on the k sign
+sessions recorded just before it (20 epochs, 2 seeds), calibrated on its rounds 1 and 2, scored on the rest,
+balanced over the signs and rest. Means of the 2 seeds:
+
+| Held out | k = 1 | 2 | 4 | all earlier | no calibration, k = 1 / all |
+|---|---|---|---|---|---|
+| 2026-10-19_161702 | 93.2 % | 94.3 % | 94.3 % | 94.2 % (5) | 87.2 / 84.6 % |
+| 2026-10-20_093404 | 95.5 % | 96.2 % | 96.3 % | 96.5 % (6) | 85.2 / 88.3 % |
+| 2026-10-20_105110 | 96.5 % | 95.5 % | 95.8 % | 94.7 % (7) | 84.5 / 75.9 % |
+| 2026-10-21_141651 (MacBook) | 96.2 % | 97.2 % | 97.3 % | 97.8 % (8) | 62.2 / 91.8 % |
+
+- Calibrated, more sessions barely matter: at most 1.8 points between any two k for a session, about the seed spread
+  (up to 1.8). Even trained on one session the MacBook session reaches 96.2 %. The rise from session to session
+  (94 to 98 %) comes with the held-out session, not with the amount of training data: the later sessions are
+  easier to classify (signs held more consistently, or the placement), not the model learning more.
+- Without calibration there is no steady trend: the MacBook session went from 62 to 92 % with more sessions, the
+  2026-10-20_105110 session fell from 85 to 76 %. More sessions help a new placement only sometimes.
+- False alarms (rerun with them added, same splits), means over the 4 held-out sessions for k = 1 / 2 / 4 / all:
+  wrist bend read as a sign 1.2 / 0.9 / 0.8 / 0.4 % calibrated, 2.3 / 1.9 / 0.7 / 0.7 % without; rest read as a sign
+  (plain argmax, the app's threshold would turn some into unsure) 0.9 / 0.9 / 0.9 / 1.0 % calibrated, almost all of it
+  2026-10-19_161702 at about 3 %, the others under 0.6 %; a sign read as another sign at probability 0.8 or more
+  1.7 / 1.7 / 1.6 / 1.4 % calibrated, 3.0 / 3.4 / 3.6 / 3.9 % without (2026-10-20_105110 up to 6 to 7 %).
+- So more sessions clearly cut the wrist bend false alarm (to a third calibrated, Noah's point that false alarms
+  matter as much as accuracy); rest and confident wrong signs don't move beyond the session to session spread. A
+  short calibration still does almost all the work for accuracy.
+
 ## Open
 
 - Hub: torch CPU build on the Mac for networks. Later, per-person consent before other people record.
+- Tracking switch: an F session with tracking off lost 0.04 % of samples; compare with tracking on, then merge
+  `tracking-toggle`.
 - Mac hum (ch 0 and ch 5): record it and look at the raw data (spectrum per channel, which channels, steady or
   coming and going).
 - Delay test: run it on the desktop too. Its flash result minus the LED test's 37 ms is that screen's own delay,
@@ -1830,7 +1883,8 @@ session rebuilds once. The start page's entrance and exit run about 1 s, the one
 - Arm animation for cues: the forearm and wrist are drawn for the wrist cues since 2026-10-19. Still missing: the
   upper arm (D's arm raise, reach, lean), the forearm lying along the table in the table posture, and the wrist
   movements left out of protocol C.
-- Sign network (in `ml/` with calibration since 2026-10-19): try it live against the sign LDA, and trigger mode with
+- Sign network (in `ml/` with calibration since 2026-10-19; calibrated score flat from 1 training session on, see the
+  2026-10-21 learning curve): try it live against the sign LDA, and trigger mode with
   it on the Control tab (sign map, clench level against the sign session's levels); decide whether open stays in the
   set (seven F sessions 2026-10-20: calibrated mean 95.3 % without it, 91.5 % with, worst 91.9 / 85.6 %). Epochs: 20 since the 2026-10-19 sweep, recheck with
   more sessions. Later: one label path for grips and signs (both are held positions), without changing grip

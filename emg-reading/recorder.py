@@ -21,6 +21,8 @@ TICK_S = 0.02
 HAND_LOST_S = 0.5
 # Cues whose windows get joint angle labels from the camera; the hand warnings only matter during these
 CAMERA_KINDS = ("hold", "finger", "free", "move", "custom")
+# Sign sessions train on the cue labels only (ml.gesture_model.SIGN_PROTOCOLS), tracking off doesn't lose anything
+SIGN_PROTOCOLS = ("E", "F")
 # The webcam runs at 30 fps, a drop to 15 means frames are being lost somewhere
 CAMERA_SLOW_FPS = 25
 # Mark bad within this long of a rest cue starting still means the gesture before it
@@ -44,8 +46,10 @@ def _folder_text(session):
 
 
 class Recorder:
-    def __init__(self, band, camera=None):
+    def __init__(self, band, camera=None, hub=False):
         self.band = band
+        # Started with --hub: no camera and no armband on purpose, their warnings would only be noise
+        self.hub = hub
         self.camera = camera
         # The recording setup picked on the start page (devices.json), stored with every session for its camera delay
         self.setup = None
@@ -297,20 +301,26 @@ class Recorder:
             print(f"after saving {folder.name}: {e}")
 
     def _camera_meta(self):
-        if self.camera is None:
+        if self.camera is None or not self.camera.on:
             return None
         return {"source": str(self.camera.source), "size": self.camera.size, "fps": round(self.camera.fps, 1)}
 
     # What the browser gets
 
     def warnings(self):
+        if self.hub and getattr(self.band, "connected", True) is False:
+            return []
         out = self.quality.warnings()
         if getattr(self.band, "connected", True) is False:
             out.append(("armband", "Armband not connected: switch it on, then Connect armband WiFi on the Connection tab"))
         if self.loop_error is not None and time.time() - self.loop_error[0] < ERROR_SHOWN_S:
             out.append(("loop_error", f"Reading the armband failed: {self.loop_error[1]}"))
         if self.camera is None:
-            out.append(("camera", "No camera, joint angles aren't recorded"))
+            if not self.hub:
+                out.append(("camera", "No camera, joint angles aren't recorded"))
+        elif not self.camera.on:
+            if self._camera_needed() and self.session.meta["settings"].get("protocol") not in SIGN_PROTOCOLS:
+                out.append(("camera", "Hand tracking is off, this cue's joint angles aren't recorded"))
         elif not self.camera.ok or self.camera.stage:
             out.append(("camera", self.camera.error or f"Camera starting: {self.camera.stage or 'stopped'}"))
         else:
@@ -364,6 +374,7 @@ class Recorder:
                      "lost": self.quality.lost.tolist(), "warnings": self.warnings(),
                      "battery": self.quality.battery_status(),
                      "hand": None, "camera_fps": round(self.camera.fps, 1) if self.camera else None,
+                     "tracking": self.camera is not None and self.camera.on,
                      "session": None, "summary": self.last_summary}
             track = self.camera.latest if self.camera is not None else None
             if track is not None and track[2] and time.time() - track[0] < HAND_LOST_S:

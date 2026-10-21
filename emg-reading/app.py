@@ -6,10 +6,12 @@ Serves the page in web/ and streams the live state to it.
 
 Then open http://localhost:8000. --host 0.0.0.0 makes it reachable from a tablet on the same network. --hub makes
 this computer the hub other computers send their sessions to and train on (hub.py): it then listens on every
-network, but only answers this computer and devices with a token.
+network, but only answers this computer and devices with a token. The hub only trains, so it starts without the
+camera and without connecting the armband (the Connection tab can still connect it).
 """
 import argparse
 import asyncio
+import contextlib
 import importlib.util
 import json
 import socket
@@ -103,6 +105,10 @@ class SessionSettings(PlanSettings):
 
 class HandChoice(BaseModel):
     hand: Literal["right", "left"]
+
+
+class TrackingChoice(BaseModel):
+    on: bool
 
 
 class WifiSettings(BaseModel):
@@ -1018,6 +1024,15 @@ def make_app(recorder, band, camera, tools, lan=True, serving=False):
             camera.hand = choice.hand
         return {"hand": camera.hand if camera else None}
 
+    @app.post("/api/tracking")
+    def tracking(choice: TrackingChoice):
+        if camera is None:
+            refuse("started with --no-camera")
+        if recorder.session is not None and choice.on != camera.on:
+            refuse("not during a session")
+        camera.set_on(choice.on)
+        return {"on": camera.on}
+
     @app.websocket("/ws")
     async def live(ws: WebSocket):
         await ws.accept()
@@ -1079,10 +1094,11 @@ def main():
 
     band = Replay(args.replay) if args.replay else Armband(args.synthetic, optional=True)
     camera = None
-    if not args.no_camera:
+    if not args.no_camera and not args.hub:
         camera = Camera(int(args.camera) if args.camera.isdigit() else args.camera, args.hand).start()
-    with band:
-        recorder = Recorder(band, camera)
+    # A reader connected later from the Connection tab ends with the app, its output pipe closes
+    with contextlib.nullcontext(band) if args.hub else band:
+        recorder = Recorder(band, camera, args.hub)
         recorder.start()
         tools = Tools(recorder)
         print(f"EMG from {band.source}, open http://localhost:{args.port}")
