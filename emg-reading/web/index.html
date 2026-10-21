@@ -33,6 +33,7 @@
   <button data-tab="haptics">Haptics</button>
   <button data-tab="calibrate">Calibrate</button>
   <button data-tab="cursor" class="archived">Cursor</button>
+  <button data-tab="sync">Sync</button>
   <button data-tab="dev">Dev</button>
   <label class="check"><input type="checkbox" id="show-archived"> Show archived</label>
 </nav>
@@ -233,6 +234,11 @@
     <p class="muted">Every model trains here: LDA (seconds, on the CPU) or the ring network (on the GPU, only on the
       training desktop, needs torch). Both use 200 ms windows of the filtered EMG. Grip sessions (protocols A to D)
       and sign sessions (E and F) train separate models, so they can't be ticked together.</p>
+    <div id="train-where" class="row filters" hidden>
+      <label class="check"><input type="radio" name="train-where" value="here" checked> This computer</label>
+      <label class="check"><input type="radio" name="train-where" value="hub"> The hub</label>
+    </div>
+    <p id="train-where-note" class="muted"></p>
     <div class="train-layout">
     <div>
     <h2>Sessions</h2>
@@ -500,6 +506,47 @@
     <p id="hap-error" class="error"></p>
     <canvas id="outputs" width="900" height="260"></canvas>
     <pre id="esp-log"></pre>
+  </section>
+</main>
+
+<main id="tab-sync" class="tab single" hidden>
+  <section>
+    <h1>Sync</h1>
+    <p class="muted">Sessions can be recorded on any computer, the networks train on the desktop with the GPU (the
+      hub). This computer sends its finished sessions to the hub, the Train tab can train there, and the models it
+      saves are downloaded here to run with this computer's armband.</p>
+    <p id="sync-serving" hidden></p>
+    <div id="sync-device">
+      <h2>Hub</h2>
+      <p class="muted">The hub's address on the tailnet and the token it made for this computer
+        (<code>python hub.py add-device NAME</code> on the hub, which runs the app with <code>--hub</code>).</p>
+      <div class="row">
+        <label>Address <input id="sync-url" placeholder="http://noah-desktop:8000"></label>
+        <label>Device token <input id="sync-token" type="password" autocomplete="off"></label>
+      </div>
+      <div class="controls"><button id="sync-save">Connect</button></div>
+      <p id="sync-hello" class="muted"></p>
+      <p id="sync-error" class="error"></p>
+      <h2>Sessions</h2>
+      <p class="muted">Sends every finished session the hub doesn't have yet, stopped early ones too (training leaves
+        those out by itself). A broken connection carries on where it stopped on the next send, and a session only
+        appears on the hub once every file arrived intact. Nothing on either side is overwritten.</p>
+      <div class="controls">
+        <button id="sync-send" class="primary">Send new sessions</button>
+        <button id="sync-refresh">Refresh</button>
+      </div>
+      <div class="table-scroll"><table id="sync-sessions"></table></div>
+      <h2>Models</h2>
+      <p class="muted">The hub's models that can run live. A model comes with the session its effort and haptic
+        levels are taken from, if this computer doesn't have it. Downloading also swaps Control mappings and
+        profiles both ways; where both computers have one of the same name, each keeps its own.</p>
+      <div class="table-scroll"><table id="sync-models"></table></div>
+      <div class="controls"><button id="sync-fetch" class="primary">Download ticked</button></div>
+      <p id="sync-step" class="muted"></p>
+      <div id="sync-progress" class="bar" hidden><div id="sync-bar"></div></div>
+      <p id="sync-job-error" class="error"></p>
+      <pre id="sync-result"></pre>
+    </div>
   </section>
 </main>
 

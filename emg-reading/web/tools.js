@@ -8,7 +8,7 @@ const SPECTRUM_MS = 250;
 // Tabs
 
 // The setup and troubleshooting pages sit under System. Cursor is archived: only listed with Show archived on
-const SYSTEM_TABS = ["signals", "connection", "haptics", "calibrate", "cursor", "dev"];
+const SYSTEM_TABS = ["signals", "connection", "haptics", "calibrate", "cursor", "sync", "dev"];
 const SYSTEM_KEY = "system-tab";
 const ARCHIVED_KEY = "show-archived";
 
@@ -44,6 +44,7 @@ function showTab(name) {
   if (name === "train") loadTrainLists();
   if (name === "control") loadControlLists();
   if (name === "cursor") loadCursorSessions();
+  if (name === "sync") loadSyncConfig().then(loadSyncStatus);
   moveTabInk();
 }
 
@@ -406,9 +407,34 @@ let trainSessions = [];
 // Sign networks start from the newest general network (networks are listed newest first)
 let newestGeneral = null;
 
+// The Train tab can train on the hub (System > Sync): its requests then go through this app's proxy, the live test
+// below stays on this computer
+const trainOnHub = () => !$("train-where").hidden && document.querySelector("[name=train-where]:checked").value === "hub";
+const trainApi = (path) => (trainOnHub() ? path.replace("/api/", "/api/hub-proxy/") : path);
+const TRAIN_WHERE_KEY = "train-where";
+const IDLE_JOBS = { trainer: { running: false }, network: { running: false } };
+let hubJobs = null;
+
+async function getJson(path) {
+  const res = await fetch(path);
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(typeof body.detail === "string" ? body.detail : `${path} answered ${res.status}`);
+  return body;
+}
+
 async function loadTrainLists() {
-  const [sessions, models, networks] = await Promise.all(["/api/sessions", "/api/models", "/api/networks"]
-    .map((u) => fetch(u).then((x) => x.json())));
+  const lists = ["/api/sessions", "/api/models", "/api/networks"];
+  let sessions, models, networks, localModels, localNetworks;
+  try {
+    [sessions, models, networks] = await Promise.all(lists.map((u) => getJson(trainApi(u))));
+    [localModels, localNetworks] = trainOnHub() ? await Promise.all(lists.slice(1).map(getJson)) : [models, networks];
+  } catch (err) {
+    $("train-where-note").textContent = err.message;
+    return;
+  }
+  $("train-where-note").textContent = trainOnHub()
+    ? `Sessions and jobs are the hub's (${hubConfig.url}). Send new sessions from System > Sync first, and download the
+      models it saves there before the live test.` : "";
   const table = $("train-sessions");
   const checked = new Set([...table.querySelectorAll("input:checked")].map((c) => c.value));
   const listed = new Set([...table.querySelectorAll("input")].map((c) => c.value));
@@ -438,7 +464,7 @@ async function loadTrainLists() {
   newestGeneral = networks.find((n) => n.kind === "general") || null;
   fillModels($("net-base"), networks.filter((n) => n.kind === "general" || n.kind === "signs"));
   fillSelect($("net-session"), trainSessions, (s) => `${s.name}, protocol ${s.protocol}${s.completed ? "" : " (stopped early)"}`);
-  const live = [...models, ...networks.filter((n) => n.kind === "calibrated" || n.kind === "signs")];
+  const live = [...localModels, ...localNetworks.filter((n) => n.kind === "calibrated" || n.kind === "signs")];
   fillModels($("model-select"), live);
   // A model that was just trained is already running, show that one
   const running = state?.tools?.predictor?.running && state.tools.predictor.model;
@@ -514,7 +540,7 @@ $("train-start").addEventListener("click", () => {
   $("train-error").textContent = "";
   $("net-error").textContent = "";
   if ($("train-kind").value === "lda") {
-    postShowing("/api/train", {
+    postShowing(trainApi("/api/train"), {
       sessions, log: $("train-log").checked, accel: $("train-accel").checked, extended: $("train-extended").checked,
       vote: Number($("train-vote").value), exclude,
     }, "train-error");
@@ -523,7 +549,7 @@ $("train-start").addEventListener("click", () => {
   const signs = ticked.some(signSession);
   const body = { job: signs ? "signs" : "train", epochs: Number($("net-epochs").value), sessions, exclude };
   if (signs) body.network = newestGeneral?.name;
-  postShowing("/api/network/run", body, "net-error");
+  postShowing(trainApi("/api/network/run"), body, "net-error");
 });
 
 // Haptics start with the model, on the ESP32 link set on the Haptics tab
@@ -687,13 +713,33 @@ function runNetwork(job) {
     body.session = $("net-session").value;
     body.reps = $("net-reps").value.split(/[\s,]+/).filter(Boolean).map(Number);
   }
-  postShowing("/api/network/run", body, "net-error");
+  postShowing(trainApi("/api/network/run"), body, "net-error");
 }
 
 $("net-eval-newest").addEventListener("click", () => runNetwork("evaluate_newest"));
 $("net-eval").addEventListener("click", () => runNetwork("evaluate"));
 $("net-calibrate").addEventListener("click", () => runNetwork("calibrate"));
-$("net-stop").addEventListener("click", () => post("/api/network/stop").catch(() => {}));
+$("net-stop").addEventListener("click", () => post(trainApi("/api/network/stop")).catch(() => {}));
+
+// The hub's jobs aren't in this app's websocket state, they are asked for while the Train tab shows them
+async function pollHubJobs() {
+  if (currentTab === "train" && trainOnHub()) {
+    try {
+      hubJobs = await getJson("/api/hub-proxy/hub/jobs");
+    } catch (err) {
+      hubJobs = null;
+      $("train-where-note").textContent = err.message;
+    }
+  }
+  setTimeout(pollHubJobs, 1000);
+}
+
+document.querySelectorAll("[name=train-where]").forEach((r) => r.addEventListener("change", () => {
+  store(TRAIN_WHERE_KEY, r.value);
+  hubJobs = null;
+  for (const id of ["train-error", "net-error", "train-result"]) $(id).textContent = "";
+  loadTrainLists();
+}));
 
 function networkTable(job, r) {
   if (job.startsWith("evaluate") && r.grips) {
@@ -768,9 +814,9 @@ $("net-side").addEventListener("change", () => {
 
 let networkWasRunning = false;
 let shownNetError = null;
-function drawNetwork(n, p) {
+function drawNetwork(n, p, trainer) {
   for (const id of ["net-eval-newest", "net-eval", "net-calibrate"]) $(id).disabled = n.running;
-  $("train-start").disabled = n.running || state.tools.trainer.running;
+  $("train-start").disabled = n.running || trainer.running;
   $("net-stop").disabled = !n.running;
   // Only there while a network job runs, next to Train it read as part of LDA training
   $("net-stop").hidden = !n.running;
@@ -859,11 +905,108 @@ function drawTools() {
   drawHaptics(t.haptics, t.test);
   drawConnection(t.check);
   drawWifi(t.wifi);
-  drawTrain(t.trainer);
+  const jobs = trainOnHub() ? hubJobs || IDLE_JOBS : t;
+  drawTrain(jobs.trainer);
   drawPredictor(t.predictor);
-  drawNetwork(t.network, t.predictor);
+  drawNetwork(jobs.network, t.predictor, jobs.trainer);
   drawControl(t.control, t.predictor);
   drawCursor(t.cursor);
+  drawSync(t.sync);
+}
+
+// Sync
+
+const SYNC_WHERE = { "not sent": "not sent yet", "on the hub": "on the hub", recording: "still recording",
+  "name taken on the hub": "not sent: the hub has a different session with this name" };
+const SYNC_HERE = { no: "", yes: "on this computer", differs: "this computer has a different file with this name" };
+let hubConfig = null;
+
+const megabytes = (n) => `${(n / 1e6).toFixed(n < 1e7 ? 1 : 0)} MB`;
+
+async function loadSyncConfig() {
+  try {
+    hubConfig = await getJson("/api/sync/config");
+  } catch (err) {
+    $("sync-error").textContent = err.message;
+    return;
+  }
+  const c = hubConfig;
+  $("sync-serving").hidden = !c.serving;
+  $("sync-serving").innerHTML = c.serving ? `This computer (${c.name}) is the hub. Devices allowed: ${c.devices.join(", ") || "none yet"}.
+    Add one with <code>python hub.py add-device NAME</code> and paste its token on that device.` : "";
+  $("sync-device").hidden = c.serving;
+  $("train-where").hidden = c.serving || !c.url;
+  if (!$("train-where").hidden && stored(TRAIN_WHERE_KEY) === "hub" && !trainOnHub()) {
+    document.querySelector("[name=train-where][value=hub]").checked = true;
+    placePill($("train-where"));
+    if (currentTab === "train") loadTrainLists();
+  }
+  if (document.activeElement !== $("sync-url")) $("sync-url").value = c.url || "";
+  $("sync-token").placeholder = c.token_set ? "saved, paste a new one to replace it" : "from hub.py add-device";
+}
+
+async function loadSyncStatus() {
+  $("sync-error").textContent = "";
+  if (!hubConfig?.url || hubConfig.serving) return;
+  let s;
+  try {
+    s = await getJson("/api/sync/status");
+  } catch (err) {
+    $("sync-hello").textContent = "";
+    $("sync-error").textContent = err.message;
+    return;
+  }
+  $("sync-hello").textContent = `Connected to ${s.hub.hub} as ${s.hub.device}.`;
+  const toSend = s.sessions.filter((x) => x.where === "not sent");
+  $("sync-send").textContent = toSend.length
+    ? `Send ${toSend.length} new session${toSend.length > 1 ? "s" : ""} (${megabytes(toSend.reduce((a, x) => a + x.bytes, 0))})` : "Nothing new to send";
+  $("sync-send").disabled = !toSend.length || state?.tools?.sync?.running;
+  $("sync-sessions").innerHTML = s.sessions.length
+    ? `<tr><th>Session</th><th>Size</th><th>Where</th></tr>${s.sessions.map((x) => `<tr><td>${x.name}</td>
+      <td>${megabytes(x.bytes)}</td><td>${SYNC_WHERE[x.where]}</td></tr>`).join("")}`
+    : "<tr><td>No sessions recorded on this computer yet.</td></tr>";
+  const time = (m) => m.created || m.trained;
+  const models = s.models.sort((a, b) => time(b).localeCompare(time(a)));
+  const levels = (m) => (!m.levels ? "the hub doesn't have its session" : m.levels_here ? "here"
+    : `${m.levels} comes along`);
+  $("sync-models").innerHTML = models.length
+    ? `<tr><th></th><th>Model</th><th>Kind</th><th>Size</th><th>Levels session</th><th></th></tr>${models.map((m) => `<tr>
+      <td><input type="checkbox" value="${m.name}" ${m.here === "no" ? "" : "disabled"}></td>
+      <td title="${m.name}">${modelLabel(m)}</td><td>${modelGroup(m)}</td><td>${megabytes(m.size)}</td>
+      <td>${levels(m)}</td><td>${SYNC_HERE[m.here]}</td></tr>`).join("")}`
+    : "<tr><td>The hub has no models that can run live yet.</td></tr>";
+}
+
+$("sync-save").addEventListener("click", async () => {
+  const r = await postShowing("/api/sync/config", { url: $("sync-url").value.trim(), token: $("sync-token").value }, "sync-error");
+  if (!r) return;
+  $("sync-token").value = "";
+  await loadSyncConfig();
+  loadSyncStatus();
+});
+$("sync-refresh").addEventListener("click", loadSyncStatus);
+$("sync-send").addEventListener("click", () => postShowing("/api/sync/send", undefined, "sync-job-error"));
+$("sync-fetch").addEventListener("click", () => {
+  const names = [...$("sync-models").querySelectorAll("input:checked")].map((c) => c.value);
+  if (!names.length) {
+    $("sync-job-error").textContent = "tick the models to download first";
+    return;
+  }
+  postShowing("/api/sync/fetch", { names }, "sync-job-error");
+});
+
+let syncWasRunning = false;
+function drawSync(s) {
+  if (!s) return;
+  $("sync-step").textContent = s.running ? `${s.step || "starting"}...` : "";
+  $("sync-progress").hidden = !s.running;
+  $("sync-bar").style.width = `${100 * (s.share ?? 0)}%`;
+  $("sync-fetch").disabled = s.running;
+  if (s.running) $("sync-send").disabled = true;
+  if (s.error) $("sync-job-error").textContent = s.error;
+  $("sync-result").textContent = (s.lines || []).join("\n");
+  if (syncWasRunning && !s.running && currentTab === "sync") loadSyncStatus();
+  syncWasRunning = s.running;
 }
 
 // Dev
@@ -901,4 +1044,6 @@ function initTools() {
   $("esp-ip").value = link.ip || config.esp32_wifi_ip;
   saveLink();
   showCurrentCalibration();
+  loadSyncConfig();
+  pollHubJobs();
 }
