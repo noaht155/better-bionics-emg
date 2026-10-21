@@ -1852,9 +1852,14 @@ balanced over the signs and rest. Means of the 2 seeds:
   easier to classify (signs held more consistently, or the placement), not the model learning more.
 - Without calibration there is no steady trend: the MacBook session went from 62 to 92 % with more sessions, the
   2026-10-20_105110 session fell from 85 to 76 %. More sessions help a new placement only sometimes.
-- Wrist bends read as a sign after calibration: 0 to 2.6 %, lower with more sessions on the MacBook session.
-- So for the sign set, a short calibration does almost all the work. More F sessions are for the uncalibrated case
-  and later continual learning, not for a higher calibrated score.
+- False alarms (rerun with them added, same splits), means over the 4 held-out sessions for k = 1 / 2 / 4 / all:
+  wrist bend read as a sign 1.2 / 0.9 / 0.8 / 0.4 % calibrated, 2.3 / 1.9 / 0.7 / 0.7 % without; rest read as a sign
+  (plain argmax, the app's threshold would turn some into unsure) 0.9 / 0.9 / 0.9 / 1.0 % calibrated, almost all of it
+  2026-10-19_161702 at about 3 %, the others under 0.6 %; a sign read as another sign at probability 0.8 or more
+  1.7 / 1.7 / 1.6 / 1.4 % calibrated, 3.0 / 3.4 / 3.6 / 3.9 % without (2026-10-20_105110 up to 6 to 7 %).
+- So more sessions clearly cut the wrist bend false alarm (to a third calibrated, Noah's point that false alarms
+  matter as much as accuracy); rest and confident wrong signs don't move beyond the session to session spread. A
+  short calibration still does almost all the work for accuracy.
 
 ## Open
 
