@@ -100,6 +100,7 @@ These decide when the recorder marks a cue bad and redoes it.
 | Test | Checks |
 |---|---|
 | `test_session_levels_keep_rest_quiet` | Haptic levels taken from the newest session (`calibrate.from_session`) are sane (rest above 0, max above rest) and, played back over that session's rest cues, leave every output off in at least 95 % of rest windows |
+| `test_band_bump_doesnt_lose_channels` | A one-window bump on 7 channels doesn't drop them from a session's common average (it did on 2026-10-21_141651 and crashed Control), a pad off half the time still counts as lost, and a zero rest level is refused instead of dividing by it |
 
 ### Automatic evaluation (`tests/test_auto_evaluate.py`)
 
