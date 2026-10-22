@@ -1868,9 +1868,9 @@ balanced over the signs and rest. Means of the 2 seeds:
   Proton Drive's synced folder for now, a USB stick works the same. Each copy is hashed against the original before
   it is listed in the folder's `backups.json`; nothing there is overwritten or deleted. Runs at startup, after every
   session saved here and after every session a device sends.
-- A device deletes a session after sending only when its files, the hub's and the backup's all have the same hashes,
-  so there are always two copies off the device. It keeps the sessions its models take their levels from (haptics
-  need them) and waits up to 5 min for the hub's backup of what it just sent.
+- A device deletes sessions only when its app closes (Ctrl+C), never during use or on the hub (Noah), and only those
+  whose files, the hub's and the backup's all have the same hashes, so there are always two copies off the device.
+  It keeps the sessions its models take their levels from (haptics need them). Hub not reachable: nothing deleted.
 - The backup is in Noah's own Proton account until the handoff. Move it to the lab's storage before then, and check
   where other people's recordings may be kept before anyone else records.
 - On branch `backup-and-cleanup` until tried on the real setup with the Mac.
@@ -1878,7 +1878,7 @@ balanced over the signs and rest. Means of the 2 seeds:
 ## Open
 
 - Backup: set the Proton Drive folder on the hub, check the first full copy (4.2 GB) and that Proton uploads it,
-  then a Mac send that deletes there. Merge `backup-and-cleanup` after.
+  then a Mac send and app close that deletes there. Merge `backup-and-cleanup` after.
 - Hub: torch CPU build on the Mac for networks. Later, per-person consent before other people record.
 - Tracking switch: an F session with tracking off lost 0.04 % of samples; compare with tracking on, then merge
   `tracking-toggle`.

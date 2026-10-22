@@ -546,7 +546,7 @@
       <h2>Backup</h2>
       <p class="muted">Every ended session is copied into this folder and checked, after each session recorded here
         and each one a device sends. Pick a folder the Proton Drive app syncs, or a USB stick. Nothing in it is ever
-        overwritten or deleted. A device deletes a session it sent only once the backup has it too.</p>
+        overwritten or deleted. A device deletes a session it sent only when its app closes and the backup has it too.</p>
       <div class="row">
         <label>Folder <input id="backup-folder" placeholder="a folder in Proton Drive"></label>
       </div>
@@ -571,9 +571,9 @@
       <h2>Sessions</h2>
       <p class="muted">Sends every finished session the hub doesn't have yet, stopped early ones too (training leaves
         those out by itself). A broken connection carries on where it stopped on the next send, and a session only
-        appears on the hub once every file arrived intact. Nothing on either side is overwritten. After sending,
-        sessions the hub and its backup both hold byte for byte are deleted here, except the ones this computer's
-        models take their levels from.</p>
+        appears on the hub once every file arrived intact. Nothing on either side is overwritten. When the app on
+        this computer closes, sessions the hub and its backup both hold byte for byte are deleted here, except the
+        ones this computer's models take their levels from.</p>
       <div class="controls">
         <button id="sync-send" class="primary">Send new sessions</button>
         <button id="sync-refresh">Refresh</button>

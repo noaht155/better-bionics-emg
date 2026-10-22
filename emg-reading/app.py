@@ -1051,7 +1051,7 @@ def make_app(recorder, band, camera, tools, lan=True, serving=False):
     @app.post("/api/sync/send")
     def sync_send():
         try:
-            tools.sync.send({levels_session(m) for m in model_list()} - {None})
+            tools.sync.send()
         except ValueError as e:
             refuse(e)
         return {"ok": True}
@@ -1136,6 +1136,18 @@ def make_app(recorder, band, camera, tools, lan=True, serving=False):
     return app
 
 
+def free_space(tools):
+    """On a device as its app closes: deletes the sessions the hub and its backup both hold (tools.Sync.free_space).
+    Never mid-use, so a session can't disappear from a page that shows it."""
+    print("checking which sessions the hub has backed up...")
+    try:
+        lines = tools.sync.free_space({levels_session(m) for m in model_list()} - {None})
+    except Exception as e:
+        lines = [f"kept every session here, the hub couldn't be asked: {e}"]
+    for line in lines:
+        print(line)
+
+
 def main():
     parser = argparse.ArgumentParser()
     source = parser.add_mutually_exclusive_group()
@@ -1176,6 +1188,8 @@ def main():
             recorder.stop()
             if camera is not None:
                 camera.stop()
+            if not args.hub and hub.load().get("url"):
+                free_space(tools)
 
 
 if __name__ == "__main__":

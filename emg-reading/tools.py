@@ -53,10 +53,6 @@ DELAY_GAP_S = (0.3, 0.6)
 # The page's clock and this computer's agree to a few ms when the page runs here
 DELAY_CLOCK_S = 0.05
 DELAY_FLASH_TIMEOUT_S = 120
-# How long a send waits for the hub to back up what it just received before deleting it here. Copying and checking
-# a 350 MB session takes a few seconds; one not backed up by then is deleted after the next send
-BACKUP_WAIT_S = 300
-BACKUP_POLL_S = 2
 
 
 class Tool:
@@ -763,9 +759,8 @@ class Sync(Tool):
     """System > Sync on a device: sends this computer's ended sessions to the hub, and downloads the models picked
     there together with the session each one takes its levels from (hub.py)."""
 
-    def send(self, keep):
-        """keep: sessions this computer's own LDA models take their levels from, never deleted here."""
-        self._launch(self._send, set(keep))
+    def send(self):
+        self._launch(self._send)
 
     def fetch(self, names, control_files):
         """control_files: {"mappings": path, "presets": path}, swapped both ways after the models."""
@@ -783,7 +778,7 @@ class Sync(Tool):
     def _log(self, line):
         self.state["lines"] = self.state["lines"] + [line]
 
-    def _send(self, keep):
+    def _send(self):
         client = hub.client()
         self.state.update(step="asking the hub which sessions it has", share=0.0, lines=[])
         theirs = client.request("GET", "/api/hub/sessions")
@@ -799,42 +794,38 @@ class Sync(Tool):
                 self._log(f"left out {name}: the hub has a different session with that name")
         if not todo:
             self._log("nothing to send, the hub has every session")
-        self._free_space(client, mine, keep)
         self.state.update(step=None, share=1.0)
 
-    def _free_space(self, client, mine, keep):
-        """Deletes the sessions here that the hub and its backup both hold byte for byte. Keeps the ones a model here
-        takes its levels from, the haptics need them."""
-        keep |= {m["levels"] for m in client.request("GET", "/api/hub/models")
-                 if m["levels"] and model_path(m["name"]).exists()}
+    @staticmethod
+    def free_space(keep):
+        """Deletes the sessions here that the hub and its backup both hold byte for byte, for a device when its app
+        closes. keep: sessions its LDA models take their levels from; the ones its downloaded networks need are
+        added from the hub's list. Returns what it did, one line each."""
+        client = hub.client()
+        keep = set(keep) | {m["levels"] for m in client.request("GET", "/api/hub/models")
+                            if m["levels"] and model_path(m["name"]).exists()}
+        mine = hub.ended_sessions(DATA_DIR)
         theirs = client.request("GET", "/api/hub/sessions")
         candidates = [name for name in mine if theirs.get(name) == mine[name] and name not in keep]
         backups = client.request("GET", "/api/hub/backups")
         if not backups["folder_set"]:
-            if candidates:
-                self._log("kept the sent sessions here, the hub has no backup folder set")
-            return
-        waited = 0
-        while any(name not in backups["sessions"] for name in candidates) and waited < BACKUP_WAIT_S:
-            self.state["step"] = "waiting for the hub to back up what it received"
-            time.sleep(BACKUP_POLL_S)
-            waited += BACKUP_POLL_S
-            backups = client.request("GET", "/api/hub/backups")
+            return ["kept every session here, the hub has no backup folder set"] if candidates else []
+        lines = []
         for name in candidates:
             if name not in backups["sessions"]:
-                self._log(f"kept {name} here, the hub hasn't backed it up yet")
+                lines.append(f"kept {name} here, the hub hasn't backed it up yet")
                 continue
-            self.state["step"] = f"checking {name} against the hub and its backup"
             here = hub.hashes(DATA_DIR / name)
             if here != client.request("GET", f"/api/hub/sessions/{name}/hashes") or here != backups["sessions"][name]:
-                self._log(f"kept {name} here, the copies differ")
+                lines.append(f"kept {name} here, the copies differ")
                 continue
             try:
                 hub.remove_session(DATA_DIR / name)
             except ValueError as e:
-                self._log(str(e))
+                lines.append(str(e))
                 continue
-            self._log(f"deleted {name} here, the hub and its backup have it")
+            lines.append(f"deleted {name} here, the hub and its backup have it")
+        return lines
 
     def _fetch(self, names, control_files):
         client = hub.client()

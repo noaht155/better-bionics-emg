@@ -260,7 +260,7 @@ def test_backup_worker_and_missing_folder(hub_dir, tmp_path, monkeypatch):
     assert list(hub.backed_up(dest)) == [NAME]
 
 
-def test_device_deletes_only_what_the_hub_and_backup_hold(hub_dir, server, tmp_path, monkeypatch):
+def test_device_deletes_on_close_only_what_the_hub_and_backup_hold(hub_dir, server, tmp_path, monkeypatch):
     models = tmp_path / "models"
     models.mkdir()
     monkeypatch.setattr(gesture_model, "MODEL_DIR", models)
@@ -268,7 +268,6 @@ def test_device_deletes_only_what_the_hub_and_backup_hold(hub_dir, server, tmp_p
     monkeypatch.setattr(tools, "NETWORK_DIR", models)
     device = tmp_path / "device-data"
     monkeypatch.setattr(tools, "DATA_DIR", device)
-    monkeypatch.setattr(tools, "BACKUP_WAIT_S", 0)
     token = hub.add_device("mac")
     monkeypatch.setattr(hub, "client", lambda: hub.Hub(server, token))
     names = {k: f"2026-10-20_1{i}0000_noah" for i, k in enumerate(["gone", "pending", "levels", "extra", "differs"])}
@@ -277,10 +276,10 @@ def test_device_deletes_only_what_the_hub_and_backup_hold(hub_dir, server, tmp_p
     (device / names["extra"] / "notes.txt").write_text("not sent")
     sync = tools.Sync()
 
+    sync._send()
     # Without a backup folder on the hub nothing is deleted
-    sync._send(set())
+    assert tools.Sync.free_space(set()) == ["kept every session here, the hub has no backup folder set"]
     assert all((device / name).exists() for name in names.values())
-    assert any("no backup folder" in line for line in sync.state["lines"])
 
     dest = tmp_path / "backup"
     dest.mkdir()
@@ -292,7 +291,10 @@ def test_device_deletes_only_what_the_hub_and_backup_hold(hub_dir, server, tmp_p
     listing = json.loads((dest / hub.BACKUP_LIST).read_text())
     listing[names["differs"]]["board.f64"] = "0" * 64
     (dest / hub.BACKUP_LIST).write_text(json.dumps(listing))
-    sync._send({names["levels"]})
+    # Sending never deletes, only the app closing does
+    sync._send()
+    assert all((device / name).exists() for name in names.values())
+    tools.Sync.free_space({names["levels"]})
     assert not (device / names["gone"]).exists()
     for key in ("pending", "levels", "extra", "differs"):
         assert (device / names[key] / "session.json").exists(), key
