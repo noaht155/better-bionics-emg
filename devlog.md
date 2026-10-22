@@ -1940,6 +1940,15 @@ the rest cues of recorded sessions.
 - The same test runs from the app on System > Dev (Noah): pick the block, Record block, no need to close the app.
   Each computer keeps its own blocks in `data/hum-test/`, so the Mac's blocks have to be copied over to compare
   in one table.
+- Result (2026-10-22, all 7 blocks, 59 one-second windows each, 22 to 27 dropped samples per Mac block). Median over
+  channels, filtered rest / raw 60 Hz in uV: desktop 5.5 / 5.5, desktop + mouse 4.9 / 5.6, desktop again 5.1 / 4.0;
+  Mac battery 4.6 / 3.7, charger 5.0 / 6.7, charger + palm rest 5.1 / 27.2 (ch 0 74, ch 2 69), battery + palm rest
+  6.6 / 2.9. 120 Hz, and both bands outside the filter, the same in every block; 180 Hz up to 2.8 only with charger + touch.
+- So the Mac itself is not worse, and neither is the charger hands off. The hum comes from touching the Mac while it is on
+  the charger: 60 Hz goes up 5 to 7 times, close to the 80 uV hum limit on ch 0. The notch removes it (filtered 5.1).
+  That fits the 10-21 session (charger in, 10.8 uV at 60 Hz). Record on the Mac on battery, or keep the hand off it
+  while charging. The slightly higher filtered level with the hand on the palm rest on battery has no mains in it,
+  probably muscle from the resting hand.
 
 ## Open
 
@@ -1951,7 +1960,6 @@ the rest cues of recorded sessions.
 - Hub: per-person consent before other people record.
 - Tracking switch: an F session with tracking off lost 0.04 % of samples; compare with tracking on, then merge
   `tracking-toggle`.
-- Mac hum: run the A/B test agreed with the Mac session (see "Mac hum test", `emg-reading/hum_test.py`).
 - Delay test: run it on the desktop too. Its flash result minus the LED test's 37 ms is that screen's own delay,
   which shows how far the flash method overestimates (the MacBook's 43 ms shift includes its screen). Rerun the
   MacBook once to check the 88 / 15 ms light and dark split repeats.
