@@ -849,6 +849,18 @@ class Sync(Tool):
         self.state.update(step=None, share=1.0)
 
     @staticmethod
+    def free_models():
+        """Deletes the models here that the hub holds byte for byte, for a device when its app closes, so it never
+        runs an old copy. Models only this computer has stay. Returns what it did, one line each."""
+        lines = []
+        for m in hub.client().request("GET", "/api/hub/models"):
+            path = model_path(m["name"])
+            if path.exists() and hub.sha256(path) == m["sha256"]:
+                path.unlink()
+                lines.append(f"deleted the model {m['name']} here, the hub has it")
+        return lines
+
+    @staticmethod
     def free_space(keep):
         """Deletes the sessions here that the hub and its backup both hold byte for byte, for a device when its app
         closes. keep: sessions its LDA models take their levels from; the ones its downloaded networks need are

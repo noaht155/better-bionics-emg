@@ -1912,6 +1912,9 @@ balanced over the signs and rest. Means of the 2 seeds:
   answers and no session or practice run is going. The Mac has one WiFi, so while it records on the armband's network
   the hub is out of reach and sending waits until it is back on the home network.
 - Merged into `main` together with the Control tab's Simulate (Noah, without a Mac test first).
+- A device now also deletes its models when its app closes, those the hub has byte for byte (`Sync.free_models`,
+  Noah), before the sessions, so a session kept only for a downloaded model's levels goes too. Models only the device
+  has stay. Next start, download the models again in System > Sync. On the `free-models` branch until tried on the Mac.
 
 ## Open
 

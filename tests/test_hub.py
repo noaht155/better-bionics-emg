@@ -354,3 +354,19 @@ def test_sync_line_and_auto_send(hub_dir, server, tmp_path, monkeypatch):
     assert w._check()["text"] == "1 to back up"
     hub.back_up(hub_dir / NAME, dest)
     assert w._check()["text"] == "backed up"
+
+
+def test_device_deletes_on_close_only_models_the_hub_holds(tmp_path, monkeypatch):
+    monkeypatch.setattr(gesture_model, "MODEL_DIR", tmp_path)
+    monkeypatch.setattr(tools, "NETWORK_DIR", tmp_path)
+    for name in ("same.joblib", "differs.joblib", "mine.pt"):
+        (tmp_path / name).write_bytes(name.encode())
+    listing = [{"name": "same.joblib", "sha256": hub.sha256(tmp_path / "same.joblib")},
+               {"name": "differs.joblib", "sha256": "0" * 64}, {"name": "absent.pt", "sha256": "0" * 64}]
+
+    class Client:
+        def request(self, method, path):
+            return listing
+    monkeypatch.setattr(hub, "client", Client)
+    assert tools.Sync.free_models() == ["deleted the model same.joblib here, the hub has it"]
+    assert sorted(p.name for p in tmp_path.iterdir()) == ["differs.joblib", "mine.pt"]

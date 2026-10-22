@@ -1180,13 +1180,15 @@ def make_app(recorder, band, camera, tools, lan=True, serving=False):
 
 
 def free_space(tools):
-    """On a device as its app closes: deletes the sessions the hub and its backup both hold (tools.Sync.free_space).
-    Never mid-use, so a session can't disappear from a page that shows it."""
-    print("checking which sessions the hub has backed up...")
+    """On a device as its app closes: deletes the models the hub has (tools.Sync.free_models), then the sessions the
+    hub and its backup both hold that no model left here needs (tools.Sync.free_space). Never mid-use, so nothing
+    can disappear from a page that shows it."""
+    print("checking which models and sessions the hub has...")
     try:
-        lines = tools.sync.free_space({levels_session(m) for m in model_list()} - {None})
+        lines = tools.sync.free_models()
+        lines += tools.sync.free_space({levels_session(m) for m in model_list()} - {None})
     except Exception as e:
-        lines = [f"kept every session here, the hub couldn't be asked: {e}"]
+        lines = [f"kept every model and session here, the hub couldn't be asked: {e}"]
     for line in lines:
         print(line)
 
