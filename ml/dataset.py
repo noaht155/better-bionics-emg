@@ -10,7 +10,8 @@ shared filter, 8 channels x WINDOW samples, ending every STEP samples, with what
   (protocol D) is forearm activity that isn't a grip, never a grip or rest label
 - angles: the 20 joint angles from the camera at the window's last sample, NaN when the hand wasn't tracked
 
-Each session is processed once and cached in ml/cache/ (ignored by git, it holds personal data).
+Each session is processed once and cached in ml/cache/ (ignored by git, it holds personal data). The cache holds the
+filtered signal once and the windows are cut from it on load, storing every window took 4 times the space.
 """
 import json
 from collections import defaultdict
@@ -42,7 +43,7 @@ MAX_FRAME_GAP_S = 0.1
 IMPOSSIBLE_DEG = -60
 CACHE = Path(__file__).with_name("cache")
 # Bump when the windows or labels change, old cache files are then rebuilt
-VERSION = f"6-f{FILTER_VERSION}-w{WINDOW}-s{STEP}-{'.'.join(GESTURE_SET)}"
+VERSION = f"7-f{FILTER_VERSION}-w{WINDOW}-s{STEP}-{'.'.join(GESTURE_SET)}"
 
 
 def good_sessions(data_dir=DATA_DIR):
@@ -105,6 +106,11 @@ def _repetitions(segs):
 
 def build(folder):
     """All windows of one session that have a grip label or tracked angles."""
+    return _windows(_labelled(folder))
+
+
+def _labelled(folder):
+    """The session's filtered signal y and the labels of the windows that build keeps, ending at ends."""
     data = load_session(folder)
     meta = data["meta"]
     y = filter_block(data["emg"][meta["channels"]], RATE).astype(np.float32)
@@ -147,10 +153,17 @@ def build(folder):
             angles[near] = interp[near]
 
     keep = (grip != "") | ~np.isnan(angles).any(axis=1)
-    x = np.lib.stride_tricks.sliding_window_view(y, WINDOW, axis=1)[:, ends[keep] - WINDOW].transpose(1, 0, 2)
-    return {"x": np.ascontiguousarray(x), "grip": grip[keep].astype(str), "rep": rep[keep],
+    return {"y": y, "grip": grip[keep].astype(str), "rep": rep[keep],
             "posture": posture[keep].astype(str), "kind": kind[keep].astype(str), "angles": angles[keep], "ends": ends[keep],
             "subject": meta.get("subject", ""), "channels": np.array(meta["channels"])}
+
+
+def _windows(stored):
+    """The session's windows with x cut from the filtered signal y."""
+    out = {k: v for k, v in stored.items() if k != "y"}
+    x = np.lib.stride_tricks.sliding_window_view(stored["y"], WINDOW, axis=1)[:, stored["ends"] - WINDOW]
+    out["x"] = np.ascontiguousarray(x.transpose(1, 0, 2))
+    return out
 
 
 def load(folder):
@@ -163,10 +176,10 @@ def load(folder):
     if path.exists():
         cached = np.load(path, allow_pickle=False)
         if str(cached["version"]) == version:
-            return {k: cached[k] for k in cached.files if k != "version"}
-    out = build(folder)
+            return _windows({k: cached[k] for k in cached.files if k != "version"})
+    out = _labelled(folder)
     np.savez(path, version=version, **{k: (v if not isinstance(v, str) else np.array(v)) for k, v in out.items()})
-    return out
+    return _windows(out)
 
 
 def clear_cache():
@@ -178,10 +191,22 @@ def clear_cache():
     return freed
 
 
+def prune_cache(data_dir=DATA_DIR):
+    """Deletes the cache files of sessions that no longer exist. Returns the bytes freed."""
+    freed = 0
+    for path in CACHE.glob("*.npz"):
+        if not (Path(data_dir) / path.stem / "session.json").exists():
+            freed += path.stat().st_size
+            path.unlink()
+    return freed
+
+
 def load_all(folders=None, verbose=False):
     """{session name: windows} for the given folders, or for every good session. verbose prints each session as it
     loads, a session that isn't cached yet takes a while."""
-    folders = folders if folders is not None else good_sessions()
+    if folders is None:
+        prune_cache()
+        folders = good_sessions()
     out = {}
     for i, f in enumerate(folders, 1):
         if verbose:
