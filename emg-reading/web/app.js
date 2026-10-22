@@ -742,7 +742,7 @@ $("outro-calibrate").addEventListener("click", async () => {
     $("outro-calibrate").disabled = false;
     return;
   }
-  Object.assign(quickCal, { network: reply.network, job: reply.job, seen: false });
+  Object.assign(quickCal, { network: reply.network, job: reply.job ?? "network", seen: false });
   $("outro-cal-status").textContent = reply.network ? `Calibrating ${reply.network}` : "Sending the session to the hub";
 });
 
