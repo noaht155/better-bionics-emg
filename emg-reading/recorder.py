@@ -131,12 +131,16 @@ class Recorder:
             self._captures = [c for c in self._captures if not c["done"].is_set()]
             self._advance()
 
-    def capture(self, seconds):
-        """Blocks for seconds and returns every board row that arrived meanwhile, like calibrate.py's record."""
+    def capture(self, seconds, cancel=None):
+        """Blocks for seconds and returns every board row that arrived meanwhile, like calibrate.py's record. Setting
+        the cancel event ends it early with what arrived so far."""
         capture = {"chunks": [], "until": time.time() + seconds, "done": threading.Event()}
         with self._lock:
             self._captures.append(capture)
-        capture["done"].wait(seconds + 2)
+        deadline = time.time() + seconds + 2
+        while not capture["done"].wait(0.1):
+            if time.time() > deadline or (cancel is not None and cancel.is_set()):
+                break
         with self._lock:
             if capture in self._captures:
                 self._captures.remove(capture)

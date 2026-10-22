@@ -869,9 +869,11 @@ const FLASH_CHANGES = 60, FLASH_HOLD_MS = [400, 800], FLASH_LEAD_MS = 1000;
 
 $("hum-start").addEventListener("click", () => postShowing("/api/hum-test",
   { label: $("hum-block").value, seconds: Number($("hum-seconds").value) }, "hum-error"));
+$("hum-stop").addEventListener("click", () => postShowing("/api/hum-test/stop", undefined, "hum-error"));
 
 function drawHum(t) {
   $("hum-start").disabled = t.running || !!state.session;
+  $("hum-stop").disabled = !t.running;
   $("hum-prompt").textContent = t.running && t.prompt ? `${t.prompt}${t.countdown ? `  ${t.countdown}...` : ""}` : "";
   progress("hum-bar", t);
   if (t.error) $("hum-error").textContent = t.error;

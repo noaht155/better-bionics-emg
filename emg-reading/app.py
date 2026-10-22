@@ -601,6 +601,11 @@ def make_app(recorder, band, camera, tools, lan=True, serving=False):
             refuse(e)
         return {"ok": True}
 
+    @app.post("/api/hum-test/stop")
+    def hum_test_stop():
+        tools.hum.stop()
+        return {"ok": True}
+
     @app.post("/api/delay/save")
     def delay_save():
         try:

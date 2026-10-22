@@ -362,6 +362,7 @@ class HumTest(Tool):
     def __init__(self, recorder):
         super().__init__()
         self.recorder = recorder
+        self._stop = threading.Event()
 
     def start(self, label, seconds):
         if label not in dict(hum_test.BLOCKS):
@@ -370,15 +371,24 @@ class HumTest(Tool):
             raise ValueError("a session is recording")
         if not self.recorder.band.connected:
             raise ValueError("armband not connected")
+        self._stop.clear()
         self._launch(self._run, label, seconds)
+
+    def stop(self):
+        self._stop.set()
 
     def _run(self, label, seconds):
         for n in range(COUNTDOWN_S, 0, -1):
             self.state.update(prompt=f"{dict(hum_test.BLOCKS)[label]}, arm relaxed and still", countdown=n)
-            time.sleep(1)
+            if self._stop.wait(1):
+                break
         self.state.update(countdown=None, until=time.time() + seconds, total=seconds)
         band = self.recorder.band
-        board = self.recorder.capture(seconds)
+        if not self._stop.is_set():
+            board = self.recorder.capture(seconds, self._stop)
+        if self._stop.is_set():
+            self.state.update(prompt=None, until=None, lines=[f"{label} cancelled, nothing saved"])
+            return
         if board.shape[1] < seconds * band.rate / 2:
             raise SystemExit(f"only {board.shape[1]} samples arrived, check the connection")
         replaced = (hum_test.OUT_DIR / f"{label}.npy").exists()
