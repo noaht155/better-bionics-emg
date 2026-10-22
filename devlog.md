@@ -1874,6 +1874,10 @@ balanced over the signs and rest. Means of the 2 seeds:
 - The backup is in Noah's own Proton account until the handoff. Move it to the lab's storage before then, and check
   where other people's recordings may be kept before anyone else records.
 - On branch `backup-and-cleanup` until tried on the real setup with the Mac.
+- Tried on the real setup the same day: the first backup copied all 44 hub sessions (4.1 GB) into Proton Drive in
+  about 25 s, a rehash of 5 matched. The Mac sent a fake session and its real 2026-10-21 session; on Ctrl+C it deleted
+  both (Noah OKed the real one), data/ on the Mac is empty. The fake session was removed from the hub and the backup.
+  Not checked yet: that Proton finished uploading to the cloud.
 
 ## Open
 
