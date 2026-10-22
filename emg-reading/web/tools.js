@@ -984,6 +984,7 @@ function drawTools() {
   drawControl(t.control, t.predictor);
   drawCursor(t.cursor);
   drawSync(t.sync);
+  drawBackup(t.backup);
 }
 
 // Sync
@@ -1007,6 +1008,9 @@ async function loadSyncConfig() {
   $("sync-serving").innerHTML = c.serving ? `This computer (${c.name}) is the hub. Devices allowed: ${c.devices.join(", ") || "none yet"}.
     Add one with <code>python hub.py add-device NAME</code> and paste its token on that device.` : "";
   $("sync-device").hidden = c.serving;
+  // A device's sessions are backed up on the hub
+  $("backup").hidden = !c.serving && !!c.url;
+  if (!$("backup").hidden) loadBackup();
   $("train-where").hidden = c.serving || !c.url;
   if (!$("train-where").hidden && stored(TRAIN_WHERE_KEY) === "hub" && !trainOnHub()) {
     document.querySelector("[name=train-where][value=hub]").checked = true;
@@ -1066,6 +1070,36 @@ $("sync-fetch").addEventListener("click", () => {
   }
   postShowing("/api/sync/fetch", { names }, "sync-job-error");
 });
+
+async function loadBackup() {
+  $("backup-error").textContent = "";
+  let b;
+  try {
+    b = await getJson("/api/backup");
+  } catch (err) {
+    $("backup-error").textContent = err.message;
+    return;
+  }
+  if (document.activeElement !== $("backup-folder")) $("backup-folder").value = b.folder || "";
+  $("backup-status").textContent = b.error ? "" : !b.folder ? "No backup folder set, sessions are only on this computer."
+    : `${b.sessions} sessions backed up${b.missing ? `, ${b.missing} still to copy` : ", all of them"}.`;
+  if (b.error) $("backup-error").textContent = b.error;
+}
+
+$("backup-save").addEventListener("click", async () => {
+  if (await postShowing("/api/backup/folder", { folder: $("backup-folder").value }, "backup-error")) loadBackup();
+});
+$("backup-run").addEventListener("click", () => postShowing("/api/backup/run", undefined, "backup-error"));
+
+let backupWasRunning = false;
+function drawBackup(b) {
+  if (!b || $("backup").hidden) return;
+  if (b.running) $("backup-status").textContent = `${b.step || "checking"}...`;
+  if (backupWasRunning && !b.running && currentTab === "sync") {
+    loadBackup().then(() => { if (b.error) $("backup-error").textContent = b.error; });
+  }
+  backupWasRunning = b.running;
+}
 
 let syncWasRunning = false;
 function drawSync(s) {

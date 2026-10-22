@@ -1861,8 +1861,28 @@ balanced over the signs and rest. Means of the 2 seeds:
   matter as much as accuracy); rest and confident wrong signs don't move beyond the session to session spread. A
   short calibration still does almost all the work for accuracy.
 
+## 2026-10-22: backups and freeing space on devices
+
+- `data/` on the desktop is 4.2 GB over about 45 sessions (100 to 350 MB each), with no backup until now.
+- The hub now copies every ended session into a backup folder (System > Sync > Backup, saved in `hub.json`):
+  Proton Drive's synced folder for now, a USB stick works the same. Each copy is hashed against the original before
+  it is listed in the folder's `backups.json`; nothing there is overwritten or deleted. Runs at startup, after every
+  session saved here and after every session a device sends.
+- A device deletes sessions only when its app closes (Ctrl+C), never during use or on the hub (Noah), and only those
+  whose files, the hub's and the backup's all have the same hashes, so there are always two copies off the device.
+  It keeps the sessions its models take their levels from (haptics need them). Hub not reachable: nothing deleted.
+- The backup is in Noah's own Proton account until the handoff. Move it to the lab's storage before then, and check
+  where other people's recordings may be kept before anyone else records.
+- On branch `backup-and-cleanup` until tried on the real setup with the Mac.
+- Tried on the real setup the same day: the first backup copied all 44 hub sessions (4.1 GB) into Proton Drive in
+  about 25 s, a rehash of 5 matched. The Mac sent a fake session and its real 2026-10-21 session; on Ctrl+C it deleted
+  both (Noah OKed the real one), data/ on the Mac is empty. The fake session was removed from the hub and the backup.
+  Not checked yet: that Proton finished uploading to the cloud.
+
 ## Open
 
+- Backup: set the Proton Drive folder on the hub, check the first full copy (4.2 GB) and that Proton uploads it,
+  then a Mac send and app close that deletes there. Merge `backup-and-cleanup` after.
 - Hub: torch CPU build on the Mac for networks. Later, per-person consent before other people record.
 - Tracking switch: an F session with tracking off lost 0.04 % of samples; compare with tracking on, then merge
   `tracking-toggle`.

@@ -9,8 +9,12 @@ carries the device's token.
     python hub.py remove-device mac     that token stops working straight away
     python hub.py devices
 
-hub.json holds the hashes of the device tokens (on the hub) or the hub's address and this device's token (on a
-device). It stays out of git.
+hub.json holds the hashes of the device tokens and the backup folder (on the hub) or the hub's address and this
+device's token (on a device). It stays out of git.
+
+The hub copies every ended session into its backup folder (a cloud drive's folder or a USB stick) and checks the copy.
+A device deletes a session it sent once the hub and the backup both hold it byte for byte, so there are always two
+copies off the device.
 """
 import argparse
 import hashlib
@@ -18,6 +22,7 @@ import hmac
 import json
 import re
 import secrets
+import shutil
 import socket
 from http.client import HTTPConnection, HTTPException, HTTPSConnection
 from pathlib import Path
@@ -32,6 +37,8 @@ DEVICE_NAME = re.compile(r"^[A-Za-z0-9_-]{1,32}$")
 # Files arrive in data/.incoming and are only moved into data/ once every file matches the sender's hash, so a half
 # sent session never shows up as a session
 INCOMING = ".incoming"
+# In the backup folder: {session name: {file: sha256}} of every session copied and checked there
+BACKUP_LIST = "backups.json"
 # Per request. A dropped connection abroad then only costs the chunk it was on
 CHUNK = 4 * 1024 * 1024
 # The Train tab's requests, which a device may also send to the hub
@@ -105,10 +112,25 @@ def ended(folder):
         return False
 
 
-def ended_sessions():
+def ended_sessions(data_dir=None):
     """{name: {file: size}} of the ended sessions in data/."""
-    return {p.parent.name: file_sizes(p.parent) for p in sorted(DATA_DIR.glob("*/session.json"))
+    return {p.parent.name: file_sizes(p.parent) for p in sorted(Path(data_dir or DATA_DIR).glob("*/session.json"))
             if SESSION_NAME.match(p.parent.name) and ended(p.parent)}
+
+
+def hashes(folder):
+    return {file: sha256(folder / file) for file in file_sizes(folder)}
+
+
+def remove_session(folder):
+    """Deletes a session folder that holds only the session files. Anything else in it was never sent, so then the
+    folder is left as it is."""
+    extra = sorted(p.name for p in folder.iterdir() if p.name not in SESSION_FILES)
+    if extra:
+        raise ValueError(f"{folder.name} also holds {', '.join(extra)}, left as it is")
+    for path in folder.iterdir():
+        path.unlink()
+    folder.rmdir()
 
 
 def check_name(name):
@@ -175,6 +197,52 @@ def finish(name, hashes):
             path.unlink()
     folder.rename(target)
     return target
+
+
+# The hub's backup
+
+def backup_folder():
+    """The folder set as the backup, None when none is set. Refused when it is set but missing, for example a USB
+    stick that isn't plugged in."""
+    path = load().get("backup")
+    if not path:
+        return None
+    if not Path(path).is_dir():
+        raise ValueError(f"the backup folder {path} isn't there")
+    return Path(path)
+
+
+def backed_up(dest):
+    """{session name: {file: sha256}} of the sessions in the backup, as checked when each was copied."""
+    path = dest / BACKUP_LIST
+    listing = json.loads(path.read_text()) if path.exists() else {}
+    return {name: h for name, h in listing.items() if (dest / name / "session.json").exists()}
+
+
+def back_up(folder, dest):
+    """Copies one ended session into the backup through dest/.incoming, checks every file against the original and
+    only then moves it in and lists it. A session already in the backup is never overwritten."""
+    name = folder.name
+    check_name(name)
+    if not ended(folder):
+        raise ValueError(f"{name} hasn't ended")
+    original = hashes(folder)
+    target = dest / name
+    if not target.exists():
+        part = dest / INCOMING / name
+        part.mkdir(parents=True, exist_ok=True)
+        for file, digest in original.items():
+            shutil.copyfile(folder / file, part / file)
+            if sha256(part / file) != digest:
+                raise ValueError(f"{file} of {name} came out different in the backup, try again")
+        part.rename(target)
+    # Also covers a copy moved in just before the list was written last time
+    elif hashes(target) != original:
+        raise ValueError(f"the backup has a different {name}, left as it is")
+    path = dest / BACKUP_LIST
+    listing = json.loads(path.read_text()) if path.exists() else {}
+    listing[name] = original
+    path.write_text(json.dumps(listing, indent=1) + "\n")
 
 
 def merge_named(path, theirs):

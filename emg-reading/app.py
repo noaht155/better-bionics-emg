@@ -253,6 +253,10 @@ class HubSettings(BaseModel):
     token: str = Field("", max_length=200)
 
 
+class BackupSettings(BaseModel):
+    folder: str
+
+
 class ModelNames(BaseModel):
     names: list[str] = Field(min_length=1)
 
@@ -443,7 +447,14 @@ def make_app(recorder, band, camera, tools, lan=True, serving=False):
         except ValueError:
             pass
 
-    recorder.on_saved = auto_evaluate
+    def after_saved(folder):
+        tools.backup.request()
+        auto_evaluate(folder)
+
+    recorder.on_saved = after_saved
+    # Catches up on sessions that ended while the app was off, and on sessions stopped early, which don't call
+    # on_saved
+    tools.backup.request()
 
     @app.middleware("http")
     async def revalidate(request, call_next):
@@ -902,9 +913,19 @@ def make_app(recorder, band, camera, tools, lan=True, serving=False):
             folder = hub.finish(name, hashes)
         except ValueError as e:
             refuse(e)
-        # Same as a session recorded here: scored before anything trains on it
+        # Same as a session recorded here: backed up and scored before anything trains on it
+        tools.backup.request()
         auto_evaluate(folder)
         return {"ok": True}
+
+    @app.get("/api/hub/backups")
+    def hub_backups():
+        """What the backup holds, for a device to check before it deletes a session it sent."""
+        try:
+            dest = hub.backup_folder()
+        except ValueError:
+            dest = None
+        return {"folder_set": dest is not None, "sessions": hub.backed_up(dest) if dest else {}}
 
     @app.get("/api/hub/models")
     def hub_models():
@@ -998,6 +1019,35 @@ def make_app(recorder, band, camera, tools, lan=True, serving=False):
             m["levels_here"] = bool(m["levels"]) and (DATA_DIR / m["levels"] / "session.json").exists()
         return {"hub": hello, "sessions": sessions, "models": models}
 
+    @app.get("/api/backup")
+    def backup_status():
+        folder = hub.load().get("backup")
+        try:
+            dest = hub.backup_folder()
+        except ValueError as e:
+            return {"folder": folder, "error": str(e)}
+        if dest is None:
+            return {"folder": None}
+        done = hub.backed_up(dest)
+        return {"folder": folder, "sessions": len(done),
+                "missing": len([name for name in hub.ended_sessions() if name not in done])}
+
+    @app.post("/api/backup/folder")
+    def set_backup_folder(settings: BackupSettings):
+        folder = settings.folder.strip()
+        if folder and not Path(folder).is_dir():
+            refuse(f"{folder} isn't a folder on this computer")
+        if folder and Path(folder).resolve().is_relative_to(DATA_DIR.resolve()):
+            refuse("the backup can't be inside data/")
+        hub.save(dict(hub.load(), backup=folder or None))
+        tools.backup.request()
+        return {"ok": True}
+
+    @app.post("/api/backup/run")
+    def run_backup():
+        tools.backup.request()
+        return {"ok": True}
+
     @app.post("/api/sync/send")
     def sync_send():
         try:
@@ -1086,6 +1136,18 @@ def make_app(recorder, band, camera, tools, lan=True, serving=False):
     return app
 
 
+def free_space(tools):
+    """On a device as its app closes: deletes the sessions the hub and its backup both hold (tools.Sync.free_space).
+    Never mid-use, so a session can't disappear from a page that shows it."""
+    print("checking which sessions the hub has backed up...")
+    try:
+        lines = tools.sync.free_space({levels_session(m) for m in model_list()} - {None})
+    except Exception as e:
+        lines = [f"kept every session here, the hub couldn't be asked: {e}"]
+    for line in lines:
+        print(line)
+
+
 def main():
     parser = argparse.ArgumentParser()
     source = parser.add_mutually_exclusive_group()
@@ -1126,6 +1188,8 @@ def main():
             recorder.stop()
             if camera is not None:
                 camera.stop()
+            if not args.hub and hub.load().get("url"):
+                free_space(tools)
 
 
 if __name__ == "__main__":
