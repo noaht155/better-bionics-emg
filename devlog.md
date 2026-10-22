@@ -1996,7 +1996,8 @@ the rest cues of recorded sessions.
 - `ml/cache/` stores the filtered signal once and cuts the windows on load (`dataset._windows`), it stored every
   window, each sample 4 times. Cache version 7. All 16 cached sessions rebuilt with identical windows and labels;
   895 MB to 287 MB. `load_all` over every session also deletes cache files of deleted sessions (none were left).
-  On the `cache-signal` branch until a training or calibration run on it works.
+  Also checked against main's `build` on all 28 completed sessions (the F sessions too) and on the 16 read back
+  from the cache: identical. On the `cache-signal` branch until Noah merges it.
 - Small items (Noah): the Proton Drive upload is checked. The flash delay test and tracking on the Mac only matter for
   camera-labelled sessions, so they are parked with the angles.
 
