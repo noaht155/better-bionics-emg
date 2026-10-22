@@ -1881,6 +1881,9 @@ balanced over the signs and rest. Means of the 2 seeds:
 - A network downloaded to the Mac didn't show in Control: the app hides networks where torch is missing. torch 2.2.2
   (last Intel Mac build) runs the downloaded sign network at about 5 ms per prediction on the 2017 MacBook. Torch is
   only how the PC runs it; the ESP32 port will run the exported weights in C++.
+- Closing a test copy of the app (`--port 8010`) ran the cleanup and deleted `2026-10-22_100023_noah` from the Mac
+  while the main app was still open (hub and backup both had it, nothing lost). Only the app on the default port
+  8000 cleans up now.
 
 ## Open
 

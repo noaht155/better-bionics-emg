@@ -1188,7 +1188,8 @@ def main():
             recorder.stop()
             if camera is not None:
                 camera.stop()
-            if not args.hub and hub.load().get("url"):
+            # A test copy on another port closes while the main app may still show those sessions
+            if not args.hub and hub.load().get("url") and args.port == parser.get_default("port"):
                 free_space(tools)
 
 
