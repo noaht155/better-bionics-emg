@@ -1985,41 +1985,81 @@ the rest cues of recorded sessions.
   the full 10-21 calibration (97.9 %).
 - Felt good live in Control (Noah). Merged into `main`.
 
+## 2026-10-22: priorities
+
+- Protocol A dropped as the control set (Noah): the signs (protocol F, semi abstract control) separate better and
+  get confused less, and F does what A did. A's code and sessions stay (old protocols are kept).
+- Continuous finger angles parked: not feasible with the current setup (band, loose pads, camera labels). The
+  control layer reaches in-between hand positions anyway.
+- Next: `ml/` foundations, haptics tests on the motors, and the ESP32 port. Open list regrouped below.
+- `tracking-toggle` was already merged (`036ac66`); the Open list still asked for it.
+
 ## Open
 
-- Backup: check that Proton Drive finished uploading `bb-sessions` to the cloud. Before the handoff, move the backup
-  to the lab's storage (Sync > Backup folder).
-- Hub: per-person consent before other people record.
-- Tracking switch: an F session with tracking off lost 0.04 % of samples; compare with tracking on, then merge
-  `tracking-toggle`.
-- Delay test: run it on the desktop too. Its flash result minus the LED test's 37 ms is that screen's own delay,
-  which shows how far the flash method overestimates (the MacBook's 43 ms shift includes its screen). Rerun the
-  MacBook once to check the 88 / 15 ms light and dark split repeats.
-
-- Trigger mode on the arm: tune clench level and timings live, count wrong picks (short clench read as two, a grab
-  read as a clench), check opening still registers with the distance check on, haptic confirmation of the picked grip.
-- Cursor tab parked; if a pad fix or socket electrodes change the picture, rerun the practice (logs in `data/cursor/`).
-- Control tab: try it on the arm (grab, hold, release; count wrong grips and twitches), check the 0.9 s to lock
-  against fewer votes, and whether pinch closes far enough at gain 1.5 (per-grip max levels or a higher gain).
-  Try the distance check and rest_or_class release live (retrain the LDA first).
-- Blend mode live: calibrate with a short protocol A session first, tune with the live loop (set settings over
-  the API, Noah tests). Then log Control runs to a file and a cued live test with scores.
-- Arm animation for cues: the forearm and wrist are drawn for the wrist cues since 2026-10-19. Still missing: the
-  upper arm (D's arm raise, reach, lean), the forearm lying along the table in the table posture, and the wrist
-  movements left out of protocol C.
+Now: control on the signs
 - Sign network (in `ml/` with calibration since 2026-10-19; calibrated score flat from 1 training session on, see the
   2026-10-21 learning curve): try it live against the sign LDA, and trigger mode with
   it on the Control tab (sign map, clench level against the sign session's levels); decide whether open stays in the
   set (seven F sessions 2026-10-20: calibrated mean 95.3 % without it, 91.5 % with, worst 91.9 / 85.6 %). Epochs: 20 since the 2026-10-19 sweep, recheck with
   more sessions. Later: one label path for grips and signs (both are held positions), without changing grip
   training results.
+- Trigger mode on the arm: tune clench level and timings live, count wrong picks (short clench read as two, a grab
+  read as a clench), check opening still registers with the distance check on, haptic confirmation of the picked grip.
+- Control tab: try it on the arm (grab, hold, release; count wrong grips and twitches), check the 0.9 s to lock
+  against fewer votes, and whether pinch closes far enough at gain 1.5 (per-grip max levels or a higher gain).
+  Try the distance check and rest_or_class release live (retrain the LDA first).
+- Blend mode live: calibrate with a short protocol A session first, tune with the live loop (set settings over
+  the API, Noah tests). Then log Control runs to a file and a cued live test with scores.
+- Measure false grips per minute in everyday activity, and a "hold to switch" rule.
+- Bring latency under 200 ms: shorter windows and vote, at some cost in accuracy.
+
+Now: `ml/` foundations
+- `ml/` foundations: session cache, dataset builder, shared evaluation harness, model registry, continual update
+  flow tested with LDA first.
+- `ml/cache/` is about 50 MB per session (every window stored, each sample 4 times). Store the filtered signal once
+  and cut windows on load, and drop cache files of sessions that no longer exist. System > Dev has a Clear cache button since
+  2026-10-22 (895 MB, 16 sessions, that day).
+- Ring network: rerun as sessions come in; fix the rest false alarms after calibration (rest weighting); then
+  continual updates with replay and the benchmark.
+- Test per-session normalisation on unseen sessions. Rotation augmentation only for LDA, the ring network ignores
+  whole-electrode rotations by construction.
+- Record one mirrored session to check the channel flip on real data. (Channel order round the band confirmed from
+  the MindRove manual, 2026-10-16.)
+
+Now: haptics
+- Motors: firmware 0.2.1 is flashed and channels 0 and 1 follow the duty. When the ULN2003, MOSFETs or LEDs go
+  back on, set `OUTPUTS_INVERTED` to false. Still to measure: lowest duty that starts a motor (the haptics floor),
+  how many levels can be told apart, and EMG spectra with the motors off and on to see if they show up.
+- Motor pickup: run `diagnostics/motor_pickup.py` with the motor band below the pads, relaxed and with a steady
+  clench.
+- Haptics: decide on LRAs vs coin motors. LRAs need an AC drive at their resonance (about 170 to 235 Hz), which is
+  inside the 40 to 200 Hz EMG band, so check for motor pickup in the EMG either way.
+
+Now: ESP32
+- Port the filter, envelope and features to C++ as streaming code and check them against `StreamFilter` and the
+  Python features on recorded sessions. Then the sign model: size, speed and memory on the board, weights in flash.
+
+Small items
+- Backup: check that Proton Drive finished uploading `bb-sessions` to the cloud. Before the handoff, move the backup
+  to the lab's storage (Sync > Backup folder).
+- Hub: per-person consent before other people record.
+- Delay test: run it on the desktop too. Its flash result minus the LED test's 37 ms is that screen's own delay,
+  which shows how far the flash method overestimates (the MacBook's 43 ms shift includes its screen). Rerun the
+  MacBook once to check the 88 / 15 ms light and dark split repeats.
+- Quick calibration on the Mac: calibrates on the CPU with torch 2.2.2, time not measured yet.
+- Arm animation for cues: the forearm and wrist are drawn for the wrist cues since 2026-10-19. Still missing: the
+  upper arm (D's arm raise, reach, lean), the forearm lying along the table in the table posture, and the wrist
+  movements left out of protocol C.
+- Tracking switch: an F session with tracking off lost 0.04 % of samples; compare with tracking on.
+
+Parked
 - Sign research (`sign-research.md`, tests and times in its section 7): "not a sign" class for wrist flexion on the
   D sessions; calibrated ring network on the 2 to 4 sign sets (1 to 2 h GPU, ask first); still gate and 12 votes
   live in lock mode with open, fist, point; record a protocol E session and run `screen_e.py`; then build protocol F
   (confirmation on 3 days) from its best set; Ninapro DB3 check if downloaded.
 - Record and play: train the classifier on protocol C's `custom` labels and play back each movement's target
   (or its recorded camera trajectory) under the control layer.
-
+- Cursor tab parked; if a pad fix or socket electrodes change the picture, rerun the practice (logs in `data/cursor/`).
 - Camera delay: re-measure with `diagnostics/camera_led/led_delay.py` only if the camera, its capture settings, the
   grab code or the computer change, and with `diagnostics/armband_rtt/armband_rtt.py rtt` if the band, its
   firmware or the WiFi setup change; then update `CAMERA_DELAY_S`.
@@ -2029,30 +2069,8 @@ the rest cues of recorded sessions.
   rerun the time-split test every 2 or 3 sessions) and a protractor check of the camera, to
   split the remaining gap into protocol, sensors and labels; then a live control test, since offline r doesn't
   predict live control.
-
 - Finger angles (priority since 2026-10-05, the recording plan is in the angles item above). Moving windows are
   weighted since 2026-10-05. Still to try: an angle head with its own temporal part on the shared backbone,
   calibration that includes finger movement in every posture, per-session open/fist normalisation of the labels,
   causal convolutions so the network can stream on an ESP32-S3.
 - More sessions with the 7 grips, firm holds and a marked band position.
-- Quick calibration on the Mac: calibrates on the CPU with torch 2.2.2, time not measured yet.
-- Test per-session normalisation on unseen sessions. Rotation augmentation only for LDA, the ring network ignores
-  whole-electrode rotations by construction.
-- `ml/cache/` is about 50 MB per session (every window stored, each sample 4 times). Store the filtered signal once
-  and cut windows on load, and drop cache files of sessions that no longer exist. System > Dev has a Clear cache button since
-  2026-10-22 (895 MB, 16 sessions, that day).
-- Measure false grips per minute in everyday activity, and a "hold to switch" rule.
-- Bring latency under 200 ms: shorter windows and vote, at some cost in accuracy.
-- `ml/` foundations: session cache, dataset builder, shared evaluation harness, model registry, continual update
-  flow tested with LDA first.
-- Record one mirrored session to check the channel flip on real data. (Channel order round the band confirmed from
-  the MindRove manual, 2026-10-16.)
-- Motor pickup: run `diagnostics/motor_pickup.py` with the motor band below the pads, relaxed and with a steady
-  clench.
-- Motors: firmware 0.2.1 is flashed and channels 0 and 1 follow the duty. When the ULN2003, MOSFETs or LEDs go
-  back on, set `OUTPUTS_INVERTED` to false. Still to measure: lowest duty that starts a motor (the haptics floor),
-  how many levels can be told apart, and EMG spectra with the motors off and on to see if they show up.
-- Haptics: decide on LRAs vs coin motors. LRAs need an AC drive at their resonance (about 170 to 235 Hz), which is
-  inside the 40 to 200 Hz EMG band, so check for motor pickup in the EMG either way.
-- Ring network: rerun as sessions come in; fix the rest false alarms after calibration (rest weighting); then
-  continual updates with replay and the benchmark.
