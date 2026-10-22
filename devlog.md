@@ -1945,9 +1945,11 @@ the rest cues of recorded sessions.
   Mac battery 4.6 / 3.7, charger 5.0 / 6.7, charger + palm rest 5.1 / 27.2 (ch 0 74, ch 2 69), battery + palm rest
   6.6 / 2.9. 120 Hz, and both bands outside the filter, the same in every block; 180 Hz up to 2.8 only with charger + touch.
 - So the Mac itself is not worse, and neither is the charger hands off. The hum comes from touching the Mac while it is on
-  the charger: 60 Hz goes up 5 to 7 times, close to the 80 uV hum limit on ch 0. The notch removes it (filtered 5.1).
-  That fits the 10-21 session (charger in, 10.8 uV at 60 Hz). Record on the Mac on battery, or keep the hand off it
-  while charging. The slightly higher filtered level with the hand on the palm rest on battery has no mains in it,
+  the charger: 60 Hz goes up 5 to 7 times, close to the 80 uV hum limit on ch 0. The notch removes most of it (median
+  filtered 5.1), but not on the worst pads: ch 0 and ch 2 rest at 8.5 and 8.4 filtered against about 5 elsewhere and
+  in the charger hands-off block, so mains that strong reaches what the models see. Rule: record on the Mac on
+  battery. The 10-21 session (charger in, 10.8 uV at 60 Hz) likely had the same cause, not proven since nobody noted
+  whether the trackpad was touched. The slightly higher filtered level with the hand on the palm rest on battery has no mains in it,
   probably muscle from the resting hand.
 
 ## Open
