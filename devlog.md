@@ -1978,6 +1978,8 @@ the rest cues of recorded sessions.
   training), tested on rounds 3 and 4, table / forward: table round 1 95.7 / 78.5 %, table rounds 1 and 2
   97.2 / 90.1 %, both postures round 1 95.2 / 94.7 %, both rounds 1 and 2 97.2 / 98.6 %. Same pattern on
   `2026-10-20_105110` (in training, optimistic). So quick calibration now records every ticked posture.
+- `2026-10-22_135247` deleted (Noah): table only, he didn't want it in the training data. Its calibrated network
+  and backup copy went too (Recycle Bin).
 
 ## Open
 
