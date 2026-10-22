@@ -41,6 +41,9 @@ INCOMING = ".incoming"
 BACKUP_LIST = "backups.json"
 # Per request. A dropped connection abroad then only costs the chunk it was on
 CHUNK = 4 * 1024 * 1024
+# Opening a connection to a hub out of reach (the Mac on the armband's WiFi) fails after this, whatever the request's
+# own timeout for the answer
+CONNECT_TIMEOUT_S = 5
 # The Train tab's requests, which a device may also send to the hub
 TRAIN_PATHS = {"/api/sessions", "/api/models", "/api/networks", "/api/train", "/api/network/run",
                "/api/network/stop"}
@@ -286,27 +289,30 @@ class Hub:
             if self._connection is None:
                 parts = urlsplit(self.url)
                 if parts.scheme == "https":
-                    self._connection = HTTPSConnection(parts.netloc, timeout=timeout)
+                    self._connection = HTTPSConnection(parts.netloc, timeout=CONNECT_TIMEOUT_S)
                 else:
                     host = parts.hostname
                     try:
                         host = socket.getaddrinfo(host, None, socket.AF_INET)[0][4][0]
                     except OSError:
                         pass
-                    self._connection = HTTPConnection(host, parts.port or 80, timeout=timeout)
+                    self._connection = HTTPConnection(host, parts.port or 80, timeout=CONNECT_TIMEOUT_S)
+            fresh = self._connection.sock is None
             try:
-                if self._connection.sock is not None:
-                    self._connection.sock.settimeout(timeout)
+                if fresh:
+                    self._connection.connect()
+                self._connection.sock.settimeout(timeout)
                 self._connection.request(method, path, body=data, headers=headers)
                 res = self._connection.getresponse()
                 raw = res.read()
                 break
             # A kept connection the hub has closed fails on first use, the second try opens a new one. A chunk that
-            # did arrive is refused on the second try by its offset, never written twice
+            # did arrive is refused on the second try by its offset, never written twice. A new connection that
+            # fails is not tried again: the hub is out of reach and a second try only doubles the wait
             except (OSError, HTTPException) as e:
                 self._connection.close()
                 self._connection = None
-                if attempt == 2:
+                if fresh or attempt == 2:
                     raise HubError(502, f"can't reach the hub at {self.url}: {e}") from None
         if res.status >= 400:
             try:

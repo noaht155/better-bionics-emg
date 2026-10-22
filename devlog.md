@@ -1918,6 +1918,12 @@ balanced over the signs and rest. Means of the 2 seeds:
   Noah), before the sessions, so a session kept only for a downloaded model's levels goes too. Models only the device
   has stay. Next start, download the models again in System > Sync. Tried on the Mac the same day: on close it
   deleted the downloaded sign network and then `2026-10-21_141651_noah`, both still on the hub and in the backup.
+- Sync hang on the Mac with the hub out of reach (Noah): not one call, `hub.request` itself. Every failure got a
+  second try, meant for a kept connection the hub had closed, so a hub that never answers cost two full timeouts: 60 s
+  for System > Sync, Send and the check on close, 10 s for the header chip. Now only a kept connection is tried again,
+  and opening one gives up after `hub.CONNECT_TIMEOUT_S` 5 s whatever the request's own timeout (chunks still get
+  120 s for the answer). Measured on the Mac with the desktop's hub not answering: all four give up in 5.0 s. A name
+  that doesn't resolve fails in 0.1 s. Not yet tried on the band's WiFi itself, the Mac can't be on it and online.
 
 **Mac hum test.** `emg-reading/hum_test.py` records the relaxed arm for a set time under a label (into
 `data/hum-test/`, no session.json so sync leaves it alone) and prints per channel, median over 1 s windows: filtered
@@ -1954,9 +1960,6 @@ the rest cues of recorded sessions.
 
 ## Open
 
-- Sync on the MacBook hangs when it has no sessions or can't reach the hub (on the band's WiFi, for example), it
-  should give up much sooner (Noah, 2026-10-22). Hub requests default to a 30 s timeout (`hub.request`), only the
-  status check uses `SYNC_TIMEOUT_S` 5 s. Find which call hangs first.
 - Backup: check that Proton Drive finished uploading `bb-sessions` to the cloud. Before the handoff, move the backup
   to the lab's storage (Sync > Backup folder).
 - Hub: per-person consent before other people record.
