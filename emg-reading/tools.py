@@ -61,6 +61,8 @@ SIM_STEP_S = 0.05
 SYNC_CHECK_S = 30
 SYNC_BUSY_CHECK_S = 2
 SYNC_TIMEOUT_S = 5
+# How often a quick calibration on the hub checks on the hub's job
+HUB_POLL_S = 1.0
 
 
 class Tool:
@@ -971,6 +973,68 @@ class Sync(Tool):
         self.state.update(step=None, share=1.0)
 
 
+class HubCalibration(Tool):
+    """A device's quick calibration, run on the hub's GPU: sends the session if the hub doesn't have it yet (through
+    Sync, so it never goes up twice at once with auto send), starts the calibration there, follows the hub's job
+    and downloads the calibrated network. Its state has the same fields the page reads from NetworkJob."""
+
+    def __init__(self, sync):
+        super().__init__()
+        self.sync = sync
+
+    def start(self, name):
+        self._launch(self._run, name)
+
+    def _wait_for_sync(self):
+        while self.sync.state["running"]:
+            time.sleep(HUB_POLL_S)
+
+    def _run(self, name):
+        now = time.time()
+        self.state.update(job="calibrate", lines=[], result=None, started=now, last_line=now, progress={"share": None})
+        client = hub.client()
+        mine = hub.ended_sessions(DATA_DIR).get(name)
+        if mine is None:
+            raise ValueError(f"{name} hasn't ended on this computer")
+        self._wait_for_sync()
+        theirs = client.request("GET", "/api/hub/sessions").get(name)
+        if theirs is None:
+            self.state["lines"] = [f"Sending {name} to the hub"]
+            try:
+                self.sync.send()
+            except ValueError:
+                pass
+            # Sync sets running before send() returns, so the wait can't miss it
+            self._wait_for_sync()
+            theirs = client.request("GET", "/api/hub/sessions").get(name)
+            if theirs is None:
+                raise ValueError(f"couldn't send {name} to the hub: {self.sync.state.get('error') or 'not there'}")
+        if theirs != mine:
+            raise ValueError(f"the hub has a different session called {name}")
+        network = client.request("POST", "/api/network/quick", body={"session": name})["network"]
+        self.state["network"] = network
+        while True:
+            time.sleep(HUB_POLL_S)
+            job = client.request("GET", "/api/hub/jobs")["network"]
+            self.state.update(lines=job.get("lines", []), progress=job.get("progress") or {"share": None},
+                              last_line=time.time())
+            if not job["running"]:
+                break
+        if job.get("error"):
+            raise RuntimeError(f"on the hub: {job['error']}")
+        result = job.get("result") or {}
+        saved = result.get("saved")
+        if not saved:
+            raise RuntimeError("calibration on the hub finished without saving a network")
+        listing = {m["name"]: m for m in client.request("GET", "/api/hub/models")}
+        if saved not in listing:
+            raise RuntimeError(f"the hub doesn't list {saved}")
+        m = listing[saved]
+        self.state["lines"] = self.state["lines"] + [f"downloading {saved}"]
+        client.download({"kind": "model", "name": saved}, model_path(saved), m["size"], m["sha256"], lambda n: None)
+        self.state["result"] = result
+
+
 class Backup:
     """Copies every ended session the backup folder doesn't have yet (hub.back_up), in the background whenever a
     session is saved here or received from a device. Asked again while copying, it goes round once more."""
@@ -1093,6 +1157,7 @@ class Tools:
         self.trainer = Trainer(self.predictor)
         self.network = NetworkJob()
         self.sync = Sync()
+        self.hub_calibration = HubCalibration(self.sync)
         self.backup = Backup()
         self.sync_watch = SyncWatch(recorder, self.sync, self.backup)
         self.recorder = recorder
@@ -1117,7 +1182,8 @@ class Tools:
         now = time.time()
         out = {}
         for name in ("check", "wifi", "calibration", "haptics", "test", "predictor", "trainer", "network", "control",
-                     "cursor", "sync", "backup", "sync_watch", "round_trip", "flash", "hum"):
+                     "cursor", "sync", "backup", "sync_watch", "round_trip", "flash", "hum",
+                     "hub_calibration"):
             state = dict(getattr(self, name).state)
             if state.get("until"):
                 state["left"] = max(0.0, state["until"] - now)

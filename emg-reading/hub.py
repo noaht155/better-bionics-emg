@@ -46,7 +46,7 @@ CHUNK = 4 * 1024 * 1024
 CONNECT_TIMEOUT_S = 5
 # The Train tab's requests, which a device may also send to the hub
 TRAIN_PATHS = {"/api/sessions", "/api/models", "/api/networks", "/api/train", "/api/network/run",
-               "/api/network/stop"}
+               "/api/network/stop", "/api/network/quick"}
 
 
 def load():

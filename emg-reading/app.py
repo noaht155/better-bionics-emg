@@ -740,8 +740,15 @@ def make_app(recorder, band, camera, tools, lan=True, serving=False):
     @app.post("/api/network/quick")
     def quick_calibration(choice: QuickCalibration):
         """Calibrates the newest base network on a quick calibration session (end card of the Record tab): the
-        general network for grips, the newest sign network for a protocol F session."""
+        general network for grips, the newest sign network for a protocol F session. A device with a hub runs it
+        on the hub's GPU and downloads the result (tools.HubCalibration)."""
         folder = session_folder(choice.session)
+        if not serving and hub.load().get("url"):
+            try:
+                tools.hub_calibration.start(folder.name)
+            except ValueError as e:
+                refuse(e)
+            return {"network": None, "job": "hub_calibration"}
         settings = json.loads((folder / "session.json").read_text()).get("settings", {})
         signs = settings.get("protocol") == "F"
         if not signs and settings.get("protocol", "A") != "A":
@@ -758,7 +765,7 @@ def make_app(recorder, band, camera, tools, lan=True, serving=False):
             tools.network.start("calibrate", args)
         except ValueError as e:
             refuse(e)
-        return {"network": base}
+        return {"network": base, "job": "network"}
 
     @app.post("/api/network/stop")
     def stop_network():

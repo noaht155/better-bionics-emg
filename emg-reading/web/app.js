@@ -699,11 +699,16 @@ function showQuickCal(r) {
 
 // The job state comes over the websocket, so a result is only taken once this job has been seen running
 function drawQuickCal() {
-  if (!quickCal?.network || quickCal.saved || $("outro").hidden) return;
-  const n = state.tools.network;
+  if (!quickCal?.job || quickCal.saved || $("outro").hidden) return;
+  const n = state.tools[quickCal.job];
   if (n.running) {
     quickCal.seen = true;
-    $("outro-cal-status").textContent = `Calibrating ${quickCal.network}, ${fmtTime(n.running_s ?? 0)}`;
+    // On the hub the network's name comes back once the session is there and the job has started
+    const what = n.network ?? quickCal.network;
+    const where = quickCal.job === "hub_calibration" ? " on the hub" : "";
+    $("outro-cal-status").textContent = what
+      ? `Calibrating ${what}${where}, ${fmtTime(n.running_s ?? 0)}`
+      : `${n.lines?.at(-1) ?? "Sending the session"}, ${fmtTime(n.running_s ?? 0)}`;
     return;
   }
   if (!quickCal.seen) return;
@@ -711,7 +716,7 @@ function drawQuickCal() {
   if (n.error || !r?.saved) {
     $("outro-cal-error").textContent = n.error || "calibration finished without saving a network";
     $("outro-cal-status").textContent = "";
-    quickCal.network = null;
+    quickCal.job = null;
     $("outro-calibrate").disabled = false;
     return;
   }
@@ -737,8 +742,8 @@ $("outro-calibrate").addEventListener("click", async () => {
     $("outro-calibrate").disabled = false;
     return;
   }
-  Object.assign(quickCal, { network: reply.network, seen: false });
-  $("outro-cal-status").textContent = `Calibrating ${reply.network}`;
+  Object.assign(quickCal, { network: reply.network, job: reply.job, seen: false });
+  $("outro-cal-status").textContent = reply.network ? `Calibrating ${reply.network}` : "Sending the session to the hub";
 });
 
 $("outro-control").addEventListener("click", async () => {
