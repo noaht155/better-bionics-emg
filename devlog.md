@@ -1885,6 +1885,19 @@ balanced over the signs and rest. Means of the 2 seeds:
   while the main app was still open (hub and backup both had it, nothing lost). Only the app on the default port
   8000 cleans up now.
 
+## 2026-10-22: Control crash on the Mac session
+
+- Control (and haptics) with the network calibrated on `2026-10-21_141651_noah` crashed with a division by zero in
+  `calibrate.levels`. Cause: `lost_channels` dropped a channel from the common average if its pad lost contact anywhere
+  in the recording. Three band bumps (3 of 3319 windows) tripped it on 7 of 8 channels, so the average was ch 1 alone,
+  ch 1 minus itself was 0 and its rest level 0. Fine for the 10 s calibration it was written for, not since levels
+  come from whole sessions.
+- `from_session` now counts a channel as lost only when contact was off in more than 1 % of windows
+  (`SESSION_LOST_SHARE`); no completed session has more than 0.1 %. It refuses with a message when fewer than 2 pads
+  kept contact, and `levels` refuses a zero rest. Levels change only for the 4 sessions with a bump.
+- The session itself is usable but hums: rest 18 to 26 uV filtered (Mac session's numbers) against 5 to 6 on the
+  desktop, and 7 channels got "grips barely above rest" (ratio 2.0). Mac hum stays an Open item.
+
 ## Open
 
 - Backup: check that Proton Drive finished uploading `bb-sessions` to the cloud. Before the handoff, move the backup

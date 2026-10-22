@@ -33,6 +33,11 @@ REST_MARGIN = 1.5
 # Max level below the peaks so 100% is reachable
 MAX_PERCENTILE = 80
 MIN_RATIO = 2.0
+# In a whole session a channel only counts as lost when its pad was off for more than this share of the time. A bump
+# of the band trips the contact check for one window on most channels: 2026-10-21_141651 lost 7 of 8 channels from
+# 3 windows of 3319, the common average was then ch 1 alone and its rest level 0. No completed session has a channel
+# off for more than 0.1 % of windows
+SESSION_LOST_SHARE = 0.01
 
 
 def load_calibration():
@@ -45,13 +50,11 @@ def load_calibration():
     return {int(ch): (v["rest"], v["max"]) for ch, v in data["channels"].items()}, data["common_average"]
 
 
-def lost_channels(raw, rate):
-    """True for channels that lost pad contact anywhere in the recording."""
+def lost_channels(raw, rate, share=0.0):
+    """True for channels that lost pad contact in more than share of the recording's windows, by default anywhere."""
     window = int(ENVELOPE_MS / 1000 * rate)
-    lost = np.zeros(raw.shape[0], bool)
-    for i in range(0, raw.shape[1] - window + 1, window):
-        lost |= contact_lost(raw[:, i:i + window])
-    return lost
+    hits = [contact_lost(raw[:, i:i + window]) for i in range(0, raw.shape[1] - window + 1, window)]
+    return np.mean(hits, axis=0) > share if hits else np.zeros(raw.shape[0], bool)
 
 
 def process(raw, rate, car):
@@ -94,6 +97,8 @@ def levels(ch, rest_env, active_env, low_note="barely changed, check the pad", s
     report line)."""
     rest_pct, margin, max_pct = scale or (REST_PERCENTILE, REST_MARGIN, MAX_PERCENTILE)
     rest = float(np.percentile(rest_env, rest_pct)) * margin
+    if rest <= 0:
+        raise ValueError(f"channel {ch} has no signal at rest")
     max_ = float(np.percentile(active_env, max_pct))
     note = ""
     if max_ < MIN_RATIO * rest:
@@ -110,7 +115,9 @@ def from_session(folder, car=True, scale=None):
     channels = data["meta"]["channels"]
     rate = data["meta"]["rate"]
     raw = data["emg"][channels]
-    lost = lost_channels(raw, rate)
+    lost = lost_channels(raw, rate, SESSION_LOST_SHARE)
+    if (~lost).sum() < 2:
+        raise ValueError(f"{Path(folder).name}: only {(~lost).sum()} of {len(channels)} pads kept contact, no levels")
     y = filter_block(raw, rate)
     if car:
         y = common_average(y, ~lost)

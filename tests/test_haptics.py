@@ -30,3 +30,16 @@ def test_session_levels_keep_rest_quiet():
         env = np.concatenate([envelope_series(y[i, s["sample0"] + trim:s["sample1"]], 500) for s in rests])
         on.append([level(e, result[ch]["rest"], result[ch]["max"]) > 0 for e in env])
     assert np.mean(np.any(on, axis=0)) < 0.05
+
+
+def test_band_bump_doesnt_lose_channels():
+    """A bump trips the contact check for one window on most channels. In a whole session that mustn't drop them
+    from the common average (2026-10-21_141651: 7 of 8 dropped, ch 1 averaged with itself to a rest level of 0)."""
+    raw = np.random.default_rng(0).normal(0, 10, (8, 500 * 60))
+    raw[:7, 1000:1010] += 200_000
+    assert calibrate.lost_channels(raw, 500).sum() == 7
+    assert calibrate.lost_channels(raw, 500, calibrate.SESSION_LOST_SHARE).sum() == 0
+    raw[3, :] += np.tile([0, 200_000], 500 * 30)
+    assert list(np.flatnonzero(calibrate.lost_channels(raw, 500, calibrate.SESSION_LOST_SHARE))) == [3]
+    with pytest.raises(ValueError, match="no signal"):
+        calibrate.levels(1, np.zeros(10), np.ones(10))
