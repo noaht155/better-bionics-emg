@@ -1993,6 +1993,12 @@ the rest cues of recorded sessions.
   control layer reaches in-between hand positions anyway.
 - Next: `ml/` foundations, haptics tests on the motors, and the ESP32 port. Open list regrouped below.
 - `tracking-toggle` was already merged (`036ac66`); the Open list still asked for it.
+- `ml/cache/` stores the filtered signal once and cuts the windows on load (`dataset._windows`), it stored every
+  window, each sample 4 times. Cache version 7. All 16 cached sessions rebuilt with identical windows and labels;
+  895 MB to 287 MB. `load_all` over every session also deletes cache files of deleted sessions (none were left).
+  On the `cache-signal` branch until a training or calibration run on it works.
+- Small items (Noah): the Proton Drive upload is checked. The flash delay test and tracking on the Mac only matter for
+  camera-labelled sessions, so they are parked with the angles.
 
 ## Open
 
@@ -2016,9 +2022,6 @@ Now: control on the signs
 Now: `ml/` foundations
 - `ml/` foundations: session cache, dataset builder, shared evaluation harness, model registry, continual update
   flow tested with LDA first.
-- `ml/cache/` is about 50 MB per session (every window stored, each sample 4 times). Store the filtered signal once
-  and cut windows on load, and drop cache files of sessions that no longer exist. System > Dev has a Clear cache button since
-  2026-10-22 (895 MB, 16 sessions, that day).
 - Ring network: rerun as sessions come in; fix the rest false alarms after calibration (rest weighting); then
   continual updates with replay and the benchmark.
 - Test per-session normalisation on unseen sessions. Rotation augmentation only for LDA, the ring network ignores
@@ -2040,19 +2043,14 @@ Now: ESP32
   Python features on recorded sessions. Then the sign model: size, speed and memory on the board, weights in flash.
 
 Small items
-- Backup: check that Proton Drive finished uploading `bb-sessions` to the cloud. Before the handoff, move the backup
-  to the lab's storage (Sync > Backup folder).
+- Backup: Proton Drive upload checked (Noah, 2026-10-22). Before the handoff, move the backup to the lab's
+  storage (Sync > Backup folder).
 - Hub: per-person consent before other people record.
-- Delay test: run it on the desktop too. Its flash result minus the LED test's 37 ms is that screen's own delay,
-  which shows how far the flash method overestimates (the MacBook's 43 ms shift includes its screen). Rerun the
-  MacBook once to check the 88 / 15 ms light and dark split repeats.
-- Quick calibration on the Mac: calibrates on the CPU with torch 2.2.2, time not measured yet.
+- Quick calibration on the Mac: calibrates on the CPU with torch 2.2.2 (the desktop uses the GPU), note the time
+  on the first one there.
 - Arm animation for cues: the forearm and wrist are drawn for the wrist cues since 2026-10-19. Still missing: the
   upper arm (D's arm raise, reach, lean), the forearm lying along the table in the table posture, and the wrist
   movements left out of protocol C.
-- Tracking switch: an F session with tracking off lost 0.04 % of samples; compare with tracking on.
-
-Parked
 - Sign research (`sign-research.md`, tests and times in its section 7): "not a sign" class for wrist flexion on the
   D sessions; calibrated ring network on the 2 to 4 sign sets (1 to 2 h GPU, ask first); still gate and 12 votes
   live in lock mode with open, fist, point; record a protocol E session and run `screen_e.py`; then build protocol F
@@ -2074,3 +2072,9 @@ Parked
   calibration that includes finger movement in every posture, per-session open/fist normalisation of the labels,
   causal convolutions so the network can stream on an ESP32-S3.
 - More sessions with the 7 grips, firm holds and a marked band position.
+- Tracking switch: the F session on the Mac with tracking off lost 0.04 % of samples. Whether tracking on loses
+  more only matters for camera-labelled sessions, so parked with the angles.
+- Delay test (parked with the angles, the camera delay only shifts angle labels): run the flash test on the
+  desktop too. Its flash result minus the LED test's 37 ms is that screen's own delay,
+  which shows how far the flash method overestimates (the MacBook's 43 ms shift includes its screen). Rerun the
+  MacBook once to check the 88 / 15 ms light and dark split repeats.
