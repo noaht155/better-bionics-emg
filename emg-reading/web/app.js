@@ -95,9 +95,9 @@ function mirrored() {
 // Setup form
 
 // Filled in fresh every session: a copied placement or note would be wrong after the band moves, and a forgotten
-// practice tick would quietly throw away a real session. Older browsers may still have them saved, so they are
+// practice or quick calibration tick would quietly throw away or cut short a real session. Older browsers may still have them saved, so they are
 // skipped on load too
-const PER_SESSION = ["practice", "crease_distance", "crease_unit", "module_side", "placement", "notes"];
+const PER_SESSION = ["practice", "quick", "crease_distance", "crease_unit", "module_side", "placement", "notes"];
 
 function loadSettings() {
   const form = $("setup");
@@ -162,6 +162,7 @@ function readSettings() {
     notes: form.notes.value.trim(),
     postures: [...form.querySelectorAll("[name=posture]:checked")].map((c) => c.value),
     protocol: form.protocol.value,
+    quick: form.quick.checked && ["A", "F"].includes(form.protocol.value),
     reps: num("reps"), hold_s: num("hold_s"), rest_s: num("rest_s"), rounds: num("rounds"), move_s: num("move_s"),
     moves: [...form.querySelectorAll("[name=move]:checked")].map((c) => c.value),
     c_rounds: num("c_rounds"), c_move_s: num("c_move_s"), d_rounds: num("d_rounds"), d_activity_s: num("d_activity_s"),
@@ -171,10 +172,10 @@ function readSettings() {
 }
 
 function planBody() {
-  const { postures, protocol, reps, hold_s, rest_s, rounds, move_s, moves, c_rounds, c_move_s, d_rounds, d_activity_s,
-    e_rounds, e_sign_s, f_rounds, f_sign_s } = readSettings();
-  return { postures, protocol, reps, hold_s, rest_s, rounds, move_s, moves, c_rounds, c_move_s, d_rounds, d_activity_s,
-    e_rounds, e_sign_s, f_rounds, f_sign_s };
+  const { postures, protocol, quick, reps, hold_s, rest_s, rounds, move_s, moves, c_rounds, c_move_s, d_rounds,
+    d_activity_s, e_rounds, e_sign_s, f_rounds, f_sign_s } = readSettings();
+  return { postures, protocol, quick, reps, hold_s, rest_s, rounds, move_s, moves, c_rounds, c_move_s, d_rounds,
+    d_activity_s, e_rounds, e_sign_s, f_rounds, f_sign_s };
 }
 
 // Protocol C movement picker: checkboxes grouped by category, the hand above plays the one under the pointer
@@ -248,10 +249,13 @@ function drawPick(dt) {
   if (angles) drawSolidHand(ctx, angles, { view: solidView, mirror: mirrored(), color: SOLID_COLOR });
 }
 
-// Only the fields the chosen protocol uses
+// Only the fields the chosen protocol uses. A quick calibration sets its own repetitions (QUICK_REPS)
 function showProtocolFields() {
   const form = $("setup");
-  form.querySelectorAll("[data-protocol]").forEach((el) => { el.hidden = el.dataset.protocol !== form.protocol.value; });
+  const quick = readSettings().quick;
+  form.querySelectorAll("[data-protocol]").forEach((el) => {
+    el.hidden = !el.dataset.protocol.split(" ").includes(form.protocol.value) || (quick && "full" in el.dataset);
+  });
 }
 
 // The server works out the length from the real session plan
@@ -500,6 +504,7 @@ function drawLive(now) {
 }
 
 function drawSession() {
+  drawQuickCal();
   const s = state.session;
   if (s) preview = null;
   if (s) sawSession = true;
@@ -671,9 +676,79 @@ function showOutro(r) {
   void box.offsetWidth;
   box.hidden = false;
   clearTimeout(outroTimer);
+  showQuickCal(r);
   // With reduced motion the bar has no animation to end, a plain timer closes it
-  if (matchMedia("(prefers-reduced-motion: reduce)").matches) outroTimer = setTimeout(closeOutro, OUTRO_HOLD_MS);
+  if (!quickCal && matchMedia("(prefers-reduced-motion: reduce)").matches) outroTimer = setTimeout(closeOutro, OUTRO_HOLD_MS);
 }
+
+// A quick calibration session's card stays open (no countdown) and calibrates the newest network on the session,
+// then offers the result in Control. {session, network, seen, saved}
+let quickCal = null;
+
+function showQuickCal(r) {
+  const quick = !!(r.quick && r.completed && !r.practice);
+  quickCal = quick ? { session: r.session } : null;
+  $("outro-cal").hidden = !quick;
+  $("outro-bar").parentElement.hidden = quick;
+  $("outro-close").classList.toggle("primary", !quick);
+  $("outro-calibrate").disabled = false;
+  $("outro-control").hidden = true;
+  $("outro-cal-status").textContent = quick ? "Fits the network to where the band sits now, then scores it." : "";
+  $("outro-cal-error").textContent = "";
+}
+
+// The job state comes over the websocket, so a result is only taken once this job has been seen running
+function drawQuickCal() {
+  if (!quickCal?.network || quickCal.saved || $("outro").hidden) return;
+  const n = state.tools.network;
+  if (n.running) {
+    quickCal.seen = true;
+    $("outro-cal-status").textContent = `Calibrating ${quickCal.network}, ${fmtTime(n.running_s ?? 0)}`;
+    return;
+  }
+  if (!quickCal.seen) return;
+  const r = n.result;
+  if (n.error || !r?.saved) {
+    $("outro-cal-error").textContent = n.error || "calibration finished without saving a network";
+    $("outro-cal-status").textContent = "";
+    quickCal.network = null;
+    $("outro-calibrate").disabled = false;
+    return;
+  }
+  showQuickResult(r);
+}
+
+function showQuickResult(r) {
+  quickCal.saved = r.saved;
+  $("outro-calibrate").disabled = true;
+  const word = r.scores?.wrist_as_sign != null ? "round" : "repetition";
+  const m = r.scores;
+  $("outro-cal-status").textContent = (m && r.checked_on
+    ? `${word[0].toUpperCase()}${word.slice(1)} ${r.reps.at(-1)} after calibrating on ${r.checked_on.join(", ")}: `
+      + `${pct(m.balanced)} balanced, rest taken for a position ${pct(m.rest_false)}, wrong position shown ${pct(m.wrong)}. `
+    : "") + `Saved ${r.saved}, calibrated on the whole session.`;
+  $("outro-control").hidden = false;
+}
+
+$("outro-calibrate").addEventListener("click", async () => {
+  $("outro-calibrate").disabled = true;
+  const reply = await postShowing("/api/network/quick", { session: quickCal.session }, "outro-cal-error");
+  if (!reply) {
+    $("outro-calibrate").disabled = false;
+    return;
+  }
+  Object.assign(quickCal, { network: reply.network, seen: false });
+  $("outro-cal-status").textContent = `Calibrating ${reply.network}`;
+});
+
+$("outro-control").addEventListener("click", async () => {
+  const saved = quickCal.saved;
+  closeOutro(false);
+  showTab("control");
+  await loadControlLists();
+  $("ctl-model").value = saved;
+  $("ctl-model").dispatchEvent(new Event("change"));
+});
 
 function closeOutro(fade = true) {
   const box = $("outro");

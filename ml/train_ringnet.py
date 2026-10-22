@@ -287,7 +287,8 @@ def main():
                                "net train")}
     angles = {k: [] for k in ANGLE_ROWS}
     t0 = time.time()
-    folds = [n for n in names if not args.held or n in args.held]
+    # Quick calibration sessions train but aren't held out, they lack the third repetition to test on
+    folds = [n for n in names if (n in args.held if args.held else not dataset.quick(dataset.DATA_DIR / n))]
     for fold, held in enumerate(folds, 1):
         before = {k: len(v) for k, v in results.items()}
         others = [data[n] for n in names if n != held]
@@ -366,9 +367,8 @@ def main():
     for key, label in ANGLE_ROWS.items():
         print(f"  {label:46s} {mean_of(angles[key], 'mae'):5.1f} deg   r {mean_of(angles[key], 'r'):.2f}")
 
-    held = [n for n in names if not args.held or n in args.held]
     row = {"date": time.strftime("%Y-%m-%d %H:%M"), "code": code_version(),
-           "run": "all" if not args.held else "held", "held": " ".join(n[:17] for n in held),
+           "run": "all" if not args.held else "held", "held": " ".join(n[:17] for n in folds),
            "sessions": len(names), "epochs": args.epochs, "seed": args.seed, "minutes": round((time.time() - t0) / 60, 1)}
     for key, prefix in LOG_NAMES.items():
         for m in ("balanced", "grips", "rest_false", "wrong", "answers"):
@@ -381,7 +381,7 @@ def main():
     log_run(row)
     print(f"\nadded to {LOG.name}")
     if args.json:
-        summary = {"sessions": names, "held": [n for n in names if not args.held or n in args.held],
+        summary = {"sessions": names, "held": folds,
                    "grips": {labels[k]: {m: mean_of(results[k], m)
                                          for m in ("balanced", "grips", "rest_false", "wrong", "answers")}
                              for k in labels},

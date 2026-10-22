@@ -422,7 +422,11 @@ def _finger_block(rest_s, posture):
     return cues
 
 
-def session_plan(postures, reps=3, hold_s=4.0, rest_s=3.0, free_s=0.0, seed=None):
+# A quick calibration session, the repetitions the calibrated scores were measured with (2026-10-02)
+QUICK_REPS = 2
+
+
+def session_plan(postures, reps=3, hold_s=4.0, rest_s=3.0, free_s=0.0, seed=None, quick=False):
     """Cue list: per posture every gesture of GESTURE_SET reps times in shuffled order with rest in between, then
     free movement if free_s is set. No sync taps since 2026-10-08: the camera delay is fixed (ml/dataset.py).
 
@@ -430,12 +434,16 @@ def session_plan(postures, reps=3, hold_s=4.0, rest_s=3.0, free_s=0.0, seed=None
 
     kind is "hold" (a held gesture or rest, protocol A), "finger" (one finger moving, for the angle model), "free"
     (continuous movement), "move" (protocol_b_plan), "sync" (a tap, older sessions) or "break" (waits for Continue). seconds is None
-    for breaks. Free movement is off by default since 2026-10-08, protocol_b_plan records movement instead."""
+    for breaks. Free movement is off by default since 2026-10-08, protocol_b_plan records movement instead.
+
+    quick: a quick calibration after putting the band on, the grips only."""
     rng = random.Random(seed)
     grips = [g for g in GESTURE_SET if g != "rest"]
     cues = []
     for posture in postures:
         cues += _setup(rest_s, posture) + _grip_block(rng, grips, reps, hold_s, rest_s, posture)
+        if quick:
+            continue
         cues += _finger_block(rest_s, posture)
         cues += [_cue("finger", "wave", WAVE_TEXT, WAVE_S, posture), _rest(rest_s, posture)]
         if free_s > 0:
@@ -627,4 +635,4 @@ def plan_for(settings, seed=None):
         return protocol_b_plan(settings["postures"], settings.get("rounds", MOVE_ROUNDS), settings.get("move_s", MOVE_S),
                                settings["rest_s"], settings["hold_s"], seed)
     return session_plan(settings["postures"], settings["reps"], settings["hold_s"], settings["rest_s"],
-                        settings.get("free_s", 0), seed)
+                        settings.get("free_s", 0), seed, settings.get("quick", False))

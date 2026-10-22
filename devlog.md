@@ -1958,6 +1958,33 @@ the rest cues of recorded sessions.
   whether the trackpad was touched. The slightly higher filtered level with the hand on the palm rest on battery has no mains in it,
   probably muscle from the resting hand.
 
+## 2026-10-22: quick calibration
+
+- Calibrating meant recording a full session each time the band went on. Record now has "Quick calibration" for
+  protocols A and F: `QUICK_REPS` 2 repetitions in every ticked posture (A: the grip block without single fingers;
+  F: the signs and wrist bends, about 3.7 min with table and forward). The server sets the repetitions, so the form
+  keeps the full session's values. First version was the first posture only, see below. 2 repetitions because that is what the calibrated scores were measured with (58 to 76 %
+  balanced after 1, 82 to 86 % after 2).
+- Its end card stays open and offers "Calibrate the newest network on it" (`/api/network/quick`): the newest general
+  network for A, the newest sign network for F, run on this computer. `calibrate --cross` gives the score: fitted on
+  repetition 1, tested on 2, then the saved network is fitted on both. "Open it in Control" picks it there.
+- Quick sessions train like any good session but are never held out in `train_ringnet` or evaluate newest
+  (`dataset.quick`): with 2 repetitions the 2-repetition calibration has nothing left to test on.
+- Checked headless on a test copy (form, card, made-up result, Control jump); the real calibration job not run there
+  since it writes the models folder. On the `quick-calibration` branch until tried on the arm.
+- First try (`2026-10-22_135247`, F, table only): 92.3 % balanced on round 2 after round 1, against 97.9 % for the
+  10-21 calibration (2 rounds in both postures, 4 times the data); 1-round calibrations scored 89 to 93 % before.
+  Table only costs the forward posture: the sign network calibrated on parts of `2026-10-21_141651` (not in its
+  training), tested on rounds 3 and 4, table / forward: table round 1 95.7 / 78.5 %, table rounds 1 and 2
+  97.2 / 90.1 %, both postures round 1 95.2 / 94.7 %, both rounds 1 and 2 97.2 / 98.6 %. Same pattern on
+  `2026-10-20_105110` (in training, optimistic). So quick calibration now records every ticked posture.
+- `2026-10-22_135247` deleted (Noah): table only, he didn't want it in the training data. Its calibrated network
+  and backup copy went too (Recycle Bin).
+- Second try (`2026-10-22_140820`, F, table and forward, band not moved since): 3:47, 0 dropped, 97.7 % balanced
+  on round 2 after round 1, rest taken for a sign 0 %, wrong sign 0.6 %. The 2-posture quick calibration matches
+  the full 10-21 calibration (97.9 %).
+- Felt good live in Control (Noah). Merged into `main`.
+
 ## Open
 
 - Backup: check that Proton Drive finished uploading `bb-sessions` to the cloud. Before the handoff, move the backup
@@ -2008,8 +2035,7 @@ the rest cues of recorded sessions.
   calibration that includes finger movement in every posture, per-session open/fist normalisation of the labels,
   causal convolutions so the network can stream on an ESP32-S3.
 - More sessions with the 7 grips, firm holds and a marked band position.
-- Quick recalibration in the app: a short calibration-only recording (1 to 2 repetitions of the grips) after
-  putting the band on. The Deep learning tab can calibrate on any session, but there is no short recording type yet.
+- Quick calibration on the Mac: calibrates on the CPU with torch 2.2.2, time not measured yet.
 - Test per-session normalisation on unseen sessions. Rotation augmentation only for LDA, the ring network ignores
   whole-electrode rotations by construction.
 - `ml/cache/` is about 50 MB per session (every window stored, each sample 4 times). Store the filtered signal once
