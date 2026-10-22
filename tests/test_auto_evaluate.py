@@ -30,7 +30,7 @@ def test_completed_session_is_evaluated_before_training():
     pytest.importorskip("torch")
     import app
     recorder = SimpleNamespace(on_saved=None)
-    tools = SimpleNamespace(network=FakeJob(), backup=FakeBackup())
+    tools = SimpleNamespace(network=FakeJob(), backup=FakeBackup(), sync_watch=FakeBackup())
     app.make_app(recorder, None, None, tools)
     recorder.on_saved(SESSIONS[-1])
     # Once at startup, once for the session
@@ -42,7 +42,7 @@ def test_completed_session_is_evaluated_before_training():
 def test_session_without_grips_is_skipped(tmp_path):
     import app
     recorder = SimpleNamespace(on_saved=None)
-    tools = SimpleNamespace(network=FakeJob(), backup=FakeBackup())
+    tools = SimpleNamespace(network=FakeJob(), backup=FakeBackup(), sync_watch=FakeBackup())
     app.make_app(recorder, None, None, tools)
     recorder.on_saved(tmp_path / "sync-check-only")
     assert tools.network.started == []

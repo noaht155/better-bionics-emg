@@ -253,6 +253,10 @@ class HubSettings(BaseModel):
     token: str = Field("", max_length=200)
 
 
+class AutoSend(BaseModel):
+    on: bool
+
+
 class BackupSettings(BaseModel):
     folder: str
 
@@ -449,6 +453,7 @@ def make_app(recorder, band, camera, tools, lan=True, serving=False):
 
     def after_saved(folder):
         tools.backup.request()
+        tools.sync_watch.request()
         auto_evaluate(folder)
 
     recorder.on_saved = after_saved
@@ -915,6 +920,7 @@ def make_app(recorder, band, camera, tools, lan=True, serving=False):
             refuse(e)
         # Same as a session recorded here: backed up and scored before anything trains on it
         tools.backup.request()
+        tools.sync_watch.request()
         auto_evaluate(folder)
         return {"ok": True}
 
@@ -974,7 +980,13 @@ def make_app(recorder, band, camera, tools, lan=True, serving=False):
     def sync_config():
         config = hub.load()
         return {"url": config.get("url"), "token_set": bool(config.get("token")), "serving": serving,
-                "devices": hub.devices(), "name": socket.gethostname()}
+                "devices": hub.devices(), "name": socket.gethostname(), "auto_send": bool(config.get("auto_send"))}
+
+    @app.post("/api/sync/auto")
+    def set_auto_send(choice: AutoSend):
+        hub.save(dict(hub.load(), auto_send=choice.on))
+        tools.sync_watch.request()
+        return {"ok": True}
 
     @app.post("/api/sync/config")
     def set_sync_config(settings: HubSettings):
@@ -988,6 +1000,7 @@ def make_app(recorder, band, camera, tools, lan=True, serving=False):
         except ValueError as e:
             refuse(e)
         hub.save(dict(config, url=settings.url.rstrip("/"), token=token))
+        tools.sync_watch.request()
         return hello
 
     @app.get("/api/sync/status")
@@ -1041,6 +1054,7 @@ def make_app(recorder, band, camera, tools, lan=True, serving=False):
             refuse("the backup can't be inside data/")
         hub.save(dict(hub.load(), backup=folder or None))
         tools.backup.request()
+        tools.sync_watch.request()
         return {"ok": True}
 
     @app.post("/api/backup/run")
@@ -1054,6 +1068,7 @@ def make_app(recorder, band, camera, tools, lan=True, serving=False):
             tools.sync.send()
         except ValueError as e:
             refuse(e)
+        tools.sync_watch.request()
         return {"ok": True}
 
     @app.post("/api/sync/fetch")
