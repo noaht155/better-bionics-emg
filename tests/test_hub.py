@@ -13,10 +13,17 @@ import uvicorn
 import ml  # noqa: F401
 import app
 import hub
+import tools
+from ml import gesture_model
 
 NAME = "2026-10-20_120000_noah"
 # A computer on the tailnet, not this one
 REMOTE = ("100.64.0.2", 50000)
+
+
+class FakeBackup:
+    def request(self):
+        pass
 
 
 class FakeJob:
@@ -52,8 +59,8 @@ def make_session(folder, ended=True):
 
 
 def hub_app(lan=False):
-    tools = SimpleNamespace(network=FakeJob(), snapshot=lambda: {"trainer": {}, "network": {}})
-    return app.make_app(SimpleNamespace(on_saved=None), None, None, tools, lan=lan, serving=True)
+    jobs = SimpleNamespace(network=FakeJob(), backup=FakeBackup(), snapshot=lambda: {"trainer": {}, "network": {}})
+    return app.make_app(SimpleNamespace(on_saved=None), None, None, jobs, lan=lan, serving=True)
 
 
 @pytest.fixture
@@ -215,3 +222,78 @@ def test_merge_keeps_both_sides(tmp_path):
     kept = hub.merge_named(path, {"theirs": {"rules": 2}, "both": {"rules": 2}})
     assert kept == ["both"]
     assert json.loads(path.read_text()) == {"mine": {"rules": 1}, "both": {"rules": 1}, "theirs": {"rules": 2}}
+
+
+def test_back_up_copies_and_checks(hub_dir, tmp_path):
+    dest = tmp_path / "backup"
+    dest.mkdir()
+    folder = make_session(hub_dir / NAME)
+    hub.back_up(folder, dest)
+    for file in hub.SESSION_FILES:
+        assert (dest / NAME / file).read_bytes() == (folder / file).read_bytes()
+    assert hub.backed_up(dest) == {NAME: hub.hashes(folder)}
+    assert not (dest / hub.INCOMING / NAME).exists()
+    # Again is fine, a different copy of the same name is left alone
+    hub.back_up(folder, dest)
+    (dest / NAME / "events.jsonl").write_text("changed")
+    with pytest.raises(ValueError, match="different"):
+        hub.back_up(folder, dest)
+    assert (dest / NAME / "events.jsonl").read_text() == "changed"
+    with pytest.raises(ValueError, match="ended"):
+        hub.back_up(make_session(hub_dir / "2026-10-20_130000_noah", ended=False), dest)
+
+
+def test_backup_worker_and_missing_folder(hub_dir, tmp_path, monkeypatch):
+    monkeypatch.setattr(tools, "DATA_DIR", hub_dir)
+    make_session(hub_dir / NAME)
+    make_session(hub_dir / "2026-10-20_130000_noah", ended=False)
+    worker = tools.Backup()
+    # No folder set: nothing to do
+    worker._run()
+    hub.save({"backup": str(tmp_path / "unplugged")})
+    with pytest.raises(ValueError, match="isn't there"):
+        worker._run()
+    dest = tmp_path / "backup"
+    dest.mkdir()
+    hub.save({"backup": str(dest)})
+    worker._run()
+    assert list(hub.backed_up(dest)) == [NAME]
+
+
+def test_device_deletes_only_what_the_hub_and_backup_hold(hub_dir, server, tmp_path, monkeypatch):
+    models = tmp_path / "models"
+    models.mkdir()
+    monkeypatch.setattr(gesture_model, "MODEL_DIR", models)
+    monkeypatch.setattr(app, "NETWORK_DIR", models)
+    monkeypatch.setattr(tools, "NETWORK_DIR", models)
+    device = tmp_path / "device-data"
+    monkeypatch.setattr(tools, "DATA_DIR", device)
+    monkeypatch.setattr(tools, "BACKUP_WAIT_S", 0)
+    token = hub.add_device("mac")
+    monkeypatch.setattr(hub, "client", lambda: hub.Hub(server, token))
+    names = {k: f"2026-10-20_1{i}0000_noah" for i, k in enumerate(["gone", "pending", "levels", "extra", "differs"])}
+    for name in names.values():
+        make_session(device / name)
+    (device / names["extra"] / "notes.txt").write_text("not sent")
+    sync = tools.Sync()
+
+    # Without a backup folder on the hub nothing is deleted
+    sync._send(set())
+    assert all((device / name).exists() for name in names.values())
+    assert any("no backup folder" in line for line in sync.state["lines"])
+
+    dest = tmp_path / "backup"
+    dest.mkdir()
+    config = hub.load()
+    hub.save(dict(config, backup=str(dest)))
+    for key in ("gone", "levels", "extra", "differs"):
+        hub.back_up(hub_dir / names[key], dest)
+    # The backup's copy no longer matches what the device has
+    listing = json.loads((dest / hub.BACKUP_LIST).read_text())
+    listing[names["differs"]]["board.f64"] = "0" * 64
+    (dest / hub.BACKUP_LIST).write_text(json.dumps(listing))
+    sync._send({names["levels"]})
+    assert not (device / names["gone"]).exists()
+    for key in ("pending", "levels", "extra", "differs"):
+        assert (device / names[key] / "session.json").exists(), key
+    assert (hub_dir / names["gone"] / "session.json").exists()

@@ -542,6 +542,21 @@
       hub). This computer sends its finished sessions to the hub, the Train tab can train there, and the models it
       saves are downloaded here to run with this computer's armband.</p>
     <p id="sync-serving" hidden></p>
+    <div id="backup" hidden>
+      <h2>Backup</h2>
+      <p class="muted">Every ended session is copied into this folder and checked, after each session recorded here
+        and each one a device sends. Pick a folder the Proton Drive app syncs, or a USB stick. Nothing in it is ever
+        overwritten or deleted. A device deletes a session it sent only once the backup has it too.</p>
+      <div class="row">
+        <label>Folder <input id="backup-folder" placeholder="a folder in Proton Drive"></label>
+      </div>
+      <div class="controls">
+        <button id="backup-save">Save</button>
+        <button id="backup-run">Back up now</button>
+      </div>
+      <p id="backup-status" class="muted"></p>
+      <p id="backup-error" class="error"></p>
+    </div>
     <div id="sync-device">
       <h2>Hub</h2>
       <p class="muted">The hub's address on the tailnet and the token it made for this computer
@@ -556,7 +571,9 @@
       <h2>Sessions</h2>
       <p class="muted">Sends every finished session the hub doesn't have yet, stopped early ones too (training leaves
         those out by itself). A broken connection carries on where it stopped on the next send, and a session only
-        appears on the hub once every file arrived intact. Nothing on either side is overwritten.</p>
+        appears on the hub once every file arrived intact. Nothing on either side is overwritten. After sending,
+        sessions the hub and its backup both hold byte for byte are deleted here, except the ones this computer's
+        models take their levels from.</p>
       <div class="controls">
         <button id="sync-send" class="primary">Send new sessions</button>
         <button id="sync-refresh">Refresh</button>

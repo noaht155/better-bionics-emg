@@ -53,6 +53,10 @@ DELAY_GAP_S = (0.3, 0.6)
 # The page's clock and this computer's agree to a few ms when the page runs here
 DELAY_CLOCK_S = 0.05
 DELAY_FLASH_TIMEOUT_S = 120
+# How long a send waits for the hub to back up what it just received before deleting it here. Copying and checking
+# a 350 MB session takes a few seconds; one not backed up by then is deleted after the next send
+BACKUP_WAIT_S = 300
+BACKUP_POLL_S = 2
 
 
 class Tool:
@@ -759,8 +763,9 @@ class Sync(Tool):
     """System > Sync on a device: sends this computer's ended sessions to the hub, and downloads the models picked
     there together with the session each one takes its levels from (hub.py)."""
 
-    def send(self):
-        self._launch(self._send)
+    def send(self, keep):
+        """keep: sessions this computer's own LDA models take their levels from, never deleted here."""
+        self._launch(self._send, set(keep))
 
     def fetch(self, names, control_files):
         """control_files: {"mappings": path, "presets": path}, swapped both ways after the models."""
@@ -778,11 +783,11 @@ class Sync(Tool):
     def _log(self, line):
         self.state["lines"] = self.state["lines"] + [line]
 
-    def _send(self):
+    def _send(self, keep):
         client = hub.client()
         self.state.update(step="asking the hub which sessions it has", share=0.0, lines=[])
         theirs = client.request("GET", "/api/hub/sessions")
-        mine = hub.ended_sessions()
+        mine = hub.ended_sessions(DATA_DIR)
         todo = [name for name in mine if name not in theirs]
         step = self._counter(sum(sum(mine[name].values()) for name in todo))
         for i, name in enumerate(todo):
@@ -794,7 +799,42 @@ class Sync(Tool):
                 self._log(f"left out {name}: the hub has a different session with that name")
         if not todo:
             self._log("nothing to send, the hub has every session")
+        self._free_space(client, mine, keep)
         self.state.update(step=None, share=1.0)
+
+    def _free_space(self, client, mine, keep):
+        """Deletes the sessions here that the hub and its backup both hold byte for byte. Keeps the ones a model here
+        takes its levels from, the haptics need them."""
+        keep |= {m["levels"] for m in client.request("GET", "/api/hub/models")
+                 if m["levels"] and model_path(m["name"]).exists()}
+        theirs = client.request("GET", "/api/hub/sessions")
+        candidates = [name for name in mine if theirs.get(name) == mine[name] and name not in keep]
+        backups = client.request("GET", "/api/hub/backups")
+        if not backups["folder_set"]:
+            if candidates:
+                self._log("kept the sent sessions here, the hub has no backup folder set")
+            return
+        waited = 0
+        while any(name not in backups["sessions"] for name in candidates) and waited < BACKUP_WAIT_S:
+            self.state["step"] = "waiting for the hub to back up what it received"
+            time.sleep(BACKUP_POLL_S)
+            waited += BACKUP_POLL_S
+            backups = client.request("GET", "/api/hub/backups")
+        for name in candidates:
+            if name not in backups["sessions"]:
+                self._log(f"kept {name} here, the hub hasn't backed it up yet")
+                continue
+            self.state["step"] = f"checking {name} against the hub and its backup"
+            here = hub.hashes(DATA_DIR / name)
+            if here != client.request("GET", f"/api/hub/sessions/{name}/hashes") or here != backups["sessions"][name]:
+                self._log(f"kept {name} here, the copies differ")
+                continue
+            try:
+                hub.remove_session(DATA_DIR / name)
+            except ValueError as e:
+                self._log(str(e))
+                continue
+            self._log(f"deleted {name} here, the hub and its backup have it")
 
     def _fetch(self, names, control_files):
         client = hub.client()
@@ -831,6 +871,48 @@ class Sync(Tool):
         self.state.update(step=None, share=1.0)
 
 
+class Backup:
+    """Copies every ended session the backup folder doesn't have yet (hub.back_up), in the background whenever a
+    session is saved here or received from a device. Asked again while copying, it goes round once more."""
+
+    def __init__(self):
+        self.state = {"running": False, "error": None, "step": None, "last": None}
+        self._wake = threading.Event()
+        threading.Thread(target=self._loop, daemon=True).start()
+
+    def request(self):
+        self._wake.set()
+
+    def _loop(self):
+        while True:
+            self._wake.wait()
+            self._wake.clear()
+            self.state.update(running=True, error=None)
+            try:
+                self._run()
+            except Exception as e:
+                self.state["error"] = str(e) or type(e).__name__
+            finally:
+                self.state.update(running=False, step=None)
+
+    def _run(self):
+        dest = hub.backup_folder()
+        if dest is None:
+            return
+        done = hub.backed_up(dest)
+        todo = [name for name in hub.ended_sessions(DATA_DIR) if name not in done]
+        failed = []
+        for i, name in enumerate(todo):
+            self.state["step"] = f"backing up {name} ({i + 1} of {len(todo)})"
+            try:
+                hub.back_up(DATA_DIR / name, dest)
+            except (OSError, ValueError) as e:
+                failed.append(str(e))
+        self.state["last"] = time.time()
+        if failed:
+            raise ValueError("; ".join(failed))
+
+
 class Tools:
     def __init__(self, recorder):
         esp_lock = threading.Lock()
@@ -845,6 +927,7 @@ class Tools:
         self.trainer = Trainer(self.predictor)
         self.network = NetworkJob()
         self.sync = Sync()
+        self.backup = Backup()
         self.recorder = recorder
         # The delay test's two halves, (seconds, result line) each, until saved to the setup
         self.measured = {}
@@ -867,7 +950,7 @@ class Tools:
         now = time.time()
         out = {}
         for name in ("check", "wifi", "calibration", "haptics", "test", "predictor", "trainer", "network", "control",
-                     "cursor", "sync", "round_trip", "flash"):
+                     "cursor", "sync", "backup", "round_trip", "flash"):
             state = dict(getattr(self, name).state)
             if state.get("until"):
                 state["left"] = max(0.0, state["until"] - now)

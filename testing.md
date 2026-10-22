@@ -105,7 +105,7 @@ These decide when the recorder marks a cue bad and redoes it.
 
 | Test | Checks |
 |---|---|
-| `test_completed_session_is_evaluated_before_training` | When a completed session is saved, the app starts "evaluate the newest session" on it (15 epochs), so every session gets an honest score before anything trains on it |
+| `test_completed_session_is_evaluated_before_training` | When a completed session is saved, the app starts "evaluate the newest session" on it (15 epochs), so every session gets an honest score before anything trains on it, and asks for a backup (once at startup, once for the session) |
 | `test_session_without_grips_is_skipped` | A session without grips (a sync check, for example) starts nothing |
 
 ### Network job progress (`tests/test_job_progress.py`)
@@ -230,6 +230,9 @@ transfer tests run the hub app on a free local port and send over real HTTP.
 | `test_wrong_offset_and_names_refused` | A chunk sent twice can't go in twice, and names that would leave the data folder are refused |
 | `test_session_still_recording_is_refused` | A session without an end can't be moved in |
 | `test_download_session` | A session downloaded from the hub (for a model's levels) arrives byte for byte |
+| `test_back_up_copies_and_checks` | A session lands in the backup folder byte for byte through `.incoming` and is listed with its hashes; backing up again is fine, a different copy of the same name is never overwritten, and a session still recording is refused |
+| `test_backup_worker_and_missing_folder` | The hub's backup worker does nothing without a folder, reports a folder that isn't there (an unplugged USB stick), and copies only ended sessions |
+| `test_device_deletes_only_what_the_hub_and_backup_hold` | After a send, a device deletes a session only when the hub and its backup both hold it byte for byte. Kept: everything while the hub has no backup folder, a session not backed up yet, one a model here takes its levels from, one with files that were never sent, and one whose backup copy differs |
 | `test_merge_keeps_both_sides` | Mappings and profiles are added by name, a name both sides have with different content stays as it is |
 
 ### Mac WiFi (`tests/test_mac_wifi.py`)
