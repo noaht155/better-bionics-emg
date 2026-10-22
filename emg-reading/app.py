@@ -162,6 +162,14 @@ class ModelChoice(BaseModel):
     wifi: str | None = None
 
 
+class SimInputs(BaseModel):
+    """What the Control tab's simulated model outputs: label None is rest."""
+    label: str | None = None
+    sure: float = Field(1.0, ge=0, le=1)
+    effort: float = Field(0.0, ge=0, le=1)
+    moving: bool = False
+
+
 class Threshold(BaseModel):
     value: float = Field(ge=0, le=1)
 
@@ -735,6 +743,26 @@ def make_app(recorder, band, camera, tools, lan=True, serving=False):
         except ValueError as e:
             refuse(e)
         return {"ok": True, "haptics": start_model_haptics(model, choice)}
+
+    @app.post("/api/control/simulate")
+    def control_simulate(classes: list[str]):
+        """The control layer without a model or the band: the page plays the model (class, effort, arm moving)."""
+        if len(classes) < 2:
+            refuse("the simulated model needs at least two classes")
+        tools.control.prepare_sim()
+        try:
+            tools.predictor.simulate(classes, tools.control)
+        except ValueError as e:
+            refuse(e)
+        return {"ok": True}
+
+    @app.post("/api/control/sim")
+    def control_sim(inputs: SimInputs):
+        try:
+            tools.predictor.set_sim(inputs.model_dump())
+        except ValueError as e:
+            refuse(e)
+        return {"ok": True}
 
     @app.post("/api/control/params")
     def control_params(params: ControlParams):

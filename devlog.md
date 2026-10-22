@@ -1897,6 +1897,10 @@ balanced over the signs and rest. Means of the 2 seeds:
   kept contact, and `levels` refuses a zero rest. Levels change only for the 4 sessions with a bump.
 - The session itself is usable but hums: rest 18 to 26 uV filtered (Mac session's numbers) against 5 to 6 on the
   desktop, and 7 channels got "grips barely above rest" (ratio 2.0). Mac hum stays an Open item.
+- Control tab Simulate (Noah): runs the control layer without the band or a model, the page plays the model's output
+  (class buttons or number keys, certainty, effort slider, space for full effort, arm moving). Every mode can be tried
+  and tuned without the band. A session replay was left out on purpose: it can't react, so trigger mode's clenches
+  wouldn't be yours. `Predictor.simulate`, `Control.prepare_sim` and `advance`.
 
 ## Open
 
