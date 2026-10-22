@@ -612,6 +612,14 @@
       <div class="controls"><button id="delay-save" class="primary">Save for this device</button></div>
       <p id="delay-save-error" class="error"></p>
     </div>
+    <div class="dev-test">
+      <h2>ML cache</h2>
+      <p class="muted">Network training keeps every session's windows in <code>ml/cache/</code>. Clearing it frees the
+        space; the next network job rebuilds what it needs, which takes a while per session. <span
+        id="cache-size"></span></p>
+      <button id="cache-clear" class="danger">Clear cache</button>
+      <p id="cache-error" class="error"></p>
+    </div>
     <div class="dev-test archived">
       <h2>End of session screen</h2>
       <p class="muted">Shows the end card on the Record tab with made-up numbers. Approved 2026-10-20.</p>

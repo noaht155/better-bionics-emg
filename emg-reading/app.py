@@ -682,6 +682,17 @@ def make_app(recorder, band, camera, tools, lan=True, serving=False):
         tools.network.stop()
         return {"ok": True}
 
+    @app.get("/api/ml-cache")
+    def ml_cache():
+        files = list(dataset.CACHE.glob("*.npz"))
+        return {"files": len(files), "bytes": sum(f.stat().st_size for f in files)}
+
+    @app.post("/api/ml-cache/clear")
+    def clear_ml_cache():
+        if tools.network.state["running"]:
+            refuse("a network job is reading the cache, wait for it to finish or stop it")
+        return {"freed": dataset.clear_cache()}
+
     @app.post("/api/model/use")
     def use_model(choice: ModelChoice):
         path = model_file(choice.name)

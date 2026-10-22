@@ -45,6 +45,7 @@ function showTab(name) {
   if (name === "control") loadControlLists();
   if (name === "cursor") loadCursorSessions();
   if (name === "sync") loadSyncConfig().then(loadSyncStatus);
+  if (name === "dev") loadCacheSize();
   moveTabInk();
 }
 
@@ -1105,6 +1106,20 @@ $("dev-run").addEventListener("click", async () => {
     postures: s.postures.length ? s.postures : Object.keys(config.postures).slice(0, 1),
     practice: true, dev_cues: Number($("dev-cues").value) };
   if (await postShowing("/api/session/start", body, "dev-error")) showTab("record");
+});
+
+async function loadCacheSize() {
+  try {
+    const c = await getJson("/api/ml-cache");
+    $("cache-size").textContent = `Now ${c.files} sessions, ${(c.bytes / 1e6).toFixed(0)} MB.`;
+  } catch (err) {
+    $("cache-size").textContent = "";
+    $("cache-error").textContent = err.message;
+  }
+}
+
+$("cache-clear").addEventListener("click", async () => {
+  if (await postShowing("/api/ml-cache/clear", null, "cache-error")) loadCacheSize();
 });
 
 function initTools() {

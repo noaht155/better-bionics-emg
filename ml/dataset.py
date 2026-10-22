@@ -163,6 +163,15 @@ def load(folder):
     return out
 
 
+def clear_cache():
+    """Deletes every cached session, each is rebuilt the next time it loads. Returns the bytes freed."""
+    freed = 0
+    for path in CACHE.glob("*.npz"):
+        freed += path.stat().st_size
+        path.unlink()
+    return freed
+
+
 def load_all(folders=None, verbose=False):
     """{session name: windows} for the given folders, or for every good session. verbose prints each session as it
     loads, a session that isn't cached yet takes a while."""

@@ -1916,7 +1916,8 @@ balanced over the signs and rest. Means of the 2 seeds:
 - Test per-session normalisation on unseen sessions. Rotation augmentation only for LDA, the ring network ignores
   whole-electrode rotations by construction.
 - `ml/cache/` is about 50 MB per session (every window stored, each sample 4 times). Store the filtered signal once
-  and cut windows on load, and drop cache files of sessions that no longer exist.
+  and cut windows on load, and drop cache files of sessions that no longer exist. System > Dev has a Clear cache button since
+  2026-10-22 (895 MB, 16 sessions, that day).
 - Measure false grips per minute in everyday activity, and a "hold to switch" rule.
 - Bring latency under 200 ms: shorter windows and vote, at some cost in accuracy.
 - `ml/` foundations: session cache, dataset builder, shared evaluation harness, model registry, continual update
