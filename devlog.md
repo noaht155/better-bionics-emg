@@ -1914,7 +1914,8 @@ balanced over the signs and rest. Means of the 2 seeds:
 - Merged into `main` together with the Control tab's Simulate (Noah, without a Mac test first).
 - A device now also deletes its models when its app closes, those the hub has byte for byte (`Sync.free_models`,
   Noah), before the sessions, so a session kept only for a downloaded model's levels goes too. Models only the device
-  has stay. Next start, download the models again in System > Sync. On the `free-models` branch until tried on the Mac.
+  has stay. Next start, download the models again in System > Sync. Tried on the Mac the same day: on close it
+  deleted the downloaded sign network and then `2026-10-21_141651_noah`, both still on the hub and in the backup.
 
 ## Open
 
