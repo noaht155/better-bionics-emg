@@ -1993,6 +1993,14 @@ the rest cues of recorded sessions.
   control layer reaches in-between hand positions anyway.
 - Next: `ml/` foundations, haptics tests on the motors, and the ESP32 port. Open list regrouped below.
 - `tracking-toggle` was already merged (`036ac66`); the Open list still asked for it.
+- Quick calibration on a device now runs on the hub's 4070 (Noah: the Mac calibrated on its CPU). `/api/network/quick`
+  on a device with a hub address starts `tools.HubCalibration`: sends the session through Sync if the hub doesn't
+  have it (never twice at once with auto send), starts the hub's own quick calibration, follows the hub's job every
+  second and downloads the calibrated network, so "Open it in Control" works on the device. The end card shows the
+  steps and the hub's score. The hub and the desktop without a hub address calibrate locally as before.
+  The Mac has one WiFi: on the armband's network it can't reach the hub, so it has to be back on the home network
+  to calibrate, then back on the band for Control. Tested with a fake hub and on the page headless; on the
+  `quick-on-hub` branch until tried from the Mac.
 
 ## Open
 
@@ -2046,7 +2054,8 @@ Small items
 - Delay test: run it on the desktop too. Its flash result minus the LED test's 37 ms is that screen's own delay,
   which shows how far the flash method overestimates (the MacBook's 43 ms shift includes its screen). Rerun the
   MacBook once to check the 88 / 15 ms light and dark split repeats.
-- Quick calibration on the Mac: calibrates on the CPU with torch 2.2.2, time not measured yet.
+- Quick calibration from the Mac on the hub (`quick-on-hub`): try it, and decide how to reach the hub while the
+  Mac is on the armband's WiFi (second network adapter or phone tethering over USB, or calibrate between).
 - Arm animation for cues: the forearm and wrist are drawn for the wrist cues since 2026-10-19. Still missing: the
   upper arm (D's arm raise, reach, lean), the forearm lying along the table in the table posture, and the wrist
   movements left out of protocol C.
