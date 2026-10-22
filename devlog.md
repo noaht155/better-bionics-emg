@@ -2007,7 +2007,10 @@ the rest cues of recorded sessions.
   steps and the hub's score. The hub and the desktop without a hub address calibrate locally as before.
   The Mac has one WiFi: on the armband's network it can't reach the hub, so it has to be back on the home network
   to calibrate, then back on the band for Control. Tested with a fake hub and on the page headless. Merged
-  before a run from the Mac (Noah); the hub app needs a restart on this code first.
+  before a run from the Mac (Noah).
+- Checked from the Mac against a test hub on the desktop (port 8010): `2026-10-21_141651` (protocol F, 4 rounds,
+  already on the hub) calibrated there and the .pt was on the Mac 16 s after the request, listed as calibrated in
+  the Mac's networks. The hub app has to run this code for devices to start a calibration.
 
 ## Open
 
@@ -2055,8 +2058,8 @@ Small items
 - Backup: Proton Drive upload checked (Noah, 2026-10-22). Before the handoff, move the backup to the lab's
   storage (Sync > Backup folder).
 - Hub: per-person consent before other people record.
-- Quick calibration from the Mac on the hub: try it, and decide how to reach the hub while the
-  Mac is on the armband's WiFi (second network adapter or phone tethering over USB, or calibrate between).
+- Quick calibration from the Mac on the hub (works, 16 s): try it after a real quick session, and decide how to
+  reach the hub while the Mac is on the armband's WiFi (second network adapter or phone tethering over USB, or calibrate between).
 - Arm animation for cues: the forearm and wrist are drawn for the wrist cues since 2026-10-19. Still missing: the
   upper arm (D's arm raise, reach, lean), the forearm lying along the table in the table posture, and the wrist
   movements left out of protocol C.
