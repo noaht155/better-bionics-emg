@@ -1980,6 +1980,9 @@ the rest cues of recorded sessions.
   `2026-10-20_105110` (in training, optimistic). So quick calibration now records every ticked posture.
 - `2026-10-22_135247` deleted (Noah): table only, he didn't want it in the training data. Its calibrated network
   and backup copy went too (Recycle Bin).
+- Second try (`2026-10-22_140820`, F, table and forward, band not moved since): 3:47, 0 dropped, 97.7 % balanced
+  on round 2 after round 1, rest taken for a sign 0 %, wrong sign 0.6 %. The 2-posture quick calibration matches
+  the full 10-21 calibration (97.9 %).
 
 ## Open
 
