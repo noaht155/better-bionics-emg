@@ -2012,6 +2012,18 @@ the rest cues of recorded sessions.
   already on the hub) calibrated there and the .pt was on the Mac 16 s after the request, listed as calibrated in
   the Mac's networks. The hub app has to run this code for devices to start a calibration.
 
+## 2026-10-22: shared evaluation
+
+- `ml/evaluate.py`: one evaluation for every model. A model is three functions (fit, calibrate, predict) and gets
+  scored the same way: leave one session out without calibration, then calibrated on the session's own repetitions
+  or rounds (rotating, as `train_ringnet` does, or fixed with `--cal`), and a benchmark run that trains once without
+  the benchmark sessions. Scores: balanced, grips only, rest taken for a class, wrong shown and answers at 0.8, held
+  wrist bends read as a sign. Quick sessions are skipped as held-out sessions. Tests in `tests/test_evaluate.py`.
+- LDA baseline through it on the 9 E and F sessions: 79.5 % balanced without calibration, 88.2 % calibrated (rest
+  taken for a sign 1.1 %, wrong shown 3.6 %). The worst calibrated score is `2026-10-16_140854` at 61.5 %.
+- Not moved over yet: `gesture_model.evaluate`, `train_ringnet` and `networks` still score on their own. Next is
+  wrapping the sign network as a method and choosing the benchmark sessions.
+
 ## Open
 
 Now: control on the signs
@@ -2032,8 +2044,9 @@ Now: control on the signs
 - Bring latency under 200 ms: shorter windows and vote, at some cost in accuracy.
 
 Now: `ml/` foundations
-- `ml/` foundations: session cache, dataset builder, shared evaluation harness, model registry, continual update
-  flow tested with LDA first.
+- `ml/` foundations: session cache, dataset builder and shared evaluation (`ml/evaluate.py`) done. Next: the sign
+  network as an evaluate method, pick the benchmark sessions, model registry, continual update flow tested with LDA
+  first.
 - Ring network: rerun as sessions come in; fix the rest false alarms after calibration (rest weighting); then
   continual updates with replay and the benchmark.
 - Test per-session normalisation on unseen sessions. Rotation augmentation only for LDA, the ring network ignores

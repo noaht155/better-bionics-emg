@@ -102,6 +102,17 @@ These decide when the recorder marks a cue bad and redoes it.
 | `test_session_levels_keep_rest_quiet` | Haptic levels taken from the newest session (`calibrate.from_session`) are sane (rest above 0, max above rest) and, played back over that session's rest cues, leave every output off in at least 95 % of rest windows |
 | `test_band_bump_doesnt_lose_channels` | A one-window bump on 7 channels doesn't drop them from a session's common average (it did on 2026-10-21_141651 and crashed Control), a pad off half the time still counts as lost, and a zero rest level is refused instead of dividing by it |
 
+### Shared evaluation (`tests/test_evaluate.py`)
+
+| Test | Checks |
+|---|---|
+| `test_held_out_never_trains_on_the_held_session` | Leave one session out fits on every session but the held one, and an always-rest model scores 1/3 balanced with no rest taken for a grip |
+| `test_rotating_calibration_holds_out_one_unit_each` | Default calibration uses every repetition but one and tests on that one, for each repetition |
+| `test_fixed_calibration_units` | `cal_units` calibrates on exactly those repetitions |
+| `test_benchmark_sessions_stay_out_of_training` | Benchmark sessions are never trained on; a missing benchmark session is an error |
+| `test_notsign_only_counts_as_wrist_as_sign` | Held wrist bends stay out of balanced accuracy and only count as `wrist_as_sign` |
+| `test_lda_separates_easy_sessions` | The LDA baseline runs end to end through the harness on synthetic sessions |
+
 ### Automatic evaluation (`tests/test_auto_evaluate.py`)
 
 | Test | Checks |
