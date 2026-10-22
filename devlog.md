@@ -1983,6 +1983,7 @@ the rest cues of recorded sessions.
 - Second try (`2026-10-22_140820`, F, table and forward, band not moved since): 3:47, 0 dropped, 97.7 % balanced
   on round 2 after round 1, rest taken for a sign 0 %, wrong sign 0.6 %. The 2-posture quick calibration matches
   the full 10-21 calibration (97.9 %).
+- Felt good live in Control (Noah). Merged into `main`.
 
 ## Open
 
@@ -2034,8 +2035,7 @@ the rest cues of recorded sessions.
   calibration that includes finger movement in every posture, per-session open/fist normalisation of the labels,
   causal convolutions so the network can stream on an ESP32-S3.
 - More sessions with the 7 grips, firm holds and a marked band position.
-- Quick calibration: try it on the arm (put the band on, record, calibrate, Control), then merge
-  `quick-calibration`. On the Mac it calibrates on the CPU with torch 2.2.2, time not measured yet.
+- Quick calibration on the Mac: calibrates on the CPU with torch 2.2.2, time not measured yet.
 - Test per-session normalisation on unseen sessions. Rotation augmentation only for LDA, the ring network ignores
   whole-electrode rotations by construction.
 - `ml/cache/` is about 50 MB per session (every window stored, each sample 4 times). Store the filtered signal once
