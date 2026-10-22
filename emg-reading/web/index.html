@@ -643,6 +643,24 @@
       <p id="delay-save-error" class="error"></p>
     </div>
     <div class="dev-test">
+      <h2>Hum test</h2>
+      <p class="muted">Is the hum worse on the MacBook than on the desktop? Put the band on once and leave it alone,
+        wait 5 min for the pads to settle, sit in the same seat with the arm relaxed on the table, Mac on the desk pad
+        in one spot. Record the desktop blocks here, then take the desktop off the band's WiFi, connect the Mac and
+        record its blocks in the Mac's app, then the last desktop block. Each block is saved in
+        <code>data/hum-test/</code> on the computer that recorded it, the table shows every block recorded on this
+        one. Recording a block again replaces it.</p>
+      <div class="row narrow">
+        <label>Block <select id="hum-block"></select></label>
+        <label>Seconds <input id="hum-seconds" type="number" min="5" max="120" value="60"></label>
+      </div>
+      <button id="hum-start" class="primary">Record block</button>
+      <p id="hum-prompt"></p>
+      <div class="bar"><div id="hum-bar"></div></div>
+      <p id="hum-error" class="error"></p>
+      <pre id="hum-result"></pre>
+    </div>
+    <div class="dev-test">
       <h2>ML cache</h2>
       <p class="muted">Network training keeps every session's windows in <code>ml/cache/</code>. Clearing it frees the
         space; the next network job rebuilds what it needs, which takes a while per session. <span

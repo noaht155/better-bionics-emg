@@ -29,6 +29,7 @@ from pydantic import BaseModel, Field
 
 import devices
 import hub
+import hum_test
 from armband import Armband, Replay
 from calibrate import load_calibration
 from camera import Camera
@@ -133,6 +134,11 @@ class FlashTimes(BaseModel):
     # (time.time() seconds, screen turned light) of every flash change, from the page's clock
     # Empty when the page stopped early
     switches: list[tuple[float, bool]] = Field(max_length=1000)
+
+
+class HumTestSettings(BaseModel):
+    label: str
+    seconds: float = Field(60, ge=5, le=120)
 
 
 class CalibrationSettings(BaseModel):
@@ -494,7 +500,7 @@ def make_app(recorder, band, camera, tools, lan=True, serving=False):
                 "gestures": {name: {"text": text, "angles": angles} for name, (text, angles) in GESTURES.items()},
                 "gesture_set": GESTURE_SET, "sign_sets": {"F": F_SIGNS}, "library": LIBRARY, "categories": CATEGORIES,
                 "cue_timing": {"grip_close_s": GRIP_CLOSE_S, "c_close_s": C_CLOSE_S},
-                "postures": POSTURES, "camera": camera is not None,
+                "postures": POSTURES, "camera": camera is not None, "hum_blocks": hum_test.BLOCKS,
                 "tracked_hand": camera.hand if camera else None, "esp32_wifi_ip": WIFI_IP, "platform": sys.platform,
                 "fixed_delay_s": dataset.CAMERA_DELAY_S}
 
@@ -583,6 +589,14 @@ def make_app(recorder, band, camera, tools, lan=True, serving=False):
     def delay_flash_finish(times: FlashTimes):
         try:
             tools.flash.finish(times.switches)
+        except ValueError as e:
+            refuse(e)
+        return {"ok": True}
+
+    @app.post("/api/hum-test")
+    def hum_test_start(settings: HumTestSettings):
+        try:
+            tools.hum.start(settings.label, settings.seconds)
         except ValueError as e:
             refuse(e)
         return {"ok": True}

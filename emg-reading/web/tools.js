@@ -867,6 +867,17 @@ function drawWifi(t) {
 // stays under 3 a second
 const FLASH_CHANGES = 60, FLASH_HOLD_MS = [400, 800], FLASH_LEAD_MS = 1000;
 
+$("hum-start").addEventListener("click", () => postShowing("/api/hum-test",
+  { label: $("hum-block").value, seconds: Number($("hum-seconds").value) }, "hum-error"));
+
+function drawHum(t) {
+  $("hum-start").disabled = t.running || !!state.session;
+  $("hum-prompt").textContent = t.running && t.prompt ? `${t.prompt}${t.countdown ? `  ${t.countdown}...` : ""}` : "";
+  progress("hum-bar", t);
+  if (t.error) $("hum-error").textContent = t.error;
+  $("hum-result").textContent = (t.lines || []).join("\n");
+}
+
 $("rtt-start").addEventListener("click", () => postShowing("/api/delay/round-trip", { switches: 80 }, "rtt-error"));
 
 let flashRun = null;
@@ -977,6 +988,7 @@ function drawTools() {
   drawDelayTool(t.round_trip, "rtt");
   progress("rtt-bar", t.round_trip);
   drawDelayTool(t.flash, "flash");
+  drawHum(t.hum);
   const jobs = trainOnHub() ? hubJobs || IDLE_JOBS : t;
   drawTrain(jobs.trainer);
   drawPredictor(t.predictor);
@@ -1184,6 +1196,7 @@ function initTools() {
   $("esp-ip").value = link.ip || config.esp32_wifi_ip;
   saveLink();
   showCurrentCalibration();
+  fillSelect($("hum-block"), config.hum_blocks.map(([name, text]) => ({ name, text })), (b) => `${b.name}: ${b.text}`);
   document.querySelectorAll("[data-platform]").forEach((el) => { el.hidden = el.dataset.platform !== config.platform; });
   loadSyncConfig();
   pollHubJobs();

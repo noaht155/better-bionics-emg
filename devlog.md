@@ -1937,6 +1937,9 @@ the rest cues of recorded sessions.
   10-21 (charger in, same seat as the desktop recordings, so the charger hands-off block matches that session). The Mac is worse only if its
   battery hands-off block is over both desktop blocks by more than they differ from each other. The desktop is earthed
   (3-prong), the Mac's charger is a 2-prong one, so touch is the likely path.
+- The same test runs from the app on System > Dev (Noah): pick the block, Record block, no need to close the app.
+  Each computer keeps its own blocks in `data/hum-test/`, so the Mac's blocks have to be copied over to compare
+  in one table.
 
 ## Open
 

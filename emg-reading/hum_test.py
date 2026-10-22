@@ -4,7 +4,8 @@ record: stream the band for some seconds with the arm relaxed and save the raw b
 compare: one table per measure over every saved recording, or the ones named.
 session: the same measures on the rest cues of recorded sessions.
 
-Close the app first, only one program can hold the band. Run from emg-reading/:
+The app runs the same test on System > Dev without closing it. Here, close the app first, only one program can hold
+the band. Run from emg-reading/:
     python hum_test.py record A1-desktop --seconds 60
     python hum_test.py compare
     python hum_test.py session 2026-10-21_141651_noah
@@ -29,6 +30,17 @@ OUT_DIR = DATA_DIR / "hum-test"
 SECOND = 1.0
 # Outside the 40 to 200 Hz band the filter keeps: noise there isn't muscle, and it isn't a mains line either
 OUT_OF_BAND = ((20.0, 35.0), (205.0, 245.0))
+# The blocks agreed for desktop vs MacBook (devlog 2026-10-22): band on once and left alone, 5 min to settle, arm
+# relaxed on the table, the Mac on the desk pad in one spot, one computer on the band's WiFi at a time
+BLOCKS = [
+    ("A1-desktop", "desktop, hands off"),
+    ("A1t-desktop-mouse", "desktop, free hand on the mouse"),
+    ("B1-mac-battery", "Mac on battery, hands off"),
+    ("B2-mac-charger", "Mac on the charger, hands off"),
+    ("B3-mac-charger-touch", "Mac on the charger, free hand on the palm rest"),
+    ("B4-mac-battery-touch", "Mac on battery, free hand on the palm rest"),
+    ("A2-desktop", "desktop again, hands off"),
+]
 
 
 def band_rms(x, rate, lo, hi):
@@ -70,11 +82,36 @@ def measures(pieces, rate):
     return out, lost, total
 
 
-def record(args):
+def save(label, board, rows, rate, source, note=""):
+    """Writes a recording's raw board rows and what it was. Returns the number of dropped samples."""
     OUT_DIR.mkdir(parents=True, exist_ok=True)
-    path = OUT_DIR / f"{args.label}.npy"
-    if path.exists():
-        raise SystemExit(f"{path.name} exists, pick another label")
+    steps = np.diff(board[rows["package"]])
+    dropped = int(np.where((steps > 1) & (steps < 10 * rate), steps - 1, 0).sum())
+    np.save(OUT_DIR / f"{label}.npy", board)
+    (OUT_DIR / f"{label}.json").write_text(json.dumps({
+        "label": label, "date": time.strftime("%Y-%m-%d %H:%M:%S"), "rate": rate, "rows": rows, "source": source,
+        "dropped": dropped, "note": note}, indent=2))
+    return dropped
+
+
+def saved():
+    """Labels of the recordings here, oldest first."""
+    return [p.stem for p in sorted(OUT_DIR.glob("*.npy"), key=lambda p: p.stat().st_mtime)]
+
+
+def load(names):
+    """{label: measures} of saved recordings."""
+    results = {}
+    for name in names:
+        meta = json.loads((OUT_DIR / f"{name}.json").read_text())
+        board = np.load(OUT_DIR / f"{name}.npy")
+        results[name] = measures([board[meta["rows"]["emg"]]], meta["rate"])
+    return results
+
+
+def record(args):
+    if (OUT_DIR / f"{args.label}.npy").exists():
+        raise SystemExit(f"{args.label}.npy exists, pick another label")
     chunks = []
     with Armband(args.synthetic) as band:
         print(f"recording {args.seconds:g} s, arm relaxed and still")
@@ -85,26 +122,16 @@ def record(args):
         chunks.append(band.read_all())
         rows, rate = band.rows, band.rate
     board = np.hstack(chunks)
-    steps = np.diff(board[rows["package"]])
-    dropped = int(np.where((steps > 1) & (steps < 10 * rate), steps - 1, 0).sum())
-    np.save(path, board)
-    path.with_suffix(".json").write_text(json.dumps({
-        "label": args.label, "date": time.strftime("%Y-%m-%d %H:%M:%S"), "rate": rate, "rows": rows,
-        "source": "synthetic" if args.synthetic else "armband", "dropped": dropped, "note": args.note}, indent=2))
-    print(f"saved {path.name}: {board.shape[1]} samples, {dropped} dropped")
+    dropped = save(args.label, board, rows, rate, "synthetic" if args.synthetic else "armband", args.note)
+    print(f"saved {args.label}.npy: {board.shape[1]} samples, {dropped} dropped")
     show({args.label: measures([board[rows["emg"]]], rate)})
 
 
 def compare(args):
-    names = args.labels or [p.stem for p in sorted(OUT_DIR.glob("*.npy"), key=lambda p: p.stat().st_mtime)]
+    names = args.labels or saved()
     if not names:
         raise SystemExit(f"no recordings in {OUT_DIR}")
-    results = {}
-    for name in names:
-        meta = json.loads((OUT_DIR / f"{name}.json").read_text())
-        board = np.load(OUT_DIR / f"{name}.npy")
-        results[name] = measures([board[meta["rows"]["emg"]]], meta["rate"])
-    show(results)
+    show(load(names))
 
 
 def from_sessions(args):
@@ -120,22 +147,28 @@ def from_sessions(args):
     show(results)
 
 
-def show(results):
-    """One table per measure: a row per recording, uV per channel and the median over channels."""
+def table(results):
+    """One table per measure as lines: a row per recording, uV per channel and the median over channels."""
     width = max(len(n) for n in results)
     first = next(iter(results.values()))[0]
+    lines = []
     for measure in first:
-        print(f"\n{measure} (uV)")
-        print(f"{'':{width}}" + "".join(f"{f'ch {ch}':>8}" for ch in range(8)) + f"{'median':>8}")
+        lines += ["", f"{measure} (uV)",
+                  f"{'':{width}}" + "".join(f"{f'ch {ch}':>8}" for ch in range(8)) + f"{'median':>8}"]
         for name, (values, lost, total) in results.items():
-            v = values[measure]
+            v = values.get(measure)
             if v is None:
-                print(f"{name:{width}}  no windows with contact")
+                lines.append(f"{name:{width}}  no windows with contact")
                 continue
-            print(f"{name:{width}}" + "".join(f"{x:8.1f}" for x in v) + f"{np.median(v):8.1f}")
-    print()
+            lines.append(f"{name:{width}}" + "".join(f"{x:8.1f}" for x in v) + f"{np.median(v):8.1f}")
+    lines.append("")
     for name, (values, lost, total) in results.items():
-        print(f"{name}: {total} one-second windows, {lost} with a pad losing contact")
+        lines.append(f"{name}: {total} one-second windows, {lost} with a pad losing contact")
+    return lines
+
+
+def show(results):
+    print("\n".join(table(results)))
 
 
 def main():

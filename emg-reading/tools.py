@@ -24,6 +24,7 @@ import check_connection
 import delay
 import devices
 import hub
+import hum_test
 import mac_wifi
 from control import DEFAULT_RULES, DEFAULTS, STILL_S, Controller, check_rules, movement, split_rules, still_limit
 from cursor import DEFAULTS as CURSOR_DEFAULTS, LEVEL_SCALE as CURSOR_LEVEL_SCALE, Cursor
@@ -352,6 +353,40 @@ class Calibration(Tool):
         result, lines = calibrate.compute(relaxed, squeezed, band.rate, band.channels, car)
         calibrate.save(result, car)
         self.state["lines"] = lines + [f"saved {calibrate.CAL_FILE.name}"]
+
+
+class HumTest(Tool):
+    """Hum test (System > Dev): one block of the desktop vs MacBook comparison, recorded from the running app and
+    saved like hum_test.py record, then the tables over every block recorded on this computer."""
+
+    def __init__(self, recorder):
+        super().__init__()
+        self.recorder = recorder
+
+    def start(self, label, seconds):
+        if label not in dict(hum_test.BLOCKS):
+            raise ValueError(f"unknown block {label}")
+        if self.recorder.session is not None:
+            raise ValueError("a session is recording")
+        if not self.recorder.band.connected:
+            raise ValueError("armband not connected")
+        self._launch(self._run, label, seconds)
+
+    def _run(self, label, seconds):
+        for n in range(COUNTDOWN_S, 0, -1):
+            self.state.update(prompt=f"{dict(hum_test.BLOCKS)[label]}, arm relaxed and still", countdown=n)
+            time.sleep(1)
+        self.state.update(countdown=None, until=time.time() + seconds, total=seconds)
+        band = self.recorder.band
+        board = self.recorder.capture(seconds)
+        if board.shape[1] < seconds * band.rate / 2:
+            raise SystemExit(f"only {board.shape[1]} samples arrived, check the connection")
+        replaced = (hum_test.OUT_DIR / f"{label}.npy").exists()
+        dropped = hum_test.save(label, board, band.rows, band.rate, band.source)
+        self.state.update(prompt=None, until=None)
+        self.state["lines"] = ([f"{label}: {board.shape[1]} samples, {dropped} dropped"
+                                + (", replaced the earlier one" if replaced else "")]
+                               + hum_test.table(hum_test.load(hum_test.saved())))
 
 
 class Haptics(Tool):
@@ -1039,6 +1074,7 @@ class Tools:
         self.check = ConnectionCheck(recorder)
         self.wifi = ArmbandWifi(recorder)
         self.calibration = Calibration(recorder)
+        self.hum = HumTest(recorder)
         self.haptics = Haptics(recorder, esp_lock)
         self.test = OutputTest(esp_lock)
         self.predictor = Predictor(recorder)
@@ -1071,7 +1107,7 @@ class Tools:
         now = time.time()
         out = {}
         for name in ("check", "wifi", "calibration", "haptics", "test", "predictor", "trainer", "network", "control",
-                     "cursor", "sync", "backup", "sync_watch", "round_trip", "flash"):
+                     "cursor", "sync", "backup", "sync_watch", "round_trip", "flash", "hum"):
             state = dict(getattr(self, name).state)
             if state.get("until"):
                 state["left"] = max(0.0, state["until"] - now)
