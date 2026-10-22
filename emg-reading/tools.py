@@ -55,6 +55,11 @@ DELAY_CLOCK_S = 0.05
 DELAY_FLASH_TIMEOUT_S = 120
 # The Control tab's simulated model steps as often as the models do (50 ms window step)
 SIM_STEP_S = 0.05
+# How often the header's sync line asks the hub, and how long it waits for an answer. The Mac has one WiFi, so the hub
+# is out of reach while it records on the armband's network
+SYNC_CHECK_S = 30
+SYNC_BUSY_CHECK_S = 2
+SYNC_TIMEOUT_S = 5
 
 
 class Tool:
@@ -951,6 +956,71 @@ class Backup:
             raise ValueError("; ".join(failed))
 
 
+class SyncWatch:
+    """The header's sync line. On a device: how many ended sessions the hub doesn't have yet, and with auto send on
+    (hub.json "auto_send") it sends them, never while a session or practice run is going. On the hub: how many
+    sessions its backup doesn't have yet. Checked every SYNC_CHECK_S and whenever request() is called."""
+
+    def __init__(self, recorder, sync, backup):
+        self.recorder = recorder
+        self.sync = sync
+        self.backup = backup
+        self.state = {"role": None}
+        self._wake = threading.Event()
+        threading.Thread(target=self._loop, daemon=True).start()
+
+    def request(self):
+        self._wake.set()
+
+    def _loop(self):
+        while True:
+            try:
+                self.state = self._check()
+            except Exception as e:
+                self.state = dict(self.state, ok=False, text="sync check failed", detail=str(e) or type(e).__name__)
+            busy = self.sync.state["running"] or self.backup.state["running"]
+            self._wake.wait(SYNC_BUSY_CHECK_S if busy else SYNC_CHECK_S)
+            self._wake.clear()
+
+    def _check(self):
+        now = time.time()
+        if self.recorder.hub:
+            out = {"role": "hub", "checked": now}
+            try:
+                dest = hub.backup_folder()
+            except ValueError as e:
+                return dict(out, ok=False, text="backup folder missing", detail=str(e))
+            if dest is None:
+                return dict(out, ok=False, text="no backup folder", detail="set one on System > Sync")
+            done = hub.backed_up(dest)
+            missing = len([name for name in hub.ended_sessions(DATA_DIR) if name not in done])
+            if self.backup.state["running"]:
+                return dict(out, ok=False, text="backing up", detail=self.backup.state.get("step"))
+            if self.backup.state.get("error"):
+                return dict(out, ok=False, text="backup failed", detail=self.backup.state["error"])
+            return dict(out, ok=not missing, text=f"{missing} to back up" if missing else "backed up",
+                        detail=f"{len(done)} sessions in {dest}")
+        config = hub.load()
+        if not config.get("url"):
+            return {"role": None}
+        out = {"role": "device", "checked": now, "auto": bool(config.get("auto_send"))}
+        if self.sync.state["running"]:
+            return dict(out, ok=False, text="sending", detail=self.sync.state.get("step"))
+        mine = hub.ended_sessions(DATA_DIR)
+        try:
+            theirs = hub.client().request("GET", "/api/hub/sessions", timeout=SYNC_TIMEOUT_S)
+        except hub.HubError as e:
+            return dict(out, ok=False, text="hub out of reach" if e.status == 502 else "hub refused", detail=str(e))
+        todo = [name for name in mine if name not in theirs]
+        if todo and out["auto"] and self.recorder.session is None:
+            self.sync.send()
+            return dict(out, ok=False, text="sending", detail=f"{len(todo)} new sessions")
+        if todo and self.sync.state.get("error"):
+            return dict(out, ok=False, text="send failed", detail=self.sync.state["error"])
+        detail = f"{len(mine)} sessions here" + (", sends by itself" if out["auto"] else ", send them on System > Sync")
+        return dict(out, ok=not todo, text=f"{len(todo)} to send" if todo else "synced", detail=detail)
+
+
 class Tools:
     def __init__(self, recorder):
         esp_lock = threading.Lock()
@@ -966,6 +1036,7 @@ class Tools:
         self.network = NetworkJob()
         self.sync = Sync()
         self.backup = Backup()
+        self.sync_watch = SyncWatch(recorder, self.sync, self.backup)
         self.recorder = recorder
         # The delay test's two halves, (seconds, result line) each, until saved to the setup
         self.measured = {}
@@ -988,7 +1059,7 @@ class Tools:
         now = time.time()
         out = {}
         for name in ("check", "wifi", "calibration", "haptics", "test", "predictor", "trainer", "network", "control",
-                     "cursor", "sync", "backup", "round_trip", "flash"):
+                     "cursor", "sync", "backup", "sync_watch", "round_trip", "flash"):
             state = dict(getattr(self, name).state)
             if state.get("until"):
                 state["left"] = max(0.0, state["until"] - now)

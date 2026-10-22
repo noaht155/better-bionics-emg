@@ -235,6 +235,7 @@ transfer tests run the hub app on a free local port and send over real HTTP.
 | `test_back_up_copies_and_checks` | A session lands in the backup folder byte for byte through `.incoming` and is listed with its hashes; backing up again is fine, a different copy of the same name is never overwritten, and a session still recording is refused |
 | `test_backup_worker_and_missing_folder` | The hub's backup worker does nothing without a folder, reports a folder that isn't there (an unplugged USB stick), and copies only ended sessions |
 | `test_device_deletes_on_close_only_what_the_hub_and_backup_hold` | Sending never deletes anything. When its app closes, a device deletes a session only when the hub and its backup both hold it byte for byte. Kept: everything while the hub has no backup folder, a session not backed up yet, one a model here takes its levels from, one with files that were never sent, and one whose backup copy differs |
+| `test_sync_line_and_auto_send` | The header's sync line on a device counts sessions the hub doesn't have, tells a refused token from a hub out of reach, and with auto send on sends them, never while a session records; on the hub it counts sessions the backup doesn't have |
 | `test_merge_keeps_both_sides` | Mappings and profiles are added by name, a name both sides have with different content stays as it is |
 
 ### Mac WiFi (`tests/test_mac_wifi.py`)

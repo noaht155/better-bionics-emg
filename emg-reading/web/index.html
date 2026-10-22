@@ -42,6 +42,7 @@
   </div>
   <span id="live-dot">live</span>
   <button id="device-chip" hidden title="Change device"></button>
+  <button id="sync-chip" hidden></button>
   <span id="battery-chip" hidden></span>
   <span id="rec-badge" hidden>recording</span>
 </nav>
@@ -563,6 +564,7 @@
         <button id="backup-run">Back up now</button>
       </div>
       <p id="backup-status" class="muted"></p>
+      <p id="backup-live" class="muted"></p>
       <p id="backup-error" class="error"></p>
     </div>
     <div id="sync-device">
@@ -575,6 +577,7 @@
       </div>
       <div class="controls"><button id="sync-save">Connect</button></div>
       <p id="sync-hello" class="muted"></p>
+      <p id="sync-live" class="muted"></p>
       <p id="sync-error" class="error"></p>
       <h2>Sessions</h2>
       <p class="muted">Sends every finished session the hub doesn't have yet, stopped early ones too (training leaves
@@ -582,6 +585,8 @@
         appears on the hub once every file arrived intact. Nothing on either side is overwritten. When the app on
         this computer closes, sessions the hub and its backup both hold byte for byte are deleted here, except the
         ones this computer's models take their levels from.</p>
+      <label class="check"><input type="checkbox" id="sync-auto"> Send new sessions by themselves whenever the hub can
+        be reached, never during a recording</label>
       <div class="controls">
         <button id="sync-send" class="primary">Send new sessions</button>
         <button id="sync-refresh">Refresh</button>

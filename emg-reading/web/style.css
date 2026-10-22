@@ -560,6 +560,17 @@ th { color: var(--muted); font: 400 11px var(--font-mono); letter-spacing: 0.12e
   letter-spacing: 0.08em;
   text-transform: uppercase;
 }
+#tabs #sync-chip {
+  margin-left: 12px;
+  padding: 4px 10px;
+  border: 1px solid var(--line-strong);
+  border-radius: 2px;
+  color: var(--text);
+  font: 12px var(--font-mono);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+#tabs #sync-chip.pending { color: var(--muted); }
 .device-line { display: flex; align-items: center; gap: 12px; margin: -4px 0 8px; }
 .device-line button { padding: 4px 10px; }
 

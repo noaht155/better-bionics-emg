@@ -985,6 +985,7 @@ function drawTools() {
   drawCursor(t.cursor);
   drawSync(t.sync);
   drawBackup(t.backup);
+  drawSyncWatch(t.sync_watch);
 }
 
 // Sync
@@ -1018,6 +1019,7 @@ async function loadSyncConfig() {
     if (currentTab === "train") loadTrainLists();
   }
   if (document.activeElement !== $("sync-url")) $("sync-url").value = c.url || "";
+  $("sync-auto").checked = c.auto_send;
   $("sync-token").placeholder = c.token_set ? "saved, paste a new one to replace it" : "from hub.py add-device";
 }
 
@@ -1061,6 +1063,9 @@ $("sync-save").addEventListener("click", async () => {
   loadSyncStatus();
 });
 $("sync-refresh").addEventListener("click", loadSyncStatus);
+$("sync-auto").addEventListener("change", async (e) => {
+  if (!await postShowing("/api/sync/auto", { on: e.target.checked }, "sync-error")) e.target.checked = !e.target.checked;
+});
 $("sync-send").addEventListener("click", () => postShowing("/api/sync/send", undefined, "sync-job-error"));
 $("sync-fetch").addEventListener("click", () => {
   const names = [...$("sync-models").querySelectorAll("input:checked")].map((c) => c.value);
@@ -1100,6 +1105,21 @@ function drawBackup(b) {
   }
   backupWasRunning = b.running;
 }
+
+// The header chip: synced or not on a device, backed up or not on the hub (tools.SyncWatch)
+function drawSyncWatch(w) {
+  const chip = $("sync-chip");
+  chip.hidden = !w?.role;
+  if (!w?.role) return;
+  const ago = w.checked ? `, checked ${Math.max(0, Math.round(Date.now() / 1000 - w.checked))} s ago` : "";
+  const line = `${w.role === "hub" ? "Backup" : "Hub"}: ${w.text}${w.detail ? ` (${w.detail})` : ""}${ago}.`;
+  chip.textContent = w.text;
+  chip.title = `${line} Click for System > Sync.`;
+  chip.classList.toggle("pending", !w.ok);
+  flashOnChange(chip, w.text);
+  $(w.role === "hub" ? "backup-live" : "sync-live").textContent = line;
+}
+$("sync-chip").addEventListener("click", () => showTab("sync"));
 
 let syncWasRunning = false;
 function drawSync(s) {

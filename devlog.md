@@ -1902,6 +1902,17 @@ balanced over the signs and rest. Means of the 2 seeds:
   and tuned without the band. A session replay was left out on purpose: it can't react, so trigger mode's clenches
   wouldn't be yours. `Predictor.simulate`, `Control.prepare_sim` and `advance`.
 
+## 2026-10-22: sync status and auto send
+
+- Sessions only went to the hub when Send was pressed on the device. Now a chip in the header shows the state live
+  (`tools.SyncWatch`, checked every 30 s, every 2 s while sending): on a device "synced", "N to send", "sending", "hub
+  out of reach" or "hub refused"; on the hub "backed up" or "N to back up". Click opens System > Sync, the full line
+  is there too.
+- System > Sync has "Send new sessions by themselves" (hub.json `auto_send`, off by default). It sends whenever the hub
+  answers and no session or practice run is going. The Mac has one WiFi, so while it records on the armband's network
+  the hub is out of reach and sending waits until it is back on the home network.
+- Merged into `main` together with the Control tab's Simulate (Noah, without a Mac test first).
+
 ## Open
 
 - Backup: check that Proton Drive finished uploading `bb-sessions` to the cloud. Before the handoff, move the backup

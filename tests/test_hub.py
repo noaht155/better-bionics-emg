@@ -59,7 +59,7 @@ def make_session(folder, ended=True):
 
 
 def hub_app(lan=False):
-    jobs = SimpleNamespace(network=FakeJob(), backup=FakeBackup(), snapshot=lambda: {"trainer": {}, "network": {}})
+    jobs = SimpleNamespace(network=FakeJob(), backup=FakeBackup(), sync_watch=FakeBackup(), snapshot=lambda: {"trainer": {}, "network": {}})
     return app.make_app(SimpleNamespace(on_saved=None), None, None, jobs, lan=lan, serving=True)
 
 
@@ -299,3 +299,58 @@ def test_device_deletes_on_close_only_what_the_hub_and_backup_hold(hub_dir, serv
     for key in ("pending", "levels", "extra", "differs"):
         assert (device / names[key] / "session.json").exists(), key
     assert (hub_dir / names["gone"] / "session.json").exists()
+
+
+def watch(recorder, sync, backup):
+    """A SyncWatch without its thread, checked by calling _check."""
+    w = tools.SyncWatch.__new__(tools.SyncWatch)
+    w.recorder, w.sync, w.backup, w.state = recorder, sync, backup, {"role": None}
+    return w
+
+
+class FakeSync:
+    def __init__(self):
+        self.state = {"running": False, "error": None}
+        self.sends = 0
+
+    def send(self):
+        self.sends += 1
+
+
+def test_sync_line_and_auto_send(hub_dir, server, tmp_path, monkeypatch):
+    device = tmp_path / "device-data"
+    monkeypatch.setattr(tools, "DATA_DIR", device)
+    token = hub.add_device("mac")
+    sync = FakeSync()
+    recorder = SimpleNamespace(hub=False, session=None)
+    w = watch(recorder, sync, SimpleNamespace(state={"running": False}))
+    # Hub and device share hub.json here, so the hub still knows the device's token
+    hubs = hub.load()
+    assert w._check() == {"role": None}
+    hub.save(dict(hubs, url=server, token=token))
+    make_session(device / NAME)
+    assert w._check()["text"] == "1 to send"
+    assert sync.sends == 0
+    # Auto send, but not while a session records
+    hub.save(dict(hubs, url=server, token=token, auto_send=True))
+    recorder.session = object()
+    assert w._check()["text"] == "1 to send"
+    recorder.session = None
+    assert w._check()["text"] == "sending" and sync.sends == 1
+    make_session(hub_dir / NAME)
+    assert w._check()["text"] == "synced"
+    hub.save(dict(hubs, url=server, token="wrong"))
+    assert w._check()["text"] == "hub refused"
+    hub.save(dict(hubs, url="http://127.0.0.1:9", token=token))
+    assert w._check()["text"] == "hub out of reach"
+    # The hub's line is about its backup
+    hub.save(hubs)
+    monkeypatch.setattr(tools, "DATA_DIR", hub_dir)
+    w.recorder = SimpleNamespace(hub=True, session=None)
+    assert w._check()["text"] == "no backup folder"
+    dest = tmp_path / "backup"
+    dest.mkdir()
+    hub.save(dict(hub.load(), backup=str(dest)))
+    assert w._check()["text"] == "1 to back up"
+    hub.back_up(hub_dir / NAME, dest)
+    assert w._check()["text"] == "backed up"
