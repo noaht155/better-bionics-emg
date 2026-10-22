@@ -368,6 +368,7 @@
     </div>
     <div class="controls">
       <button id="ctl-start" class="primary">Start</button>
+      <button id="ctl-simulate">Simulate</button>
       <button id="ctl-stop">Stop</button>
     </div>
     <p id="ctl-status" class="muted"></p>
@@ -379,6 +380,13 @@
         <div id="ctl-label" class="big-label"></div>
         <div id="ctl-readout" class="battery-detail"></div>
         <div class="controls"><button id="ctl-reset">Reset counts</button></div>
+        <div id="ctl-sim" hidden>
+          <h2>Simulated model</h2>
+          <p class="muted">No band or model: these play the model's output with the picked model's classes. Click a
+            class or press its number to make the model sure of it, 0 for rest. Hold space for full effort.</p>
+          <div id="ctl-sim-classes" class="controls sim-classes"></div>
+          <div id="ctl-sim-params"></div>
+        </div>
       </div>
       <div class="ctl-plots">
         <h2>Last 10 s</h2>

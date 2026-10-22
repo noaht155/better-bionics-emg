@@ -129,6 +129,73 @@ $("ctl-start").addEventListener("click", async () => {
   if (r) $("ctl-haptics").textContent = r.haptics || "";
 });
 $("ctl-stop").addEventListener("click", () => post("/api/model/stop").catch(() => {}));
+
+// Simulate: the page plays the model, so every mode can be tried without the band
+const SIM_PARAMS = [
+  { key: "effort", label: "Effort", min: 0, max: 1, step: 0.01, help: "what the band would give, 0 at the rest level, 1 at the max level" },
+  { key: "sure", label: "Sure", min: 0, max: 1, step: 0.01, help: "probability of the picked class, the others share the rest; under the threshold it counts as unsure" },
+  { key: "moving", label: "Arm moving", help: "what the accelerometer would say, for Arm still only" },
+];
+ctl.sim = { label: null, sure: 1, effort: 0, moving: false };
+ctl.clench = false;
+buildParams($("ctl-sim-params"), SIM_PARAMS, "ctl-sim-", () => ctl.sim, sendSim);
+showParams(SIM_PARAMS, "ctl-sim-", ctl.sim);
+
+function sendSim() {
+  post("/api/control/sim", { ...ctl.sim, effort: ctl.clench ? 1 : ctl.sim.effort }).catch((err) => { $("ctl-error").textContent = err.message; });
+}
+
+function simulating() {
+  const p = state?.tools?.predictor;
+  return !!(p?.running && p.simulated);
+}
+
+function pickSim(label) {
+  ctl.sim.label = label;
+  sendSim();
+}
+
+$("ctl-simulate").addEventListener("click", async () => {
+  $("ctl-haptics").textContent = "";
+  const classes = selectedModel()?.classes || config.gesture_set;
+  if (await postShowing("/api/control/simulate", classes, "ctl-error")) {
+    ctl.sim.label = null;
+    sendSim();
+  }
+});
+
+$("ctl-sim-classes").addEventListener("click", (e) => {
+  const button = e.target.closest("button[data-class]");
+  if (button) pickSim(button.dataset.class || null);
+});
+
+document.addEventListener("keydown", (e) => {
+  if (currentTab !== "control" || !simulating() || e.target.closest("input, select, textarea")) return;
+  if (e.key === " ") {
+    e.preventDefault();
+    if (!ctl.clench) { ctl.clench = true; sendSim(); }
+  } else if (/^[0-9]$/.test(e.key)) {
+    const button = $("ctl-sim-classes").querySelectorAll("button")[Number(e.key)];
+    if (button) pickSim(button.dataset.class || null);
+  }
+});
+document.addEventListener("keyup", (e) => {
+  if (e.key === " " && ctl.clench) { ctl.clench = false; sendSim(); }
+});
+
+function drawSim(p) {
+  const on = !!(p.running && p.simulated);
+  $("ctl-sim").hidden = !on;
+  if (!on) return;
+  const classes = p.classes.filter((c) => c !== "rest");
+  const key = classes.join(",");
+  if (ctl.simClasses !== key) {
+    ctl.simClasses = key;
+    $("ctl-sim-classes").innerHTML = [`<button data-class="">0 rest</button>`]
+      .concat(classes.map((c, i) => `<button data-class="${c}">${i < 9 ? `${i + 1} ` : ""}${nice(c)}</button>`)).join("");
+  }
+  for (const b of $("ctl-sim-classes").querySelectorAll("button")) b.classList.toggle("active", (b.dataset.class || null) === ctl.sim.label);
+}
 $("ctl-reset").addEventListener("click", () => post("/api/control/reset").catch(() => {}));
 
 // Saving under a name that exists takes a second click, the button turns into Overwrite until the name changes
@@ -560,7 +627,9 @@ function drawControl(c, p) {
   $("ctl-output").hidden = !running;
   $("ctl-stop").disabled = !running;
   $("ctl-reset").disabled = !running;
-  $("ctl-status").textContent = running ? `Running ${p.model}, effort levels from ${c.levels_from}`
+  drawSim(p);
+  $("ctl-status").textContent = running && p.simulated ? "Simulating, the inputs under the hand play the model"
+    : running ? `Running ${p.model}, effort levels from ${c.levels_from}`
     : p.running ? `${p.model} is running without the control layer (started from another tab)` : "Stopped";
   if (p.error && running) $("ctl-error").textContent = p.error;
   if (running && c.step != null && c.step !== ctl.lastStep) {

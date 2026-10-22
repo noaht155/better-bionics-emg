@@ -517,3 +517,25 @@ def test_rules_lock_freezes_the_hand_until_unlocked():
                              {"trigger": "point", "how": "held", "value": 0.2, "action": "unlock"}]})
     assert run(c, ("point", 0.0, 4), ("rest", 0.0, 4), ("key", 0.0, 4), ("rest", 0.0, 4)) == ["lock"]
     assert run(c, ("point", 0.0, 4)) == ["unlock"] and not c.locked
+
+
+def test_simulated_model_drives_the_control_layer():
+    import time
+    import tools
+    control = tools.Control(None)
+    control.set_params({"mode": "blend"})
+    control.prepare_sim()
+    predictor = tools.Predictor(None)
+    predictor.simulate(GESTURE_SET, control)
+    try:
+        with pytest.raises(ValueError):
+            predictor.set_sim({"label": "not_a_class"})
+        predictor.set_sim({"label": "fist", "sure": 0.95, "effort": 0.8})
+        time.sleep(0.6)
+        assert predictor.state["probs"]["fist"] == 0.95 and predictor.state["simulated"]
+        assert control.state["grip"] == "fist" and control.state["closure"] > 0
+        assert control.state["effort"] == 0.8 and control.state["step"] > 5
+    finally:
+        predictor.stop()
+        predictor.join(2)
+    assert not predictor.state["running"]

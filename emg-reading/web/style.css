@@ -576,6 +576,7 @@ th { color: var(--muted); font: 400 11px var(--font-mono); letter-spacing: 0.12e
 #ctl-pose-name { text-align: center; margin-top: 6px; color: var(--text); }
 .param { display: grid; grid-template-columns: 9em 1fr 4em; gap: 8px; align-items: center; margin: 6px 0; color: var(--text); }
 .param input[type=range] { width: 100%; padding: 0; border: none; background: none; }
+.sim-classes button.active { color: var(--text); border-color: var(--accent); }
 .param output { font: 13px var(--font-mono); text-align: right; }
 .param small { grid-column: 1 / -1; color: var(--muted); margin-top: -4px; }
 

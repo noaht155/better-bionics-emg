@@ -53,6 +53,8 @@ DELAY_GAP_S = (0.3, 0.6)
 # The page's clock and this computer's agree to a few ms when the page runs here
 DELAY_CLOCK_S = 0.05
 DELAY_FLASH_TIMEOUT_S = 120
+# The Control tab's simulated model steps as often as the models do (50 ms window step)
+SIM_STEP_S = 0.05
 
 
 class Tool:
@@ -451,6 +453,8 @@ class Predictor(Tool):
         # Kept here so it stays the same when another model is picked
         self.threshold = gesture_model.THRESHOLD
         self._live = None
+        # The Control tab's simulated model: the class it is sure of (None for rest), how sure, effort, arm moving
+        self.sim = {"label": None, "sure": 1.0, "effort": 0.0, "moving": False}
 
     def set_threshold(self, value):
         self.threshold = value
@@ -477,8 +481,37 @@ class Predictor(Tool):
         self._launch(self._run, model, path.name, control)
         return model
 
+    def simulate(self, classes, control):
+        """Runs control on inputs from the page instead of a model and the band (set_sim), at the networks' step."""
+        self.stop()
+        self.join(2)
+        self._stop.clear()
+        self.sim.update(label=None, effort=0.0, moving=False)
+        self._launch(self._simulate, list(classes), control)
+
+    def set_sim(self, inputs):
+        if inputs.get("label") is not None and inputs["label"] not in self.state.get("classes", []):
+            raise ValueError(f"the simulated model has no class {inputs['label']}")
+        self.sim.update(inputs)
+
     def stop(self):
         self._stop.set()
+
+    def _simulate(self, classes, control):
+        rest = "rest" if "rest" in classes else classes[0]
+        self.state.update(model="simulated model", classes=classes, label=None, threshold=self.threshold,
+                          control=True, simulated=True)
+        period = SIM_STEP_S
+        next_tick = time.perf_counter()
+        while not self._stop.is_set():
+            label = self.sim["label"] or rest
+            sure = min(max(self.sim["sure"], 0.0), 1.0)
+            others = (1 - sure) / (len(classes) - 1) if len(classes) > 1 else 0.0
+            probs = {c: sure if c == label else others for c in classes}
+            self.state.update(label=label if sure >= self.threshold else gesture_model.UNSURE, raw=label, probs=probs)
+            control.advance(probs, self.sim["effort"], period, None, self.sim["moving"])
+            next_tick = max(next_tick + period, time.perf_counter())
+            time.sleep(max(0.0, next_tick - time.perf_counter()))
 
     def _run(self, model, name, control):
         if model.get("kind") == "network":
@@ -564,10 +597,28 @@ class Control:
         if self._controller is not None:
             self._controller.params.update(params)
 
+    def prepare_sim(self):
+        """No session: effort and arm movement come from the page (Predictor.simulate)."""
+        self._ranges = None
+        self._still = float("inf")
+        self._controller = Controller(self.params, GESTURE_SET, POSES)
+        self._controller.set_rules(self.rules)
+        self._map = None
+        self.state = {"params": self.params, "rules": self.rules, "levels_from": None, "step": 0,
+                      "state": "idle", "grip": None, "closure": 0.0, "effort": 0.0, "angles": None, "starts": 0,
+                      "releases": 0, "opens": 0, "locks": 0, "unlocks": 0}
+
     def reset_counts(self):
         self.state.update(starts=0, releases=0, opens=0, locks=0, unlocks=0)
 
     def step(self, emg, filtered, probs, dt, distance=None):
+        n = self.recorder.env_len
+        band = self.recorder.band
+        e = effort(emg[:, -n:], filtered[:, -n:], band.channels, self._ranges, True)
+        moving = movement(self.recorder.accel_window(int(STILL_S * band.rate))) > self._still
+        self.advance(probs, e, dt, distance, moving)
+
+    def advance(self, probs, e, dt, distance=None, moving=False):
         if self.params["mode"] != "rules" and not set(probs) <= set(GESTURE_SET):
             if self._map is None:
                 self._map = sign_map(self.rules, probs)
@@ -575,10 +626,6 @@ class Control:
             for c, v in probs.items():
                 grips[self._map[c]] += v
             probs = grips
-        n = self.recorder.env_len
-        band = self.recorder.band
-        e = effort(emg[:, -n:], filtered[:, -n:], band.channels, self._ranges, True)
-        moving = movement(self.recorder.accel_window(int(STILL_S * band.rate))) > self._still
         out = self._controller.step(probs, e, dt, distance, moving)
         s = self.state
         s.update(step=s["step"] + 1, state=out["state"], grip=out["grip"], closure=round(out["closure"], 3),
