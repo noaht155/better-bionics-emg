@@ -1160,6 +1160,19 @@ const DEV_OUTROS = {
   practice: { practice: true, folder: "practice run, nothing saved", seconds: 240, cues: 30, cues_done: 30 },
 };
 
+// The session is made up, so Calibrate is refused (unknown session); the result is shown from made-up numbers
+const DEV_QUICK = { ...DEV_SUMMARY, quick: true, session: "dev-quick", seconds: 92, samples: 46000, frames: 2760,
+  cues: 26, cues_done: 26 };
+const DEV_QUICK_RESULT = { saved: "ringnet_2026-10-20_120000_cal_dev-quick.pt", reps: [1, 2], checked_on: [1],
+  scores: { balanced: 0.812, rest_false: 0.034, wrong: 0.051 } };
+
+document.querySelectorAll("[data-quick]").forEach((b) => b.addEventListener("click", () => {
+  showTab("record");
+  showOutro(DEV_QUICK);
+  $("setup").hidden = true;
+  if (b.dataset.quick === "result") showQuickResult(DEV_QUICK_RESULT);
+}));
+
 document.querySelectorAll("[data-outro]").forEach((b) => b.addEventListener("click", () => {
   showTab("record");
   showOutro({ ...DEV_SUMMARY, ...DEV_OUTROS[b.dataset.outro] });

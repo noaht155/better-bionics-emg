@@ -287,7 +287,10 @@ class Recorder:
         seconds = session.meta["ended"] - session.meta["started"]
         detected = session.detected / session.frames if session.frames else None
         practice = session.folder is None
+        settings = session.meta["settings"]
         self.last_summary = dict(summary, folder=_folder_text(session), practice=practice, seconds=seconds,
+                                 session=None if practice else session.folder.name,
+                                 quick=settings.get("quick", False) and settings.get("protocol", "A") in ("A", "F"),
                                  samples=session.samples, frames=session.frames, hand_detected=detected,
                                  ended=session.meta["ended"], cues=len(self.plan),
                                  cues_done=len(self.plan) if completed else self.index,

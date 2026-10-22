@@ -167,6 +167,8 @@ fieldset label { display: inline-flex; align-items: center; gap: 8px; }
 #outro-stats div { font-size: 28px; font-weight: 600; font-variant-numeric: tabular-nums; }
 #outro-stats small { display: block; margin-top: 4px; font: 400 11px var(--font-mono); letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); }
 #outro-stats .warn { color: var(--warn); }
+#outro-cal { max-width: 60ch; margin-bottom: 20px; }
+#outro-cal .controls { justify-content: center; }
 #outro .bar { align-self: stretch; height: 2px; margin-bottom: 20px; }
 #outro-bar { height: 100%; background: var(--gradient); animation: shrink var(--hold) linear both; }
 #outro:hover #outro-bar { animation-play-state: paused; }

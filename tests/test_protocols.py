@@ -356,3 +356,49 @@ def test_sign_network_learns_the_signs_and_loads_safely(tmp_path, monkeypatch):
     model, saved = ringnet.load(tmp_path / cal["saved"])
     assert model.classes == sorted(F_SIGNS + ["rest", gesture_model.NOT_SIGN])
     assert saved["kind"] == "calibrated" and saved["signs"] and saved["calibrated_on"] == f.name
+
+
+def test_quick_plan_is_the_grip_block_only():
+    settings = {"postures": ["table"], "reps": 2, "hold_s": 4.0, "rest_s": 3.0, "quick": True}
+    plan = plan_for(settings, seed=0)
+    assert {c["kind"] for c in plan} == {"break", "hold"}
+    holds = Counter(c["label"] for c in plan if c["kind"] == "hold" and c["label"] != "rest")
+    assert holds == {g: 2 for g in GRIPS}
+    assert plan == session_plan(["table"], 2, 4.0, 3.0, 0, 0)[:len(plan)]
+
+
+def test_quick_settings_are_one_posture_and_two_repetitions():
+    """The form keeps the full session's values, the server cuts them for a quick calibration, F included."""
+    import app
+    for protocol in ("A", "F"):
+        s = app.PlanSettings(postures=["forward", "table"], protocol=protocol, reps=5, f_rounds=4, hold_s=4,
+                             rest_s=3, quick=True)
+        assert (s.postures, s.reps, s.f_rounds) == (["forward"], gestures.QUICK_REPS, gestures.QUICK_REPS)
+    s = app.PlanSettings(postures=["forward", "table"], reps=5, hold_s=4, rest_s=3)
+    assert (s.postures, s.reps) == (["forward", "table"], 5)
+
+
+def test_quick_session_trains_but_is_never_held_out(tmp_path):
+    folder = tmp_path / "2026-10-22_120000_test"
+    _fake_session(folder, session_plan(["table"], 2, 2.5, 1.5, quick=True, seed=0), {"quick": True})
+    assert dataset.good_sessions(tmp_path) == [folder]
+    assert dataset.quick(folder)
+
+
+def test_cross_calibration_scores_the_last_repetition_and_saves_all(tmp_path, monkeypatch):
+    """--cross: the score comes from repetition 1 tested on 2, the saved network is calibrated on both."""
+    pytest.importorskip("torch")
+    from ml import networks, ringnet
+    folder = tmp_path / "2026-10-22_120000_test"
+    _fake_session(folder, session_plan(["table"], 2, 2.5, 1.5, quick=True, seed=0), {"quick": True})
+    monkeypatch.setattr(networks, "NETWORK_DIR", tmp_path / "networks")
+    monkeypatch.setattr(networks.dataset, "load", dataset.build)
+    ringnet.save(ringnet.RingNet(sorted(GESTURE_SET)), {"kind": "general", "sessions": []},
+                 tmp_path / "networks" / "base.pt")
+    result = networks.calibrate_on("base.pt", folder, [1, 2], cross=True)
+    assert result["checked_on"] == [1] and result["reps"] == [1, 2]
+    assert 0 <= result["scores"]["balanced"] <= 1
+    _, info = ringnet.load(tmp_path / "networks" / result["saved"])
+    assert info["reps"] == [1, 2] and info["balanced"] == result["scores"]["balanced"]
+    plain = networks.calibrate_on("base.pt", folder, [1, 2])
+    assert "scores" not in plain and "checked_on" not in plain

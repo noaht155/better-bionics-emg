@@ -57,6 +57,12 @@ def good_sessions(data_dir=DATA_DIR):
     return out
 
 
+def quick(folder):
+    """A quick calibration session: two repetitions of the grips, too short to hold out for scoring the
+    2-repetition calibration. It still trains like any other good session."""
+    return json.loads((Path(folder) / "session.json").read_text()).get("settings", {}).get("quick", False)
+
+
 def label_shift(meta):
     """The camera delay taken off a session's frame times: its setup's measured shift (devices.json)."""
     setup = devices.of_session(meta)

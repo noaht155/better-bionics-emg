@@ -25,7 +25,7 @@ import uvicorn
 from fastapi import FastAPI, HTTPException, Query, Request, Response, WebSocket, WebSocketDisconnect
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 import devices
 import hub
@@ -36,7 +36,8 @@ from camera import Camera
 from control import DEFAULTS as CONTROL_DEFAULTS, check_rules, rules_for, split_rules
 from esp32_link import WIFI_IP
 from gestures import (C_CLOSE_S, C_MOVE_S, C_ROUNDS, CATEGORIES, D_ACTIVITY_S, D_ROUNDS, E_ROUNDS, E_SIGN_S,
-                      F_ROUNDS, F_SIGN_S, F_SIGNS, GESTURE_SET, GESTURES, GRIP_CLOSE_S, LIBRARY, POSTURES, plan_for)
+                      F_ROUNDS, F_SIGN_S, F_SIGNS, GESTURE_SET, GESTURES, GRIP_CLOSE_S, LIBRARY, POSTURES, QUICK_REPS,
+                      plan_for)
 from hand_angles import JOINTS, RELIABLE
 from processing import spectrum
 from recorder import Recorder
@@ -81,6 +82,16 @@ class PlanSettings(BaseModel):
     e_sign_s: float = Field(E_SIGN_S, ge=3, le=15)
     f_rounds: int = Field(F_ROUNDS, ge=1, le=20)
     f_sign_s: float = Field(F_SIGN_S, ge=3, le=15)
+    # Quick calibration after putting the band on: protocol A without the single fingers, or F, in one posture
+    quick: bool = False
+
+    # Set here rather than on the form, so the form keeps the full session's values for next time
+    @model_validator(mode="after")
+    def _quick(self):
+        if self.quick:
+            self.postures = self.postures[:1]
+            self.reps = self.f_rounds = QUICK_REPS
+        return self
 
 
 class SessionSettings(PlanSettings):
@@ -294,6 +305,12 @@ class NetworkJobSettings(BaseModel):
     sessions: list[str] | None = None
     # Signs left out of a sign network, grip networks always learn all the grips
     exclude: list[str] = []
+    # calibrate: score from all repetitions but the last, then save the network calibrated on all of them
+    cross: bool = False
+
+
+class QuickCalibration(BaseModel):
+    session: str
 
 
 def placement_text(settings):
@@ -683,7 +700,7 @@ def make_app(recorder, band, camera, tools, lan=True, serving=False):
 
     @app.post("/api/network/run")
     def run_network(settings: NetworkJobSettings):
-        good = [f.name for f in dataset.good_sessions()]
+        good = [f.name for f in dataset.good_sessions() if not dataset.quick(f)]
         if settings.exclude and settings.job != "signs":
             refuse("leaving out positions works for LDA and sign networks; grip networks always learn all 7 grips")
         if settings.job in ("evaluate", "evaluate_newest") and len(good) < 2:
@@ -713,12 +730,35 @@ def make_app(recorder, band, camera, tools, lan=True, serving=False):
                     args += ["--exclude", *settings.exclude]
             else:
                 args = ["ml.networks", "calibrate", name, str(session_folder(settings.session or "")),
-                        "--reps", *map(str, settings.reps)]
+                        "--reps", *map(str, settings.reps)] + (["--cross"] if settings.cross else [])
         try:
             tools.network.start(settings.job, args)
         except ValueError as e:
             refuse(e)
         return {"ok": True}
+
+    @app.post("/api/network/quick")
+    def quick_calibration(choice: QuickCalibration):
+        """Calibrates the newest base network on a quick calibration session (end card of the Record tab): the
+        general network for grips, the newest sign network for a protocol F session."""
+        folder = session_folder(choice.session)
+        settings = json.loads((folder / "session.json").read_text()).get("settings", {})
+        signs = settings.get("protocol") == "F"
+        if not signs and settings.get("protocol", "A") != "A":
+            refuse("only protocol A and F sessions can be used for a quick calibration")
+        kind = "signs" if signs else "general"
+        bases = [n for n in network_list() if n.get("kind") == kind]
+        if not bases:
+            what = "sign network" if signs else "general network"
+            refuse(f"no {what} on this computer, train one on the Train tab or download one in System > Sync")
+        base = max(bases, key=lambda n: n.get("created", ""))["name"]
+        reps = list(range(1, settings.get("f_rounds" if signs else "reps", 2) + 1))
+        args = ["ml.networks", "calibrate", base, str(folder), "--reps", *map(str, reps), "--cross"]
+        try:
+            tools.network.start("calibrate", args)
+        except ValueError as e:
+            refuse(e)
+        return {"network": base}
 
     @app.post("/api/network/stop")
     def stop_network():

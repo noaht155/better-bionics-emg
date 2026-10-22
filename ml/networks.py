@@ -2,12 +2,14 @@
 sign sessions.
 
     emg-reading/.venv/Scripts/python -m ml.networks train [--epochs 15] [--sessions name ...]
-    emg-reading/.venv/Scripts/python -m ml.networks calibrate <network file> <session folder> [--reps 1 2]
+    emg-reading/.venv/Scripts/python -m ml.networks calibrate <network file> <session folder> [--reps 1 2] [--cross]
     emg-reading/.venv/Scripts/python -m ml.networks signs <network file> --sessions name ... [--epochs 20]
         [--exclude sign ...]
 
 calibrate fits the per-person transform and the grip head on the given repetitions of the session (normally a
-short recording at the current band position) and scores the result on its other repetitions, if it has any.
+short recording at the current band position) and scores the result on its other repetitions, if it has any. With
+--cross the score comes from a calibration on all but the last repetition tested on the rest, and the saved network
+is then calibrated on all of them: a quick calibration session has no repetitions left over to test on.
 signs starts from a general network, puts a new output layer on it for the signs of protocol E and F sessions (rest
 and the wrist bends as notsign, labelled as the Train tab's LDA does) and fine-tunes the whole network on them. It
 runs live without a calibration, but calibrating it (calibrate) was worth 10 points on the third F day (devlog
@@ -59,20 +61,19 @@ def train_all(epochs, sessions=None):
     return {"saved": path.name, "sessions": len(data)}
 
 
-def calibrate_on(network, session, reps):
+def calibrate_on(network, session, reps, cross=False):
     """For a sign network reps are rounds of a sign session."""
     model, info = load(NETWORK_DIR / network, DEVICE)
     model.train(False)
     result = {"calibrated_on": Path(session).name, "reps": reps}
     # The first sign networks were saved with kind signs only
     signs = bool(info.get("signs") or info.get("kind") == "signs")
-    if signs:
-        print(f"calibrating {network} on {Path(session).name}, rounds {reps}", flush=True)
-        calibrated, scores = calibrate_signs(model, session, reps)
-        if scores is not None:
-            result["scores"] = scores
-    else:
-        d = dataset.load(session)
+    d = None if signs else dataset.load(session)
+
+    def fit(reps):
+        if signs:
+            print(f"calibrating {network} on {Path(session).name}, rounds {reps}", flush=True)
+            return calibrate_signs(model, session, reps)
         labelled = d["grip"] != ""
         cal = labelled & np.isin(d["rep"], reps)
         test = labelled & (d["rep"] > 0) & ~np.isin(d["rep"], reps)
@@ -81,9 +82,19 @@ def calibrate_on(network, session, reps):
         print(f"calibrating {network} on {Path(session).name}, repetitions {reps} ({cal.sum()} windows)",
               flush=True)
         calibrated = calibrate(model, *to_tensors(d, cal), head=True)
-        if test.any():
-            x, y, _ = to_tensors(d, test)
-            result["scores"] = grip_scores(y.cpu().numpy(), predict(calibrated, x)[0])
+        if not test.any():
+            return calibrated, None
+        x, y, _ = to_tensors(d, test)
+        return calibrated, grip_scores(y.cpu().numpy(), predict(calibrated, x)[0])
+
+    if cross and len(reps) > 1:
+        _, scores = fit(reps[:-1])
+        result["checked_on"] = reps[:-1]
+        calibrated, _ = fit(reps)
+    else:
+        calibrated, scores = fit(reps)
+    if scores is not None:
+        result["scores"] = scores
     # A session the network already trained on scores far too well, the test repetitions aren't new to it
     result["seen_in_training"] = Path(session).name in info.get("sessions", [])
     if result["seen_in_training"]:
@@ -260,6 +271,7 @@ def main():
     c.add_argument("network", help="file name in emg-reading/models/networks/")
     c.add_argument("session", help="session folder")
     c.add_argument("--reps", type=int, nargs="+", default=[1, 2])
+    c.add_argument("--cross", action="store_true", help="score from all but the last repetition, then fit on all")
     s = sub.add_parser("signs")
     s.add_argument("network", help="general network file in emg-reading/models/networks/")
     s.add_argument("--sessions", nargs="+", required=True, help="protocol E and F session folder names")
@@ -272,7 +284,7 @@ def main():
     if args.command == "train":
         result = train_all(args.epochs, args.sessions)
     elif args.command == "calibrate":
-        result = calibrate_on(args.network, args.session, args.reps)
+        result = calibrate_on(args.network, args.session, args.reps, args.cross)
     else:
         result = train_signs(args.network, [DATA_DIR / n for n in args.sessions], args.epochs, args.exclude)
     if args.json:
