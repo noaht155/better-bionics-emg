@@ -1873,7 +1873,7 @@ balanced over the signs and rest. Means of the 2 seeds:
   It keeps the sessions its models take their levels from (haptics need them). Hub not reachable: nothing deleted.
 - The backup is in Noah's own Proton account until the handoff. Move it to the lab's storage before then, and check
   where other people's recordings may be kept before anyone else records.
-- On branch `backup-and-cleanup` until tried on the real setup with the Mac.
+- Merged into `main` after the test below.
 - Tried on the real setup the same day: the first backup copied all 44 hub sessions (4.1 GB) into Proton Drive in
   about 25 s, a rehash of 5 matched. The Mac sent a fake session and its real 2026-10-21 session; on Ctrl+C it deleted
   both (Noah OKed the real one), data/ on the Mac is empty. The fake session was removed from the hub and the backup.
@@ -1881,8 +1881,8 @@ balanced over the signs and rest. Means of the 2 seeds:
 
 ## Open
 
-- Backup: set the Proton Drive folder on the hub, check the first full copy (4.2 GB) and that Proton uploads it,
-  then a Mac send and app close that deletes there. Merge `backup-and-cleanup` after.
+- Backup: check that Proton Drive finished uploading `bb-sessions` to the cloud. Before the handoff, move the backup
+  to the lab's storage (Sync > Backup folder).
 - Hub: torch CPU build on the Mac for networks. Later, per-person consent before other people record.
 - Tracking switch: an F session with tracking off lost 0.04 % of samples; compare with tracking on, then merge
   `tracking-toggle`.
