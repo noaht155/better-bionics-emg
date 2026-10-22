@@ -367,13 +367,13 @@ def test_quick_plan_is_the_grip_block_only():
     assert plan == session_plan(["table"], 2, 4.0, 3.0, 0, 0)[:len(plan)]
 
 
-def test_quick_settings_are_one_posture_and_two_repetitions():
+def test_quick_settings_are_two_repetitions_in_every_posture():
     """The form keeps the full session's values, the server cuts them for a quick calibration, F included."""
     import app
     for protocol in ("A", "F"):
         s = app.PlanSettings(postures=["forward", "table"], protocol=protocol, reps=5, f_rounds=4, hold_s=4,
                              rest_s=3, quick=True)
-        assert (s.postures, s.reps, s.f_rounds) == (["forward"], gestures.QUICK_REPS, gestures.QUICK_REPS)
+        assert (s.postures, s.reps, s.f_rounds) == (["forward", "table"], gestures.QUICK_REPS, gestures.QUICK_REPS)
     s = app.PlanSettings(postures=["forward", "table"], reps=5, hold_s=4, rest_s=3)
     assert (s.postures, s.reps) == (["forward", "table"], 5)
 

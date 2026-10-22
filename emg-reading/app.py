@@ -82,14 +82,14 @@ class PlanSettings(BaseModel):
     e_sign_s: float = Field(E_SIGN_S, ge=3, le=15)
     f_rounds: int = Field(F_ROUNDS, ge=1, le=20)
     f_sign_s: float = Field(F_SIGN_S, ge=3, le=15)
-    # Quick calibration after putting the band on: protocol A without the single fingers, or F, in one posture
+    # Quick calibration after putting the band on: protocol A without the single fingers, or F, in every ticked
+    # posture (calibrating at the table only lost 7 to 16 points with the arm forward, devlog 2026-10-22)
     quick: bool = False
 
     # Set here rather than on the form, so the form keeps the full session's values for next time
     @model_validator(mode="after")
     def _quick(self):
         if self.quick:
-            self.postures = self.postures[:1]
             self.reps = self.f_rounds = QUICK_REPS
         return self
 

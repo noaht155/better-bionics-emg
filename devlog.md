@@ -1961,9 +1961,9 @@ the rest cues of recorded sessions.
 ## 2026-10-22: quick calibration
 
 - Calibrating meant recording a full session each time the band went on. Record now has "Quick calibration" for
-  protocols A and F: the first ticked posture only and `QUICK_REPS` 2 repetitions (A: the grip block without single
-  fingers, 87 s; F: the signs and wrist bends, 111 s). The server sets posture and repetitions, so the form keeps the
-  full session's values. 2 repetitions because that is what the calibrated scores were measured with (58 to 76 %
+  protocols A and F: `QUICK_REPS` 2 repetitions in every ticked posture (A: the grip block without single fingers;
+  F: the signs and wrist bends, about 3.7 min with table and forward). The server sets the repetitions, so the form
+  keeps the full session's values. First version was the first posture only, see below. 2 repetitions because that is what the calibrated scores were measured with (58 to 76 %
   balanced after 1, 82 to 86 % after 2).
 - Its end card stays open and offers "Calibrate the newest network on it" (`/api/network/quick`): the newest general
   network for A, the newest sign network for F, run on this computer. `calibrate --cross` gives the score: fitted on
@@ -1972,6 +1972,12 @@ the rest cues of recorded sessions.
   (`dataset.quick`): with 2 repetitions the 2-repetition calibration has nothing left to test on.
 - Checked headless on a test copy (form, card, made-up result, Control jump); the real calibration job not run there
   since it writes the models folder. On the `quick-calibration` branch until tried on the arm.
+- First try (`2026-10-22_135247`, F, table only): 92.3 % balanced on round 2 after round 1, against 97.9 % for the
+  10-21 calibration (2 rounds in both postures, 4 times the data); 1-round calibrations scored 89 to 93 % before.
+  Table only costs the forward posture: the sign network calibrated on parts of `2026-10-21_141651` (not in its
+  training), tested on rounds 3 and 4, table / forward: table round 1 95.7 / 78.5 %, table rounds 1 and 2
+  97.2 / 90.1 %, both postures round 1 95.2 / 94.7 %, both rounds 1 and 2 97.2 / 98.6 %. Same pattern on
+  `2026-10-20_105110` (in training, optimistic). So quick calibration now records every ticked posture.
 
 ## Open
 
