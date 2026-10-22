@@ -1896,7 +1896,9 @@ balanced over the signs and rest. Means of the 2 seeds:
   (`SESSION_LOST_SHARE`); no completed session has more than 0.1 %. It refuses with a message when fewer than 2 pads
   kept contact, and `levels` refuses a zero rest. Levels change only for the 4 sessions with a bump.
 - The session itself is usable but hums: rest 18 to 26 uV filtered (Mac session's numbers) against 5 to 6 on the
-  desktop, and 7 channels got "grips barely above rest" (ratio 2.0). Mac hum stays an Open item.
+  desktop, and 7 channels got "grips barely above rest" (ratio 2.0). Mac hum stays an Open item. Correction
+  (2026-10-22): the 5 to 6 was the 2026-09-30 number. Recent desktop sessions rest at the same level as this one,
+  see "Mac hum test" below.
 - Control tab Simulate (Noah): runs the control layer without the band or a model, the page plays the model's output
   (class buttons or number keys, certainty, effort slider, space for full effort, arm moving). Every mode can be tried
   and tuned without the band. A session replay was left out on purpose: it can't react, so trigger mode's clenches
@@ -1917,6 +1919,25 @@ balanced over the signs and rest. Means of the 2 seeds:
   has stay. Next start, download the models again in System > Sync. Tried on the Mac the same day: on close it
   deleted the downloaded sign network and then `2026-10-21_141651_noah`, both still on the hub and in the backup.
 
+**Mac hum test.** `emg-reading/hum_test.py` records the relaxed arm for a set time under a label (into
+`data/hum-test/`, no session.json so sync leaves it alone) and prints per channel, median over 1 s windows: filtered
+rest RMS (shared filter), the raw 60, 120 and 180 Hz lines (`quality.line_rms`, as the app's warning), and raw noise
+at 20 to 35 and 205 to 245 Hz (outside the filter band, so neither muscle nor mains). `session` mode does the same on
+the rest cues of recorded sessions.
+- Baseline on rest cues: the Mac session `2026-10-21_141651_noah` rests at 13.7 uV filtered (median over channels),
+  the last 7 desktop sessions (10-16 to 10-20) at 14.0 to 18.3. Out of band the same (20 to 35 Hz 6.4 vs 6.5 to 10.0,
+  205 to 245 Hz 1.9 vs 1.8 to 1.9). The raw 60 Hz line is higher on the Mac: 10.8 vs 1.6 to 4.7, 6 to 14 on every
+  channel. So the Mac session had 2 to 6 times more mains in the raw data, but the notch takes it out and the filtered
+  signal the models and haptics see was no worse.
+- Test agreed with the Mac session, to separate the computer from the band placement and the room: band on once, 5 min
+  for the pads to settle, same seat, arm relaxed on the table, 60 s each, one receiver at a time (desktop off the
+  band's WiFi during the Mac blocks, both get 192.168.4.2). Desktop hands off, desktop with the free hand on the mouse,
+  Mac on battery hands off, Mac on charger hands off, charger with the free hand on the palm rest, battery with the
+  hand on the palm rest, desktop hands off again. Mac on the desk pad in one spot for all its blocks, where it was on
+  10-21 (charger in, same seat as the desktop recordings, so the charger hands-off block matches that session). The Mac is worse only if its
+  battery hands-off block is over both desktop blocks by more than they differ from each other. The desktop is earthed
+  (3-prong), the Mac's charger is a 2-prong one, so touch is the likely path.
+
 ## Open
 
 - Backup: check that Proton Drive finished uploading `bb-sessions` to the cloud. Before the handoff, move the backup
@@ -1924,10 +1945,7 @@ balanced over the signs and rest. Means of the 2 seeds:
 - Hub: per-person consent before other people record.
 - Tracking switch: an F session with tracking off lost 0.04 % of samples; compare with tracking on, then merge
   `tracking-toggle`.
-- Mac hum (ch 0 and ch 5, all 8 channels in `2026-10-21_141651_noah`: rest 18 to 26 uV filtered, 60 Hz 6 to 24 uV
-  raw): record 30 s relaxed on battery and 30 s on the charger, then look at the raw data (spectrum per channel,
-  which channels, steady or coming and going). That session was recorded with the charger in, the Mac on the desk
-  pad, same seat as the desktop sessions (Noah).
+- Mac hum: run the A/B test agreed with the Mac session (see "Mac hum test", `emg-reading/hum_test.py`).
 - Delay test: run it on the desktop too. Its flash result minus the LED test's 37 ms is that screen's own delay,
   which shows how far the flash method overestimates (the MacBook's 43 ms shift includes its screen). Rerun the
   MacBook once to check the 88 / 15 ms light and dark split repeats.
