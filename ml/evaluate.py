@@ -10,7 +10,7 @@ A method is any object with:
 - predict(model, x) -> (probabilities, classes), one row per window
 
 Every score comes from scores(), so models are compared on the same numbers. Run as a script for the LDA baseline:
-emg-reading/.venv/Scripts/python -m ml.evaluate [--signs] [--cal 1]
+emg-reading/.venv/Scripts/python -m ml.evaluate [--signs] [--protocol F] [--cal 1]
 """
 import argparse
 import json
@@ -145,28 +145,30 @@ class LDA:
         return model.predict_proba(self._features(x)), list(model.classes_)
 
 
-def is_signs(folder):
-    meta = json.loads((Path(folder) / "session.json").read_text())
-    return meta.get("settings", {}).get("protocol", "A") in gesture_model.SIGN_PROTOCOLS
+def protocol(folder):
+    return json.loads((Path(folder) / "session.json").read_text()).get("settings", {}).get("protocol", "A")
 
 
 def main():
     parser = argparse.ArgumentParser(description="LDA baseline through the shared evaluation, leave one session out")
-    parser.add_argument("--signs", action="store_true", help="sign sessions (protocols E and F) instead of grips")
+    parser.add_argument("--signs", action="store_true", help="sign sessions instead of grips")
+    # E and F sign sets differ, so mixing them scores an E session on signs it never had (61.5 % calibrated)
+    parser.add_argument("--protocol", nargs="*", help="protocols to include (default: F with --signs, A to D without)")
     parser.add_argument("--cal", type=int, nargs="*", help="calibration units (default: rotate)")
     args = parser.parse_args()
     low_priority()
+    wanted = set(args.protocol or (["F"] if args.signs else ["A", "B", "C", "D"]))
     if args.signs:
         folders = [p.parent for p in sorted(dataset.DATA_DIR.glob("*/session.json"))
-                   if json.loads(p.read_text()).get("completed") and is_signs(p.parent)]
+                   if json.loads(p.read_text()).get("completed")]
     else:
-        folders = [f for f in dataset.good_sessions() if not is_signs(f)]
+        folders = dataset.good_sessions()
     # Quick sessions are too short to hold out, see dataset.quick
-    folders = [f for f in folders if not dataset.quick(f)]
+    folders = [f for f in folders if protocol(f) in wanted and not dataset.quick(f)]
     load = sign_windows if args.signs else grip_windows
     sessions = {Path(f).name: load(f) for f in folders}
     result = held_out(sessions, LDA(), tuple(args.cal) if args.cal else None)
-    print(f"mean over {len(sessions)} sessions: {line(result['mean'])}")
+    print(f"mean over {len(sessions)} sessions ({', '.join(sorted(wanted))}): {line(result['mean'])}")
 
 
 if __name__ == "__main__":

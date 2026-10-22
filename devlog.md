@@ -2019,8 +2019,11 @@ the rest cues of recorded sessions.
   or rounds (rotating, as `train_ringnet` does, or fixed with `--cal`), and a benchmark run that trains once without
   the benchmark sessions. Scores: balanced, grips only, rest taken for a class, wrong shown and answers at 0.8, held
   wrist bends read as a sign. Quick sessions are skipped as held-out sessions. Tests in `tests/test_evaluate.py`.
-- LDA baseline through it on the 9 E and F sessions: 79.5 % balanced without calibration, 88.2 % calibrated (rest
-  taken for a sign 1.1 %, wrong shown 3.6 %). The worst calibrated score is `2026-10-16_140854` at 61.5 %.
+- LDA baseline through it on the 8 F sessions: 79.9 % balanced without calibration, 91.5 % calibrated (rest taken
+  for a sign 1.2 %, wrong shown 3.2 %). Calibrated, that equals the sign network with open (91.5 %, 2026-10-20), so
+  on F data the network isn't clearly ahead of LDA once both are calibrated. First run mixed in the E session
+  (`2026-10-16_140854`, a different sign set, 61.5 % calibrated) and gave 88.2 %; sign runs now take F only unless
+  `--protocol` says otherwise.
 - Not moved over yet: `gesture_model.evaluate`, `train_ringnet` and `networks` still score on their own. Next is
   wrapping the sign network as a method and choosing the benchmark sessions.
 
