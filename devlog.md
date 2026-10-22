@@ -1943,6 +1943,9 @@ the rest cues of recorded sessions.
 
 ## Open
 
+- Sync on the MacBook hangs when it has no sessions or can't reach the hub (on the band's WiFi, for example), it
+  should give up much sooner (Noah, 2026-10-22). Hub requests default to a 30 s timeout (`hub.request`), only the
+  status check uses `SYNC_TIMEOUT_S` 5 s. Find which call hangs first.
 - Backup: check that Proton Drive finished uploading `bb-sessions` to the cloud. Before the handoff, move the backup
   to the lab's storage (Sync > Backup folder).
 - Hub: per-person consent before other people record.
