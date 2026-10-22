@@ -1926,7 +1926,8 @@ balanced over the signs and rest. Means of the 2 seeds:
   `tracking-toggle`.
 - Mac hum (ch 0 and ch 5, all 8 channels in `2026-10-21_141651_noah`: rest 18 to 26 uV filtered, 60 Hz 6 to 24 uV
   raw): record 30 s relaxed on battery and 30 s on the charger, then look at the raw data (spectrum per channel,
-  which channels, steady or coming and going).
+  which channels, steady or coming and going). That session was recorded with the charger in, the Mac on the desk
+  pad, same seat as the desktop sessions (Noah).
 - Delay test: run it on the desktop too. Its flash result minus the LED test's 37 ms is that screen's own delay,
   which shows how far the flash method overestimates (the MacBook's 43 ms shift includes its screen). Rerun the
   MacBook once to check the 88 / 15 ms light and dark split repeats.
