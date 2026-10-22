@@ -1878,12 +1878,15 @@ balanced over the signs and rest. Means of the 2 seeds:
   about 25 s, a rehash of 5 matched. The Mac sent a fake session and its real 2026-10-21 session; on Ctrl+C it deleted
   both (Noah OKed the real one), data/ on the Mac is empty. The fake session was removed from the hub and the backup.
   Not checked yet: that Proton finished uploading to the cloud.
+- A network downloaded to the Mac didn't show in Control: the app hides networks where torch is missing. torch 2.2.2
+  (last Intel Mac build) runs the downloaded sign network at about 5 ms per prediction on the 2017 MacBook. Torch is
+  only how the PC runs it; the ESP32 port will run the exported weights in C++.
 
 ## Open
 
 - Backup: check that Proton Drive finished uploading `bb-sessions` to the cloud. Before the handoff, move the backup
   to the lab's storage (Sync > Backup folder).
-- Hub: torch CPU build on the Mac for networks. Later, per-person consent before other people record.
+- Hub: per-person consent before other people record.
 - Tracking switch: an F session with tracking off lost 0.04 % of samples; compare with tracking on, then merge
   `tracking-toggle`.
 - Mac hum (ch 0 and ch 5): record it and look at the raw data (spectrum per channel, which channels, steady or

@@ -118,7 +118,7 @@ On the device, System > Sync: the hub's address (`http://<desktop tailnet name>:
 - **Send new sessions** uploads every ended session the hub doesn't have, in 4 MB chunks. A broken connection carries on from where it stopped on the next send. The hub keeps the files in `data/.incoming/` until every file matches its hash, then moves the session into `data/` and evaluates it like one recorded there. A session name the hub already has is never overwritten.
 - **Train tab**: pick The hub at the top. The session list, training, calibration and evaluation are then the hub's, the live test stays on this computer. An LDA trained this way isn't made live on the hub.
 - **Download ticked** fetches models from the hub, and the session each one takes its effort and haptic levels from if the device doesn't have it. It also swaps Control mappings and profiles both ways; a name both computers have with different content stays as it is on each.
-- Networks need torch on the device to run live, the CPU build is enough.
+- Networks need torch on the device to run live, the CPU build is enough. Without it the Control and Train tabs don't list downloaded networks. Intel Macs: 2.2.2 is the last build, `uv pip install --python .venv/bin/python torch==2.2.2`.
 - New sessions note the computer they were recorded on (`device` in `session.json`).
 
 ## Undo the static IP
