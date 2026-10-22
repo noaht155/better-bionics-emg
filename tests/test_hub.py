@@ -370,3 +370,58 @@ def test_device_deletes_on_close_only_models_the_hub_holds(tmp_path, monkeypatch
     monkeypatch.setattr(hub, "client", Client)
     assert tools.Sync.free_models() == ["deleted the model same.joblib here, the hub has it"]
     assert sorted(p.name for p in tmp_path.iterdir()) == ["differs.joblib", "mine.pt"]
+
+
+def test_quick_calibration_runs_on_the_hub(tmp_path, monkeypatch):
+    device = tmp_path / "device-data"
+    monkeypatch.setattr(tools, "DATA_DIR", device)
+    monkeypatch.setattr(tools, "NETWORK_DIR", tmp_path)
+    monkeypatch.setattr(tools, "HUB_POLL_S", 0)
+    make_session(device / NAME)
+    sizes = hub.ended_sessions(device)[NAME]
+    result = {"saved": "signs_cal.pt", "reps": [1, 2], "checked_on": [1], "scores": {"balanced": 0.97}}
+
+    class Client:
+        def __init__(self):
+            self.theirs, self.polls, self.asked = {}, 0, []
+
+        def request(self, method, path, body=None, **kwargs):
+            if path == "/api/hub/sessions":
+                return self.theirs
+            if path == "/api/network/quick":
+                self.asked.append(body)
+                return {"network": "signs.pt"}
+            if path == "/api/hub/jobs":
+                self.polls += 1
+                running = self.polls < 3
+                return {"network": {"running": running, "error": None, "lines": ["epoch 1/20"],
+                                    "result": None if running else result}}
+            if path == "/api/hub/models":
+                return [{"name": "signs_cal.pt", "size": 3, "sha256": "x"}]
+
+        def download(self, params, dest, size, digest, progress):
+            dest.write_bytes(b"net")
+
+    client = Client()
+    monkeypatch.setattr(hub, "client", lambda: client)
+
+    class Sending(FakeSync):
+        def send(self):
+            super().send()
+            client.theirs[NAME] = sizes
+
+    sync = Sending()
+    job = tools.HubCalibration(sync)
+    job._wrap(job._run, NAME)
+    assert job.state["error"] is None
+    assert sync.sends == 1 and client.asked == [{"session": NAME}]
+    assert job.state["result"] == result and job.state["network"] == "signs.pt"
+    assert (tmp_path / "signs_cal.pt").read_bytes() == b"net"
+
+    # Already on the hub: not sent again. A failed job on the hub ends up on the page
+    result["saved"] = None
+    job._wrap(job._run, NAME)
+    assert sync.sends == 1 and job.state["error"] == "calibration on the hub finished without saving a network"
+    client.theirs[NAME] = {"board.f64": 1}
+    job._wrap(job._run, NAME)
+    assert job.state["error"] == f"the hub has a different session called {NAME}"

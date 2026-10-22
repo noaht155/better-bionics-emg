@@ -1997,9 +1997,17 @@ the rest cues of recorded sessions.
   window, each sample 4 times. Cache version 7. All 16 cached sessions rebuilt with identical windows and labels;
   895 MB to 287 MB. `load_all` over every session also deletes cache files of deleted sessions (none were left).
   Also checked against main's `build` on all 28 completed sessions (the F sessions too) and on the 16 read back
-  from the cache: identical. On the `cache-signal` branch until Noah merges it.
+  from the cache: identical. Merged.
 - Small items (Noah): the Proton Drive upload is checked. The flash delay test and tracking on the Mac only matter for
   camera-labelled sessions, so they are parked with the angles.
+- Quick calibration on a device now runs on the hub's 4070 (Noah: the Mac calibrated on its CPU). `/api/network/quick`
+  on a device with a hub address starts `tools.HubCalibration`: sends the session through Sync if the hub doesn't
+  have it (never twice at once with auto send), starts the hub's own quick calibration, follows the hub's job every
+  second and downloads the calibrated network, so "Open it in Control" works on the device. The end card shows the
+  steps and the hub's score. The hub and the desktop without a hub address calibrate locally as before.
+  The Mac has one WiFi: on the armband's network it can't reach the hub, so it has to be back on the home network
+  to calibrate, then back on the band for Control. Tested with a fake hub and on the page headless. Merged
+  before a run from the Mac (Noah); the hub app needs a restart on this code first.
 
 ## Open
 
@@ -2047,8 +2055,8 @@ Small items
 - Backup: Proton Drive upload checked (Noah, 2026-10-22). Before the handoff, move the backup to the lab's
   storage (Sync > Backup folder).
 - Hub: per-person consent before other people record.
-- Quick calibration on the Mac: calibrates on the CPU with torch 2.2.2 (the desktop uses the GPU), note the time
-  on the first one there.
+- Quick calibration from the Mac on the hub: try it, and decide how to reach the hub while the
+  Mac is on the armband's WiFi (second network adapter or phone tethering over USB, or calibrate between).
 - Arm animation for cues: the forearm and wrist are drawn for the wrist cues since 2026-10-19. Still missing: the
   upper arm (D's arm raise, reach, lean), the forearm lying along the table in the table posture, and the wrist
   movements left out of protocol C.
