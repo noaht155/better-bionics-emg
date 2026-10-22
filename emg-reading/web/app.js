@@ -977,11 +977,11 @@ function showDevice(setup) {
   showSavedDelay(setup);
 }
 
-async function openLanding() {
+async function openLanding(pageLoad = false) {
   const list = await (await fetch("/api/devices")).json();
   showDevice(list.setups.find((s) => s.id === list.current) || null);
-  // A page opened during a recording goes straight to it
-  if (list.recording) {
+  // A page opened during a recording goes straight to it, and a reload keeps the device picked since the app started
+  if (list.recording || (pageLoad && list.current)) {
     closeLanding();
     return;
   }
@@ -1045,8 +1045,8 @@ async function pickDevice(setup, card) {
   }, PICK_HOLD_MS);
 }
 
-$("device-chip").addEventListener("click", openLanding);
-$("setup-device-change").addEventListener("click", openLanding);
+$("device-chip").addEventListener("click", () => openLanding());
+$("setup-device-change").addEventListener("click", () => openLanding());
 document.addEventListener("keydown", (e) => {
   if (e.key === "Escape" && !$("landing").hidden && currentSetup) closeLanding();
 });
@@ -1058,7 +1058,7 @@ async function init() {
   loadSettings();
   initTools();
   showDevice(null);
-  openLanding();
+  openLanding(true);
   if (!config.camera) $("view").value = "pose";
   showView();
   connect();
