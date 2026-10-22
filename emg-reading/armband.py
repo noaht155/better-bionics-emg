@@ -1,6 +1,7 @@
 """Open the armband (or the synthetic board) and read its live EMG channels.
 Replay plays back recorded raw data in real time instead."""
 import queue
+import signal
 import subprocess
 import sys
 import threading
@@ -156,6 +157,8 @@ def _reader(source):
     def listen():
         for line in sys.stdin:
             modes.put(line.strip())
+        # The app closed its end without killing the reader, so it doesn't outlive the app
+        modes.put(None)
     threading.Thread(target=listen, daemon=True).start()
     while True:
         data = board.get_board_data()
@@ -168,6 +171,8 @@ def _reader(source):
             mode = modes.get(timeout=READ_S)
         except queue.Empty:
             continue
+        if mode is None:
+            return
         try:
             board.config_board(getattr(MindroveConfigMode, f"{mode}_MODE"))
         except MindRoveError:
@@ -214,6 +219,8 @@ class Replay(Armband):
 
 
 if __name__ == "__main__" and sys.argv[1:2] == ["--reader"]:
+    # Ctrl+C in the terminal reaches this process too; the app ends it, so the app's shutdown output stays clean
+    signal.signal(signal.SIGINT, signal.SIG_IGN)
     try:
         _reader(sys.argv[2])
     except (BrokenPipeError, OSError):
