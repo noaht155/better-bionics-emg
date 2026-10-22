@@ -1923,7 +1923,7 @@ balanced over the signs and rest. Means of the 2 seeds:
   for System > Sync, Send and the check on close, 10 s for the header chip. Now only a kept connection is tried again,
   and opening one gives up after `hub.CONNECT_TIMEOUT_S` 5 s whatever the request's own timeout (chunks still get
   120 s for the answer). Measured on the Mac with the desktop's hub not answering: all four give up in 5.0 s. A name
-  that doesn't resolve fails in 0.1 s. Not yet tried on the band's WiFi itself, the Mac can't be on it and online.
+  that doesn't resolve fails in 0.1 s. Checked on the band's WiFi too (Noah, same day): gives up quickly.
 
 **Mac hum test.** `emg-reading/hum_test.py` records the relaxed arm for a set time under a label (into
 `data/hum-test/`, no session.json so sync leaves it alone) and prints per channel, median over 1 s windows: filtered
