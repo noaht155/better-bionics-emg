@@ -2021,7 +2021,8 @@ the rest cues of recorded sessions.
   wrist bends read as a sign. Quick sessions are skipped as held-out sessions. Tests in `tests/test_evaluate.py`.
 - LDA baseline through it on the 8 F sessions: 79.9 % balanced without calibration, 91.5 % calibrated (rest taken
   for a sign 1.2 %, wrong shown 3.2 %). Calibrated, that equals the sign network with open (91.5 %, 2026-10-20), so
-  on F data the network isn't clearly ahead of LDA once both are calibrated. First run mixed in the E session
+  on F data the network isn't clearly ahead of LDA once both are calibrated (wrong: that network number came
+  from another test, on the same splits the network leads, 2026-10-23). First run mixed in the E session
   (`2026-10-16_140854`, a different sign set, 61.5 % calibrated) and gave 88.2 %; sign runs now take F only unless
   `--protocol` says otherwise.
 - Not moved over yet: `gesture_model.evaluate`, `train_ringnet` and `networks` still score on their own. Next is
@@ -2033,18 +2034,29 @@ the rest cues of recorded sessions.
   `ringnet_2026-10-16_112322.pt`, 20 epochs, calibrate transform and sign layer). `networks.py` split into
   `fine_tune_signs` and `calibrate_sign_windows` so the Train tab and the evaluation run the same code; calibration
   checked identical to before on `141651`. `--exclude open` drops a label from training and scoring.
-- Benchmark sessions (`BENCHMARK`, `--benchmark`): `2026-10-19_092314`, `2026-10-20_105110`, `2026-10-21_141651`
-  (MacBook), one per day. Only kept out in the evaluation for now, the Train tab still trains on them.
-- **Band bump breaks network training.** `2026-10-21_141651` has 20 windows in round 3 (move_thumb_abd, notsign)
+- Benchmark sessions (`dataset.BENCHMARK`, `--benchmark`): `2026-10-19_092314`, `2026-10-20_105110`,
+  `2026-10-21_141651` (MacBook), one per day. Never trained on (Noah): the Train tab's sign LDA and sign network leave
+  them out and say so (`dataset.without_benchmark`). Leave one out still trains on them when another session is held.
+- **Band bump broke network training.** `2026-10-21_141651` has 20 windows in round 3 (move_thumb_abd, notsign)
   with peaks up to 194,000 uV. Every other session peaks under 1,850 uV (28 sessions checked). LDA's log features
   don't care, the network trains on raw windows: every leave-one-out fold that trained on `141651` scored 20 to 39 %
   uncalibrated, and calibrating on it with round 3 in the calibration set gave 55 to 83 %. A sign network trained on
-  the Train tab with this session would be broken the same way. The 2026-10-20 network predates the session.
-- Clean numbers so far (benchmark, trained without `141651`), calibrated balanced, `092314` / `105110`:
-  with open LDA 85.6 / 95.8 %, network 88.6 / 95.9 %; without open LDA 92.1 / 97.2 %, network 95.7 / 97.5 %.
-  Uncalibrated the network is 1 to 5 points ahead. Wrong sign shown at 0.8, calibrated, leave one out: network 1.3 %,
-  LDA 3.2 % with open (1.0 / 2.3 % without). So the network leads by a few points and shows about half the wrong
-  signs; full rerun after the bump fix.
+  the Train tab with this session would have been broken the same way (the 2026-10-20 network predates it). Fix:
+  windows with any sample over 5,000 uV (`dataset.BUMP_UV`) are dropped from grip and sign windows, cache version 8.
+  Only `141651` loses windows. Branch `drop-bump-windows`.
+- **Sign network against LDA**, F sessions, balanced / wrong sign shown at 0.8, after the fix:
+
+| | LDA no cal | LDA calibrated | network no cal | network calibrated |
+|---|---|---|---|---|
+| with open, leave one out (8) | 80.2 % / 4.9 % | 91.6 % / 3.2 % | 86.2 % / 3.3 % | 94.8 % / 1.3 % |
+| with open, benchmark (3) | 77.6 % / 6.3 % | 91.9 % / 3.1 % | 82.6 % / 3.2 % | 94.1 % / 1.4 % |
+| no open, leave one out | 87.4 % / 4.3 % | 95.0 % / 2.3 % | 92.1 % / 2.7 % | 96.8 % / 0.9 % |
+| no open, benchmark | 83.9 % / 6.9 % | 95.4 % / 2.1 % | 87.3 % / 4.3 % | 97.3 % / 0.9 % |
+
+- The network is ahead everywhere: 2 to 3 points calibrated, 5 to 6 uncalibrated, less than half the wrong signs,
+  and rest taken for a sign 0.3 to 0.5 % against LDA's 0.8 to 1.2 %. It stays the model for control, LDA the
+  fallback. The 2026-10-22 "network not clearly ahead" compared LDA with the network's 2026-10-20 number from
+  `sign_net.py`, a different test; on the same splits it is ahead. Leaving open out adds 2 points to the network.
 
 ## Open
 
@@ -2067,7 +2079,8 @@ Now: control on the signs
 
 Now: `ml/` foundations
 - `ml/` foundations: session cache, dataset builder and shared evaluation (`ml/evaluate.py`) done. Sign network and
-  benchmark in it since 2026-10-23. Next: drop band-bump windows from training (`141651`), rerun the comparison, model registry, continual update flow tested with LDA
+  benchmark in it since 2026-10-23. Band-bump windows dropped on branch `drop-bump-windows`
+  (merge after a Train tab sign network trains clean on the real setup). Next: model registry, continual update flow tested with LDA
   first.
 - Ring network: rerun as sessions come in; fix the rest false alarms after calibration (rest weighting); then
   continual updates with replay and the benchmark.
