@@ -2027,6 +2027,25 @@ the rest cues of recorded sessions.
 - Not moved over yet: `gesture_model.evaluate`, `train_ringnet` and `networks` still score on their own. Next is
   wrapping the sign network as a method and choosing the benchmark sessions.
 
+## 2026-10-23: sign network in the shared evaluation
+
+- `ml/evaluate.py --method signnet`: the sign network as an evaluation method (fine-tune from
+  `ringnet_2026-10-16_112322.pt`, 20 epochs, calibrate transform and sign layer). `networks.py` split into
+  `fine_tune_signs` and `calibrate_sign_windows` so the Train tab and the evaluation run the same code; calibration
+  checked identical to before on `141651`. `--exclude open` drops a label from training and scoring.
+- Benchmark sessions (`BENCHMARK`, `--benchmark`): `2026-10-19_092314`, `2026-10-20_105110`, `2026-10-21_141651`
+  (MacBook), one per day. Only kept out in the evaluation for now, the Train tab still trains on them.
+- **Band bump breaks network training.** `2026-10-21_141651` has 20 windows in round 3 (move_thumb_abd, notsign)
+  with peaks up to 194,000 uV. Every other session peaks under 1,850 uV (28 sessions checked). LDA's log features
+  don't care, the network trains on raw windows: every leave-one-out fold that trained on `141651` scored 20 to 39 %
+  uncalibrated, and calibrating on it with round 3 in the calibration set gave 55 to 83 %. A sign network trained on
+  the Train tab with this session would be broken the same way. The 2026-10-20 network predates the session.
+- Clean numbers so far (benchmark, trained without `141651`), calibrated balanced, `092314` / `105110`:
+  with open LDA 85.6 / 95.8 %, network 88.6 / 95.9 %; without open LDA 92.1 / 97.2 %, network 95.7 / 97.5 %.
+  Uncalibrated the network is 1 to 5 points ahead. Wrong sign shown at 0.8, calibrated, leave one out: network 1.3 %,
+  LDA 3.2 % with open (1.0 / 2.3 % without). So the network leads by a few points and shows about half the wrong
+  signs; full rerun after the bump fix.
+
 ## Open
 
 Now: control on the signs
@@ -2047,8 +2066,8 @@ Now: control on the signs
 - Bring latency under 200 ms: shorter windows and vote, at some cost in accuracy.
 
 Now: `ml/` foundations
-- `ml/` foundations: session cache, dataset builder and shared evaluation (`ml/evaluate.py`) done. Next: the sign
-  network as an evaluate method, pick the benchmark sessions, model registry, continual update flow tested with LDA
+- `ml/` foundations: session cache, dataset builder and shared evaluation (`ml/evaluate.py`) done. Sign network and
+  benchmark in it since 2026-10-23. Next: drop band-bump windows from training (`141651`), rerun the comparison, model registry, continual update flow tested with LDA
   first.
 - Ring network: rerun as sessions come in; fix the rest false alarms after calibration (rest weighting); then
   continual updates with replay and the benchmark.
