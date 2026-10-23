@@ -22,8 +22,6 @@ import numpy as np
 from ml import dataset, gesture_model, low_priority
 
 METRICS = ("balanced", "grips", "rest_false", "wrong", "answers", "wrist_as_sign")
-# Never trained on in an evaluation: one F session per day from 10-19 to 10-21, the last one recorded on the MacBook
-BENCHMARK = {"signs": ["2026-10-19_092314_noah", "2026-10-20_105110_noah", "2026-10-21_141651_noah"]}
 SIGN_BASE = "ringnet_2026-10-16_112322.pt"
 
 
@@ -207,7 +205,7 @@ def main():
     method = SignNet() if args.method == "signnet" else LDA()
     cal = tuple(args.cal) if args.cal else None
     if args.benchmark:
-        result = benchmark(sessions, BENCHMARK["signs"], method, cal)
+        result = benchmark(sessions, dataset.BENCHMARK["signs"], method, cal)
         for name, row in result["sessions"].items():
             print(f"benchmark {name}: {line(row)}")
     else:

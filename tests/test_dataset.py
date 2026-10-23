@@ -82,3 +82,19 @@ def test_batch_features_match_one_window():
     batch = gesture_model.window_features(x, True, True)
     for i in range(len(x)):
         np.testing.assert_allclose(gesture_model.window_features(x[i], True, True), batch[i], rtol=1e-9, atol=1e-9)
+
+
+def test_bump_windows_are_dropped():
+    y = np.ones((8, 1000), np.float32)
+    y[3, 500] = 2 * dataset.BUMP_UV
+    ends = np.arange(dataset.WINDOW, 1001, 25)
+    quiet = dataset.quiet(y, ends)
+    assert not quiet[(ends - dataset.WINDOW <= 500) & (ends > 500)].any()
+    assert quiet[(ends <= 500) | (ends - dataset.WINDOW > 500)].all()
+
+
+def test_benchmark_sessions_are_left_out():
+    name = dataset.BENCHMARK["signs"][0]
+    said = []
+    assert dataset.without_benchmark([f"data/{name}", "data/other"], said.append) == ["data/other"]
+    assert name in said[0]

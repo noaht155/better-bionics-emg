@@ -24,7 +24,7 @@ from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
 
 from channels import mirrored
 from gestures import GESTURE_SET, settle_s
-from ml import EMG_READING
+from ml import EMG_READING, dataset
 from processing import FILTER_SETTLE_S, FILTER_VERSION, filter_block
 from session import load_session, segments
 
@@ -294,6 +294,10 @@ def train(folders, options, evaluate_it=True, log=None):
     Returns (model dict ready to save, evaluation or None)."""
     say = log or (lambda text, share: None)
     options = dict(options, signs=sign_sessions(folders))
+    if options["signs"]:
+        folders = dataset.without_benchmark(folders, lambda text: say(text, 0))
+        if not folders:
+            raise ValueError("only benchmark sessions picked, they are never trained on")
     sessions = load_sessions(folders, options, lambda text, share: say(text, 0.5 * share))
     if not sessions:
         raise ValueError("none of these sessions has gesture cues")

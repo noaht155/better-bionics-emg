@@ -140,7 +140,7 @@ def sign_windows(folder):
             continue
         count[seg["posture"], seg["label"]] += 1
         rounds[(ends > seg["sample0"]) & (postures == seg["posture"])] = count[seg["posture"], seg["label"]]
-    keep = labels != None  # noqa: E711
+    keep = (labels != None) & dataset.quiet(y, ends)  # noqa: E711
     x = sliding_window_view(y, dataset.WINDOW, axis=1)[:, ends[keep] - dataset.WINDOW].transpose(1, 0, 2)
     return np.ascontiguousarray(x), labels[keep].astype(str), rounds[keep]
 
@@ -169,7 +169,9 @@ def fit_signs(model, x, y, params, lr, steps, on_epoch=None):
 
 def train_signs(network, folders, epochs, exclude=()):
     """exclude: signs (or notsign) left out, their windows aren't trained on."""
-    folders = [Path(f) for f in folders]
+    folders = [Path(f) for f in dataset.without_benchmark(folders, lambda text: print(text, flush=True))]
+    if not folders:
+        raise SystemExit("only benchmark sessions picked, they are never trained on")
     if not gesture_model.sign_sessions(folders):
         raise SystemExit("pick sign sessions (protocol E or F) only")
     parts = []

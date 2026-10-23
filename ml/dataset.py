@@ -42,8 +42,14 @@ MAX_FRAME_GAP_S = 0.1
 # of the angle windows per session had one before this (2026-10-06)
 IMPOSSIBLE_DEG = -60
 CACHE = Path(__file__).with_name("cache")
+# A band bump in 2026-10-21_141651 peaked at 194,000 uV, real EMG in every other session stays under 1,850 uV. The
+# network trains on raw windows, so 20 such windows broke whole training runs (devlog 2026-10-23)
+BUMP_UV = 5000
+# Never trained on, so they stay an honest test (ml.evaluate --benchmark): one F session per day from 10-19 to 10-21,
+# the last one recorded on the MacBook
+BENCHMARK = {"signs": ["2026-10-19_092314_noah", "2026-10-20_105110_noah", "2026-10-21_141651_noah"]}
 # Bump when the windows or labels change, old cache files are then rebuilt
-VERSION = f"7-f{FILTER_VERSION}-w{WINDOW}-s{STEP}-{'.'.join(GESTURE_SET)}"
+VERSION = f"8-f{FILTER_VERSION}-w{WINDOW}-s{STEP}-{'.'.join(GESTURE_SET)}"
 
 
 def good_sessions(data_dir=DATA_DIR):
@@ -56,6 +62,21 @@ def good_sessions(data_dir=DATA_DIR):
         if meta.get("completed") and has_grips:
             out.append(path.parent)
     return out
+
+
+def without_benchmark(folders, log=print):
+    """The folders minus the benchmark sessions, saying which were left out."""
+    held = {n for names in BENCHMARK.values() for n in names}
+    left = [f for f in folders if Path(f).name in held]
+    if left and log:
+        log(f"left out benchmark sessions: {', '.join(Path(f).name for f in left)}")
+    return [f for f in folders if Path(f).name not in held]
+
+
+def quiet(y, ends):
+    """True for the windows ending at ends that have no sample over BUMP_UV on any channel."""
+    loud = np.flatnonzero(np.abs(y).max(axis=0) > BUMP_UV)
+    return np.searchsorted(loud, ends - WINDOW) == np.searchsorted(loud, ends)
 
 
 def quick(folder):
@@ -152,7 +173,7 @@ def _labelled(folder):
             interp = a_det[k - 1] * (1 - w) + a_det[k] * w
             angles[near] = interp[near]
 
-    keep = (grip != "") | ~np.isnan(angles).any(axis=1)
+    keep = ((grip != "") | ~np.isnan(angles).any(axis=1)) & quiet(y, ends)
     return {"y": y, "grip": grip[keep].astype(str), "rep": rep[keep],
             "posture": posture[keep].astype(str), "kind": kind[keep].astype(str), "angles": angles[keep], "ends": ends[keep],
             "subject": meta.get("subject", ""), "channels": np.array(meta["channels"])}
