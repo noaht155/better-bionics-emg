@@ -83,3 +83,17 @@ def test_lda_separates_easy_sessions():
     result = evaluate.held_out(sessions, evaluate.LDA(), log=None)
     assert result["mean"]["none"]["balanced"] > 0.9
     assert result["mean"]["calibrated"]["balanced"] > 0.9
+
+
+def test_sign_network_runs_through_the_harness():
+    pytest.importorskip("torch")
+    from ml import NETWORK_DIR, dataset
+    if not (NETWORK_DIR / evaluate.SIGN_BASE).exists():
+        pytest.skip("general network not on this computer")
+    sessions = {}
+    for seed in (1, 2, 3):
+        d = session(seed, 90)
+        d["x"] = np.repeat(d["x"], -(-dataset.WINDOW // 100), axis=2)[:, :, :dataset.WINDOW].copy()
+        sessions[str(seed)] = d
+    result = evaluate.held_out(sessions, evaluate.SignNet(epochs=2), log=None)
+    assert result["mean"]["calibrated"]["balanced"] > 0.6

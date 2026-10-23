@@ -170,14 +170,30 @@ def fit_signs(model, x, y, params, lr, steps, on_epoch=None):
 def train_signs(network, folders, epochs, exclude=()):
     """exclude: signs (or notsign) left out, their windows aren't trained on."""
     folders = [Path(f) for f in folders]
-    if "rest" in exclude:
-        raise SystemExit("rest can't be left out")
     if not gesture_model.sign_sessions(folders):
         raise SystemExit("pick sign sessions (protocol E or F) only")
     parts = []
     for f in folders:
         print(f"loading {f.name}", flush=True)
-        parts.append(sign_windows(f))
+        parts.append(sign_windows(f)[:2])
+    t0 = time.time()
+    model, base = fine_tune_signs(network, parts, epochs, exclude, epoch_printer())
+    last = json.loads((folders[-1] / "session.json").read_text()).get("settings", {})
+    info = dict(base, kind="signs", signs=True, base=network, sessions=[f.name for f in folders], epochs=epochs,
+                mirrored=mirrored(last), created=time.strftime("%Y-%m-%d %H:%M"))
+    for k in ("calibrated_on", "reps", "balanced", "seen_in_training"):
+        info.pop(k, None)
+    path = NETWORK_DIR / f"{Path(network).stem}_signs_{time.strftime('%Y-%m-%d_%H%M%S')}.pt"
+    save(model.cpu(), info, path)
+    print(f"trained in {time.time() - t0:.0f} s, saved {path.name}", flush=True)
+    return {"saved": path.name, "sessions": len(folders), "classes": model.classes}
+
+
+def fine_tune_signs(network, parts, epochs, exclude=(), progress=None):
+    """A new sign layer on a general network, then the whole network fine-tuned. parts: (windows, labels) per
+    session. Returns the network and the general network's info."""
+    if "rest" in exclude:
+        raise SystemExit("rest can't be left out")
     # Only the signs every chosen session has, as the Train tab's LDA
     classes = sorted(str(c) for c in set.intersection(*(set(p[1]) for p in parts)) - set(exclude))
     keep = [np.isin(p[1], classes) for p in parts]
@@ -192,31 +208,20 @@ def train_signs(network, folders, epochs, exclude=()):
     model.classes = classes
     per_epoch = int(np.ceil(len(x) / BATCH))
     total = epochs + epochs // 2
-    progress = epoch_printer()
+    show = (lambda e, loss: progress(e, total, loss)) if progress else None
 
-    t0 = time.time()
     # The new layer first, so its random start doesn't pull the backbone around, then everything but the transform,
     # which stays the identity like in the general network
     for p in model.parameters():
         p.requires_grad_(False)
     model.grip_head.requires_grad_(True)
-    fit_signs(model, x, y, list(model.grip_head.parameters()), 3e-3, epochs // 2 * per_epoch,
-              lambda e, loss: progress(e, total, loss))
+    fit_signs(model, x, y, list(model.grip_head.parameters()), 3e-3, epochs // 2 * per_epoch, show)
     for p in model.parameters():
         p.requires_grad_(True)
     model.transform.requires_grad_(False)
     fit_signs(model, x, y, [p for p in model.parameters() if p.requires_grad], 3e-4, epochs * per_epoch,
-              lambda e, loss: progress(epochs // 2 + e, total, loss))
-
-    last = json.loads((folders[-1] / "session.json").read_text()).get("settings", {})
-    info = dict(base, kind="signs", signs=True, base=network, sessions=[f.name for f in folders], epochs=epochs,
-                mirrored=mirrored(last), created=time.strftime("%Y-%m-%d %H:%M"))
-    for k in ("calibrated_on", "reps", "balanced", "seen_in_training"):
-        info.pop(k, None)
-    path = NETWORK_DIR / f"{Path(network).stem}_signs_{time.strftime('%Y-%m-%d_%H%M%S')}.pt"
-    save(model.cpu(), info, path)
-    print(f"trained in {time.time() - t0:.0f} s, saved {path.name}", flush=True)
-    return {"saved": path.name, "sessions": len(folders), "classes": classes}
+              (lambda e, loss: show(epochs // 2 + e, loss)) if show else None)
+    return model, base
 
 
 def sign_scores(classes, true, probs):
@@ -242,8 +247,20 @@ def calibrate_signs(model, session, reps):
     if not cal.any():
         raise SystemExit(f"{Path(session).name} has no labelled windows of this network's signs in rounds {reps}")
     print(f"{cal.sum()} calibration windows", flush=True)
-    y = np.array([model.classes.index(l) if k else 0 for l, k in zip(labels, known)])
-    xt, yt = torch.tensor(x, device=DEVICE), torch.tensor(y, dtype=torch.long, device=DEVICE)
+    model = calibrate_sign_windows(model, x[cal], labels[cal])
+    scores = None
+    if test.any():
+        y = np.array([model.classes.index(l) for l in labels[test]])
+        scores = sign_scores(model.classes, y, predict(model, torch.tensor(x[test], device=DEVICE))[0])
+    return model, scores
+
+
+def calibrate_sign_windows(model, x, labels):
+    """A copy of the network with the transform and the sign layer fitted on these windows, the rest frozen. Labels
+    the network doesn't have are skipped."""
+    known = np.isin(labels, model.classes)
+    xt = torch.tensor(x[known], device=DEVICE)
+    yt = torch.tensor([model.classes.index(l) for l in labels[known]], dtype=torch.long, device=DEVICE)
     torch.manual_seed(0)
     model = copy.deepcopy(model)
     for p in model.parameters():
@@ -252,13 +269,7 @@ def calibrate_signs(model, session, reps):
     tuned = list(model.transform.parameters()) + list(model.grip_head.parameters())
     for p in tuned:
         p.requires_grad_(True)
-    idx = torch.tensor(np.flatnonzero(cal), device=DEVICE)
-    fit_signs(model, xt[idx], yt[idx], tuned, 1e-2, CALIBRATION_STEPS)
-    scores = None
-    if test.any():
-        idx = torch.tensor(np.flatnonzero(test), device=DEVICE)
-        scores = sign_scores(model.classes, y[test], predict(model, xt[idx])[0])
-    return model, scores
+    return fit_signs(model, xt, yt, tuned, 1e-2, CALIBRATION_STEPS)
 
 
 def main():

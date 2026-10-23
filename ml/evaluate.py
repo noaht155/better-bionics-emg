@@ -9,8 +9,9 @@ A method is any object with:
 - calibrate(model, cal) -> model fitted to one session's calibration windows (leave it out to skip calibration)
 - predict(model, x) -> (probabilities, classes), one row per window
 
-Every score comes from scores(), so models are compared on the same numbers. Run as a script for the LDA baseline:
-emg-reading/.venv/Scripts/python -m ml.evaluate [--signs] [--protocol F] [--cal 1]
+Every score comes from scores(), so models are compared on the same numbers. Run as a script, LDA by default:
+emg-reading/.venv/Scripts/python -m ml.evaluate [--signs] [--method lda|signnet] [--protocol F] [--cal 1]
+    [--exclude open] [--benchmark]
 """
 import argparse
 import json
@@ -21,6 +22,9 @@ import numpy as np
 from ml import dataset, gesture_model, low_priority
 
 METRICS = ("balanced", "grips", "rest_false", "wrong", "answers", "wrist_as_sign")
+# Never trained on in an evaluation: one F session per day from 10-19 to 10-21, the last one recorded on the MacBook
+BENCHMARK = {"signs": ["2026-10-19_092314_noah", "2026-10-20_105110_noah", "2026-10-21_141651_noah"]}
+SIGN_BASE = "ringnet_2026-10-16_112322.pt"
 
 
 def grip_windows(folder):
@@ -145,17 +149,46 @@ class LDA:
         return model.predict_proba(self._features(x)), list(model.classes_)
 
 
+class SignNet:
+    """The sign network as the Train tab builds it: a general network with a new sign layer, fine-tuned on the sign
+    sessions, calibrated through the transform and the sign layer."""
+
+    def __init__(self, base=SIGN_BASE, epochs=20):
+        self.base, self.epochs = base, epochs
+
+    def fit(self, train):
+        from ml import networks
+        return networks.fine_tune_signs(self.base, [(d["x"], d["label"]) for d in train.values()], self.epochs)[0]
+
+    def calibrate(self, model, cal):
+        from ml import networks
+        return networks.calibrate_sign_windows(model, cal["x"], cal["label"])
+
+    def predict(self, model, x):
+        import torch
+        from ml import networks
+        return networks.predict(model, torch.tensor(x, device=networks.DEVICE))[0], list(model.classes)
+
+
 def protocol(folder):
     return json.loads((Path(folder) / "session.json").read_text()).get("settings", {}).get("protocol", "A")
 
 
 def main():
-    parser = argparse.ArgumentParser(description="LDA baseline through the shared evaluation, leave one session out")
+    parser = argparse.ArgumentParser(description="A model through the shared evaluation, leave one session out")
     parser.add_argument("--signs", action="store_true", help="sign sessions instead of grips")
+    parser.add_argument("--method", choices=("lda", "signnet"), default="lda")
     # E and F sign sets differ, so mixing them scores an E session on signs it never had (61.5 % calibrated)
     parser.add_argument("--protocol", nargs="*", help="protocols to include (default: F with --signs, A to D without)")
     parser.add_argument("--cal", type=int, nargs="*", help="calibration units (default: rotate)")
+    parser.add_argument("--exclude", nargs="*", default=[], help="labels left out of training and scoring")
+    parser.add_argument("--benchmark", action="store_true",
+                        help="train once without the benchmark sessions and score those, instead of leave one out")
     args = parser.parse_args()
+    if args.method == "signnet" and not args.signs:
+        parser.error("signnet runs on sign sessions, add --signs")
+    if args.benchmark and not args.signs:
+        parser.error("no grip benchmark chosen yet, only --signs")
     low_priority()
     wanted = set(args.protocol or (["F"] if args.signs else ["A", "B", "C", "D"]))
     if args.signs:
@@ -166,9 +199,21 @@ def main():
     # Quick sessions are too short to hold out, see dataset.quick
     folders = [f for f in folders if protocol(f) in wanted and not dataset.quick(f)]
     load = sign_windows if args.signs else grip_windows
-    sessions = {Path(f).name: load(f) for f in folders}
-    result = held_out(sessions, LDA(), tuple(args.cal) if args.cal else None)
-    print(f"mean over {len(sessions)} sessions ({', '.join(sorted(wanted))}): {line(result['mean'])}")
+    sessions = {}
+    for f in folders:
+        d = load(f)
+        keep = ~np.isin(d["label"], args.exclude)
+        sessions[Path(f).name] = {k: v[keep] for k, v in d.items()}
+    method = SignNet() if args.method == "signnet" else LDA()
+    cal = tuple(args.cal) if args.cal else None
+    if args.benchmark:
+        result = benchmark(sessions, BENCHMARK["signs"], method, cal)
+        for name, row in result["sessions"].items():
+            print(f"benchmark {name}: {line(row)}")
+    else:
+        result = held_out(sessions, method, cal)
+    print(f"mean over {len(result['sessions'])} sessions ({', '.join(sorted(wanted))}, {args.method}): "
+          f"{line(result['mean'])}")
 
 
 if __name__ == "__main__":

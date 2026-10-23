@@ -112,6 +112,7 @@ These decide when the recorder marks a cue bad and redoes it.
 | `test_benchmark_sessions_stay_out_of_training` | Benchmark sessions are never trained on; a missing benchmark session is an error |
 | `test_notsign_only_counts_as_wrist_as_sign` | Held wrist bends stay out of balanced accuracy and only count as `wrist_as_sign` |
 | `test_lda_separates_easy_sessions` | The LDA baseline runs end to end through the harness on synthetic sessions |
+| `test_sign_network_runs_through_the_harness` | The sign network (`SignNet`: fine-tune, calibrate, predict) runs end to end through the harness on synthetic sessions; skipped without torch or the general network |
 
 ### Automatic evaluation (`tests/test_auto_evaluate.py`)
 
