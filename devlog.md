@@ -2061,6 +2061,10 @@ the rest cues of recorded sessions.
   change. Details in `haptics.py`.
 - Effort mode got a lowest duty (default 0, so nothing changes until set): above 0 the duty starts there, since coin
   motors don't turn under about 30 to 40 % duty. Still to measure on the motors.
+- Checked on the ESP32 over USB through Simulate (duties read back from the Haptics tool): effort 0.5 and 1 gave
+  50 and 100 % on all outputs, 0.1 with floor 35 gave 42 %; two short clenches ticked output 0 twice then played
+  tripod's two pulses about 0.75 s after the last clench (the 0.6 s pause); a long clench ticked then played fist's
+  long pulse; two point flicks while holding played the fading release. No watchdog trips. Not yet felt on the arm.
 
 ## Open
 
