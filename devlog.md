@@ -2046,6 +2046,22 @@ the rest cues of recorded sessions.
   LDA 3.2 % with open (1.0 / 2.3 % without). So the network leads by a few points and shows about half the wrong
   signs; full rerun after the bump fix.
 
+## 2026-10-26: haptic modes
+
+- Control tab has a Haptics switch (saved in profiles): **effort per channel** (each motor follows its channels'
+  envelope, as before) or **selections** (motors only buzz on control events). Simulate now starts the haptics too,
+  every output on the page's effort, so the patterns and the ESP32 can be tried without the band.
+- Why these two: effort feedback is the EMG biofeedback of Dosen et al. (2015, halved force variability, later
+  given through vibration), selections follows the discrete event idea (DESC, Cipriani group: short bursts at
+  contact and release beat continuous feedback for grasp control). Forearm studies place about 4 sites per band as
+  the limit for telling locations apart, and the pads move under the band, so grips are coded as pulse counts on
+  all motors, not by site: fist one long (0.3 s), pinch one short (0.1 s), tripod two, key three, point two long,
+  other poses long short. Release is a 0.6 s fading buzz, lock and unlock a sweep round the band, each counted
+  clench or flick a tick on output 0 only. Patterns are played host side on the 20 Hz loop with `S`, no protocol
+  change. Details in `haptics.py`.
+- Effort mode got a lowest duty (default 0, so nothing changes until set): above 0 the duty starts there, since coin
+  motors don't turn under about 30 to 40 % duty. Still to measure on the motors.
+
 ## Open
 
 Now: control on the signs
@@ -2056,7 +2072,8 @@ Now: control on the signs
   more sessions. Later: one label path for grips and signs (both are held positions), without changing grip
   training results.
 - Trigger mode on the arm: tune clench level and timings live, count wrong picks (short clench read as two, a grab
-  read as a clench), check opening still registers with the distance check on, haptic confirmation of the picked grip.
+  read as a clench), check opening still registers with the distance check on. Selection haptics (2026-10-26): try
+  the patterns on the arm, check each grip's code can be told apart and set the strength.
 - Control tab: try it on the arm (grab, hold, release; count wrong grips and twitches), check the 0.9 s to lock
   against fewer votes, and whether pinch closes far enough at gain 1.5 (per-grip max levels or a higher gain).
   Try the distance check and rest_or_class release live (retrain the LDA first).
@@ -2079,7 +2096,7 @@ Now: `ml/` foundations
 Now: haptics
 - Motors: firmware 0.2.1 is flashed and channels 0 and 1 follow the duty. When the ULN2003, MOSFETs or LEDs go
   back on, set `OUTPUTS_INVERTED` to false. Still to measure: lowest duty that starts a motor (the haptics floor),
-  how many levels can be told apart, and EMG spectra with the motors off and on to see if they show up.
+  how many levels can be told apart (then set effort mode's lowest duty on the Control tab), and EMG spectra with the motors off and on to see if they show up.
 - Motor pickup: run `diagnostics/motor_pickup.py` with the motor band below the pads, relaxed and with a steady
   clench.
 - Haptics: decide on LRAs vs coin motors. LRAs need an AC drive at their resonance (about 170 to 235 Hz), which is

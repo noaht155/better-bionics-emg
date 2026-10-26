@@ -101,6 +101,9 @@ These decide when the recorder marks a cue bad and redoes it.
 |---|---|
 | `test_session_levels_keep_rest_quiet` | Haptic levels taken from the newest session (`calibrate.from_session`) are sane (rest above 0, max above rest) and, played back over that session's rest cues, leave every output off in at least 95 % of rest windows |
 | `test_band_bump_doesnt_lose_channels` | A one-window bump on 7 channels doesn't drop them from a session's common average (it did on 2026-10-21_141651 and crashed Control), a pad off half the time still counts as lost, and a zero rest level is refused instead of dividing by it |
+| `test_effort_floor` | Effort mode's lowest duty: 0 stays off, above 0 starts at the floor, full effort is 100 %; floor 0 gives the old proportional duties |
+| `test_selection_patterns_tell_events_apart` | Every grip's pick pattern is different and on all motors, release fades, lock and unlock sweep opposite ways, a tick only uses one motor |
+| `test_tick_never_cuts_a_pick` | A tick doesn't cut a pick that is still playing, plays once it has finished, and any other event cuts a tick |
 
 ### Shared evaluation (`tests/test_evaluate.py`)
 
@@ -190,6 +193,8 @@ These decide when the recorder marks a cue bad and redoes it.
 | `test_rules_higher_in_the_list_wins` | Two rules firing on the same step: the one higher in the list picks, whatever the trigger names |
 | `test_rules_lock_freezes_the_hand_until_unlocked` | A lock rule while holding freezes the hand: squeezing, open, a pose and the release pattern change nothing until the lock trigger fires again or an unlock rule does; squeezing closes again after |
 | `test_simulated_model_drives_the_control_layer` | Simulate on the Control tab: the page's class, certainty and effort reach the control layer at the model step without a band or model, an unknown class is refused, Stop ends it |
+| `test_counted_clenches_for_haptic_ticks` | Trigger and rules mode flag each short clench counted towards a pattern once, for the selection haptics' tick |
+| `test_selection_haptics_follow_control_events` | In selections mode the Control tab cues a tick per counted clench and the pick pattern with its grip; effort mode cues nothing |
 | `test_trigger_double_point_goes_back_and_open_only_opens` | Trigger mode, release with point (default): opening twice only opens, a point flick neither opens nor closes, two point flicks go back, and the point still held after that can't pick point until it drops out |
 
 ### Protocols (`tests/test_protocols.py`)

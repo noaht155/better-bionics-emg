@@ -31,7 +31,7 @@ from cursor import DEFAULTS as CURSOR_DEFAULTS, LEVEL_SCALE as CURSOR_LEVEL_SCAL
 from esp32_link import Esp32, self_test
 from gestures import GESTURE_SET, GESTURES, LIBRARY
 from session import DATA_DIR, load_session, segments
-from haptics import OUTPUTS, UPDATE_HZ, channel_levels, effort, output_duties
+from haptics import HAPTIC_DEFAULTS, OUTPUTS, UPDATE_HZ, channel_levels, effort, output_duties, pattern, scaled_duty
 
 # The ml package sits next to emg-reading/ in the repo
 REPO = Path(__file__).resolve().parent.parent
@@ -402,18 +402,26 @@ class HumTest(Tool):
 
 
 class Haptics(Tool):
-    """haptics.py's loop. It shares the ESP32 with the output test, only one of them can hold the port."""
+    """haptics.py's loop. It shares the ESP32 with the output test, only one of them can hold the port. Started from
+    the Control tab it follows the tab's haptics setting: effort (each output follows its channels) or selections
+    (only the patterns of the control layer's events, cue())."""
 
     def __init__(self, recorder, esp_lock):
         super().__init__()
         self.recorder = recorder
         self.esp_lock = esp_lock
         self._stop = threading.Event()
+        self._cue = None
+        self._settings = HAPTIC_DEFAULTS
 
-    def start(self, port, wifi, session=None):
+    def start(self, port, wifi, session=None, settings=None, sim_effort=None):
         """With session, the levels come from that recorded session (calibrate.from_session), else from
-        calibration.json."""
-        if session is not None:
+        calibration.json. settings: the Control tab's parameters, read on every update so a change of mode, floor
+        or strength applies straight away; None is effort mode with no floor. sim_effort: no band, every output
+        follows this function's effort (the Control tab's simulated model)."""
+        if sim_effort is not None:
+            ranges, car, source = None, False, "effort from the simulated model"
+        elif session is not None:
             ranges, car = calibrate.session_ranges(session, self.recorder.band.channels), True
             source = f"levels from session {Path(session).name}"
         else:
@@ -431,8 +439,10 @@ class Haptics(Tool):
         if not self.esp_lock.acquire(blocking=False):
             raise ValueError("the ESP32 is busy with the output test")
         self._stop.clear()
+        self._cue = None
+        self._settings = settings or HAPTIC_DEFAULTS
         try:
-            self._launch(self._run, port, wifi, ranges, car, source)
+            self._launch(self._run, port, wifi, ranges, car, source, self._settings, sim_effort)
         except ValueError:
             self.esp_lock.release()
             raise
@@ -440,7 +450,22 @@ class Haptics(Tool):
     def stop(self):
         self._stop.set()
 
-    def _run(self, port, wifi, ranges, car, source):
+    def cue(self, kind, grip=None):
+        """Plays haptics.pattern(kind) from the next update, in selections mode. A newer event cuts the one playing,
+        except that a tick never cuts a pick or release."""
+        if self._cue and self._cue[2] != "tick" and kind == "tick" and self._pattern_step(self._cue) is not None:
+            return
+        self._cue = (pattern(kind, int(self._settings["haptic_strength"]), grip), time.perf_counter(), kind)
+
+    @staticmethod
+    def _pattern_step(cue):
+        """The cue's duties now, None once it has played. Timed by the clock, not by counting updates, so a late
+        update doesn't stretch the pattern."""
+        steps, t0, _ = cue
+        i = int((time.perf_counter() - t0) * UPDATE_HZ)
+        return steps[i] if i < len(steps) else None
+
+    def _run(self, port, wifi, ranges, car, source, settings, sim_effort):
         band = self.recorder.band
         self.state.update(duties=[0] * len(OUTPUTS), lost=[False] * len(band.channels), car=car, watchdog=0,
                           outputs=[list(chs) for chs in OUTPUTS], source=source)
@@ -450,9 +475,20 @@ class Haptics(Tool):
                 self._log_session(True, esp.link.name)
                 next_tick = time.perf_counter()
                 while not self._stop.is_set():
-                    raw, filtered = self.recorder.window(self.recorder.env_len)
-                    if raw.shape[1] == self.recorder.env_len:
-                        duties, lost = output_duties(raw, filtered, band.channels, ranges, car)
+                    mode, floor = settings["haptics"], settings["haptic_floor"]
+                    self.state.update(mode=mode, floor=floor, strength=settings["haptic_strength"])
+                    duties = None
+                    if mode == "selections":
+                        step = self._pattern_step(self._cue) if self._cue else None
+                        duties, lost = step or [0] * len(OUTPUTS), np.zeros(len(band.channels), bool)
+                    elif sim_effort is not None:
+                        duties = [scaled_duty(min(max(sim_effort(), 0.0), 1.0), floor)] * len(OUTPUTS)
+                        lost = np.zeros(len(band.channels), bool)
+                    else:
+                        raw, filtered = self.recorder.window(self.recorder.env_len)
+                        if raw.shape[1] == self.recorder.env_len:
+                            duties, lost = output_duties(raw, filtered, band.channels, ranges, car, floor)
+                    if duties is not None:
                         esp.set_outputs(duties)
                         self.state.update(duties=duties, lost=lost.tolist())
                     if esp.watchdog_fired:
@@ -611,9 +647,10 @@ class Control:
     mode gets the model's own classes; the other modes get grip probabilities, a sign model's added up per grip
     through sign_map."""
 
-    def __init__(self, recorder):
+    def __init__(self, recorder, haptics=None):
         self.recorder = recorder
-        self.params = dict(DEFAULTS, mode="rules")
+        self.haptics = haptics
+        self.params = dict(DEFAULTS, mode="rules", **HAPTIC_DEFAULTS)
         self.rules = split_rules(DEFAULT_RULES)
         self.state = {"params": self.params, "rules": self.rules}
         self._controller = None
@@ -679,6 +716,12 @@ class Control:
                 grips[self._map[c]] += v
             probs = grips
         out = self._controller.step(probs, e, dt, distance, moving)
+        if self.params["haptics"] == "selections" and self.haptics is not None and self.haptics.state["running"]:
+            # The open hand picked in lock mode leaves the hand where it is, nothing to feel
+            if out["event"] in ("start", "release", "lock", "unlock"):
+                self.haptics.cue(out["event"], out["grip"])
+            elif out.get("counted"):
+                self.haptics.cue("tick")
         s = self.state
         s.update(step=s["step"] + 1, state=out["state"], grip=out["grip"], closure=round(out["closure"], 3),
                  effort=round(e, 3), angles=[round(a, 1) for a in out["angles"]],
@@ -1152,7 +1195,7 @@ class Tools:
         self.haptics = Haptics(recorder, esp_lock)
         self.test = OutputTest(esp_lock)
         self.predictor = Predictor(recorder)
-        self.control = Control(recorder)
+        self.control = Control(recorder, self.haptics)
         self.cursor = CursorTask(recorder)
         self.trainer = Trainer(self.predictor)
         self.network = NetworkJob()

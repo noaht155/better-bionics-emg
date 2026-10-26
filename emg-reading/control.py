@@ -292,6 +292,7 @@ class Controller:
         self.flick_was_on = flick_on
         self.clock += dt
         event = None
+        counted = False
 
         if self.state == "active":
             if len(self.flicks) >= 2:
@@ -323,6 +324,7 @@ class Controller:
             elif self.pulse_time > 0:
                 if not self.pulse_open:
                     self.pulses += 1
+                    counted = True
                 self.pulse_time, self.pulse_open, self.gap = 0.0, False, 0.0
             else:
                 self.gap += dt
@@ -333,7 +335,7 @@ class Controller:
                         event = self._choose(TRIGGER_GRIPS[i])
 
         return {"state": self.state, "grip": self.grip, "closure": self.closure, "angles": self._spring(dt),
-                "event": event, "pulses": self.pulses}
+                "event": event, "pulses": self.pulses, "counted": counted}
 
     @staticmethod
     def _repeats(rules, t, count):
@@ -356,6 +358,7 @@ class Controller:
         gated = p["still_gate"] and moving and self.state == "idle"
         held = {r["trigger"]: r for r in rules if r["how"] == "held"}
         events = []
+        counted = False
 
         for t in triggers:
             if t in self.stuck:
@@ -369,6 +372,7 @@ class Controller:
                     # Counted as it starts, so the last of a repeat acts straight away; a hold takes it back
                     self.counts[t] = self.counts.get(t, 0) + 1
                     counts = [r["value"] for r in rules if r["trigger"] == t and r["how"] == "repeated"]
+                    counted |= bool(counts)
                     if counts and self.counts[t] >= max(counts):
                         events += self._repeats(rules, t, self.counts[t])
                         self.counts[t] = 0
@@ -426,7 +430,7 @@ class Controller:
                 self.closure += (effort - p["hold_level"]) * p["gain"] * dt
             self.closure = float(np.clip(self.closure, 0.0, 1.0))
         return {"state": self.state, "grip": self.grip, "closure": self.closure, "angles": self._spring(dt),
-                "event": event, "pulses": self.counts.get("clench", 0), "locked": self.locked}
+                "event": event, "pulses": self.counts.get("clench", 0), "locked": self.locked, "counted": counted}
 
     def _choose(self, grip):
         self.state, self.grip, self.closure = "active", grip, 0.0

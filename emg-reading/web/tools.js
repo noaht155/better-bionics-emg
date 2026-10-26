@@ -342,7 +342,7 @@ function drawHaptics(h, test) {
   $("hap-stop").disabled = !h.running;
   $("esp-test").disabled = h.running || test.running;
   if (h.running) {
-    const source = h.with_model ? `${h.source}, started with the model` : h.source;
+    const source = h.with_model ? `${h.source}, started with the model, ${h.mode === "selections" ? "selection patterns only" : "effort per channel"}` : h.source;
     $("hap-status").textContent = h.link
       ? `Running on ${h.link}, ${source}, common average ${h.car ? "on" : "off"}, watchdog fired ${h.watchdog} times`
       : "Connecting to the ESP32...";

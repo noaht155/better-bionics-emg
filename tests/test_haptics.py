@@ -4,7 +4,7 @@ import pytest
 
 import ml  # noqa: F401
 import calibrate
-from haptics import level
+from haptics import GRIP_CODES, OUTPUTS, TICK_OUTPUT, level, output_duties, pattern, scaled_duty
 from ml import dataset
 from processing import common_average, envelope_series, filter_block
 from session import load_session, segments
@@ -43,3 +43,48 @@ def test_band_bump_doesnt_lose_channels():
     assert list(np.flatnonzero(calibrate.lost_channels(raw, 500, calibrate.SESSION_LOST_SHARE))) == [3]
     with pytest.raises(ValueError, match="no signal"):
         calibrate.levels(1, np.zeros(10), np.ones(10))
+
+
+def test_effort_floor():
+    """Above 0 the duty starts at the floor, 0 stays off, full effort is 100 % whatever the floor."""
+    assert scaled_duty(0.0, 35) == 0 and scaled_duty(1.0, 35) == 100 and scaled_duty(0.01, 35) == 36
+    assert scaled_duty(0.5, 0) == 50
+    raw = np.zeros((8, 75))
+    filtered = np.vstack([np.full(75, v) for v in (0, 10, 20, 30, 40, 50, 60, 70)])
+    ranges = {ch: (0.0, 100.0) for ch in range(8)}
+    plain, _ = output_duties(raw, filtered, list(range(8)), ranges, False)
+    floored, _ = output_duties(raw, filtered, list(range(8)), ranges, False, 30)
+    assert plain[:3] == [0, 10, 20] and floored[:3] == [0, 37, 44]
+
+
+def test_selection_patterns_tell_events_apart():
+    """Every grip has its own pattern on all motors, release fades, lock and unlock sweep opposite ways, and a tick
+    only uses one motor so it can't be taken for a pick."""
+    picks = {g: pattern("start", 100, g) for g in [*GRIP_CODES, "some_library_pose"]}
+    assert len({str(p) for p in picks.values()}) == len(picks)
+    for steps in picks.values():
+        assert all(len(d) == len(OUTPUTS) and len(set(d)) == 1 for d in steps)
+        assert steps[0][0] == 100 and steps[-1][0] == 100
+    release = [d[0] for d in pattern("release", 80)]
+    assert release[0] == 80 and release == sorted(release, reverse=True) and release[-1] > 0
+    lock, unlock = pattern("lock"), pattern("unlock")
+    assert [d.index(100) for d in lock] == list(range(len(OUTPUTS))) and lock == unlock[::-1]
+    tick = pattern("tick", 60)
+    assert all(d[TICK_OUTPUT] == 60 and sum(d) == 60 for d in tick)
+
+
+def test_tick_never_cuts_a_pick():
+    import threading
+    import time
+    import tools
+    h = tools.Haptics(None, threading.Lock())
+    h.cue("start", "tripod")
+    h.cue("tick")
+    assert h._cue[2] == "start" and h._pattern_step(h._cue) == [100] * len(OUTPUTS)
+    # Once the pick has played, a tick plays, and any event cuts a tick
+    h._cue = (h._cue[0], time.perf_counter() - 10, "start")
+    assert h._pattern_step(h._cue) is None
+    h.cue("tick")
+    assert h._cue[2] == "tick"
+    h.cue("release")
+    assert h._cue[2] == "release"

@@ -37,6 +37,15 @@ const MODE_HELP = {
   lock: "votes pick a grip while effort rises from rest, then it locks until a release",
   blend: "the hand closes with effort straight away towards a mix of the likely grips, the shape settles as the model firms up",
 };
+// The haptics that run with it (haptics.py), each setting only shown for the haptics mode that uses it
+const HAPTIC_PARAMS = [
+  { key: "haptic_floor", haptics: "effort", label: "Lowest duty", min: 0, max: 90, step: 1, help: "duty the outputs start at above 0, so the start of a squeeze is felt. Coin motors don't turn under about 30 to 40 %, set it to the lowest duty you feel. 0 is plain proportional" },
+  { key: "haptic_strength", haptics: "selections", label: "Strength", min: 10, max: 100, step: 5, help: "duty of the selection patterns" },
+];
+const HAPTICS_HELP = {
+  effort: "each motor follows the effort of the channels under it, off at rest",
+  selections: "motors only buzz on the control layer's events: grip picked (fist one long, pinch one short, tripod two, key three, point two long), release a fading buzz, lock and unlock a sweep round the band, each counted clench or flick a tick on the first motor",
+};
 const BASIC_PARAMS = CONTROL_PARAMS.filter((d) => d.basic);
 const ADVANCED_PARAMS = CONTROL_PARAMS.filter((d) => !d.basic);
 const TRACE_STEPS = 200;
@@ -46,6 +55,7 @@ const ctl = { params: null, rules: null, mappingName: "", models: [], presets: {
 function showControlParams() {
   showParams(BASIC_PARAMS, "ctl-", ctl.params);
   showParams(ADVANCED_PARAMS, "ctl-", ctl.params);
+  showParams(HAPTIC_PARAMS, "ctl-", ctl.params);
   showParamsForMode();
 }
 
@@ -57,7 +67,14 @@ function showParamsForMode() {
     $(`ctl-${d.key}`).closest(".param").hidden = !visible;
   }
   $("ctl-mode").closest(".param").querySelector("small").textContent = MODE_HELP[ctl.params.mode] || "";
+  document.querySelector(`input[name=ctl-haptics-mode][value=${ctl.params.haptics}]`).checked = true;
+  $("ctl-haptics-help").textContent = HAPTICS_HELP[ctl.params.haptics];
+  for (const d of HAPTIC_PARAMS) $(`ctl-${d.key}`).closest(".param").hidden = d.haptics !== ctl.params.haptics;
 }
+document.querySelectorAll("input[name=ctl-haptics-mode]").forEach((r) => r.addEventListener("change", () => {
+  ctl.params.haptics = r.value;
+  sendControlParams();
+}));
 
 function sendControlParams() {
   showParamsForMode();
@@ -158,7 +175,9 @@ function pickSim(label) {
 $("ctl-simulate").addEventListener("click", async () => {
   $("ctl-haptics").textContent = "";
   const classes = selectedModel()?.classes || config.gesture_set;
-  if (await postShowing("/api/control/simulate", classes, "ctl-error")) {
+  const r = await postShowing("/api/control/simulate", { classes, ...linkBody() }, "ctl-error");
+  if (r) {
+    $("ctl-haptics").textContent = r.haptics || "";
     ctl.sim.label = null;
     sendSim();
   }
@@ -616,6 +635,7 @@ function drawControl(c, p) {
     ctl.params = { ...c.params };
     buildParams($("ctl-basic"), BASIC_PARAMS, "ctl-", () => ctl.params, sendControlParams);
     buildParams($("ctl-params"), ADVANCED_PARAMS, "ctl-", () => ctl.params, sendControlParams);
+    buildParams($("ctl-haptic-params"), HAPTIC_PARAMS, "ctl-", () => ctl.params, sendControlParams);
     showControlParams();
   }
   if (!ctl.rules && c.rules) {

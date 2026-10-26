@@ -539,3 +539,39 @@ def test_simulated_model_drives_the_control_layer():
         predictor.stop()
         predictor.join(2)
     assert not predictor.state["running"]
+
+
+def test_counted_clenches_for_haptic_ticks():
+    """Each short clench counted towards a pattern is flagged once, so the selection haptics can tick for it."""
+    for mode in ("trigger", "rules"):
+        c = make(mode=mode)
+        flags = [c.step(probs("rest"), e)["counted"] for grip, e, n in [SHORT, PAUSE] * 2 for _ in range(n)]
+        assert sum(flags) == 2
+
+
+def test_selection_haptics_follow_control_events():
+    import tools
+
+    class FakeHaptics:
+        state = {"running": True}
+        cues = []
+
+        def cue(self, kind, grip=None):
+            self.cues.append((kind, grip))
+
+    haptics = FakeHaptics()
+    control = tools.Control(None, haptics)
+    control.set_params({"mode": "rules", "haptics": "selections"})
+    control.prepare_sim()
+    for grip, e, n in [SHORT, PAUSE, SHORT, PAUSE, GAP]:
+        for _ in range(n):
+            control.advance(probs("rest"), e, 0.05)
+    assert haptics.cues == [("tick", None), ("tick", None), ("start", "tripod")]
+    # Effort mode leaves the outputs to the channels, no patterns
+    haptics.cues.clear()
+    control.set_params({"haptics": "effort"})
+    control.prepare_sim()
+    for grip, e, n in [SHORT, PAUSE, GAP]:
+        for _ in range(n):
+            control.advance(probs("rest"), e, 0.05)
+    assert haptics.cues == []
