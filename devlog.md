@@ -2064,7 +2064,10 @@ the rest cues of recorded sessions.
 - Checked on the ESP32 over USB through Simulate (duties read back from the Haptics tool): effort 0.5 and 1 gave
   50 and 100 % on all outputs, 0.1 with floor 35 gave 42 %; two short clenches ticked output 0 twice then played
   tripod's two pulses about 0.75 s after the last clench (the 0.6 s pause); a long clench ticked then played fist's
-  long pulse; two point flicks while holding played the fading release. No watchdog trips. Not yet felt on the arm.
+  long pulse; two point flicks while holding played the fading release. No watchdog trips.
+- Felt on the motors (pattern tour, strength 100): Noah, "they feel really good". Modules were on 5 V for this,
+  not the 3.3 V in `pinmap.md`: the input pull-ups then pull the idle GPIOs towards 5 V (about 1 mA each into the
+  protection diodes) and the 3 V motors get about 4.5 V. Back to 3.3 V, or strength about 60 % until then.
 
 ## Open
 
