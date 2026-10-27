@@ -2053,8 +2053,10 @@ When the app closes (armband source, default port only, so a test copy on 8010 l
 records (`tools.forget_armband_wifi`). Connect armband WiFi joins it again (it already forgot and re-added the
 profile on Windows). Windows: `netsh wlan delete profile` works without admin rights, checked on the desktop with a
 test profile. Mac: removed from the preferred list, and if the Mac is on the band's network WiFi is switched off
-and on so it goes back to the home network. Not run on the Mac yet; macOS may ask for an admin password to remove a
-network, the terminal then says it couldn't. Closing the terminal window instead of Ctrl+C skips it.
+and on so it goes back to the home network. Checked on the MacBook with a fake `Mindrove_ARB_fake01` in the
+preferred list: Ctrl+C on port 8000 forgot it with no admin password, a copy on 8010 left it. The off and on branch
+(Mac on the band's network at close) is not checked yet, it needs the real band. Closing the terminal window instead
+of Ctrl+C skips it.
 
 ## Open
 
