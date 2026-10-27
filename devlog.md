@@ -2046,6 +2046,16 @@ the rest cues of recorded sessions.
   LDA 3.2 % with open (1.0 / 2.3 % without). So the network leads by a few points and shows about half the wrong
   signs; full rerun after the bump fix.
 
+## 2026-10-27: forget the armband WiFi on close
+
+When the app closes (armband source, default port only, so a test copy on 8010 leaves it alone) it forgets every
+`Mindrove_ARB_` network, so a computer doesn't join the band by itself later and take it while the other one
+records (`tools.forget_armband_wifi`). Connect armband WiFi joins it again (it already forgot and re-added the
+profile on Windows). Windows: `netsh wlan delete profile` works without admin rights, checked on the desktop with a
+test profile. Mac: removed from the preferred list, and if the Mac is on the band's network WiFi is switched off
+and on so it goes back to the home network. Not run on the Mac yet; macOS may ask for an admin password to remove a
+network, the terminal then says it couldn't. Closing the terminal window instead of Ctrl+C skips it.
+
 ## Open
 
 Now: control on the signs

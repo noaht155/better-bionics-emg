@@ -255,11 +255,13 @@ transfer tests run the hub app on a free local port and send over real HTTP.
 | `test_sync_line_and_auto_send` | The header's sync line on a device counts sessions the hub doesn't have, tells a refused token from a hub out of reach, and with auto send on sends them, never while a session records; on the hub it counts sessions the backup doesn't have |
 | `test_merge_keeps_both_sides` | Mappings and profiles are added by name, a name both sides have with different content stays as it is |
 
-### Mac WiFi (`tests/test_mac_wifi.py`)
+### Armband WiFi (`tests/test_mac_wifi.py`)
 
 | Test | Checks |
 |---|---|
 | `test_mac_scan_line` | Lines of `airport -s` give the network name and signal, with spaces in the name and with or without a BSSID |
+| `test_mac_saved_armbands` | The preferred network list on a Mac gives only the `Mindrove_ARB_` networks |
+| `test_windows_profile_line` | `netsh wlan show profiles` gives the `Mindrove_ARB_` profiles, all-user and current-user |
 
 ### Delay test (`tests/test_delay.py`)
 

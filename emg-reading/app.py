@@ -42,7 +42,7 @@ from hand_angles import JOINTS, RELIABLE
 from processing import spectrum
 from recorder import Recorder
 from session import DATA_DIR
-from tools import POSES, Tools, model_path
+from tools import POSES, Tools, forget_armband_wifi, model_path
 
 # The ml package sits next to emg-reading/ in the repo
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
@@ -1302,6 +1302,12 @@ def main():
             # A test copy on another port closes while the main app may still show those sessions
             if not args.hub and hub.load().get("url") and args.port == parser.get_default("port"):
                 free_space(tools)
+            if band.source == "armband" and args.port == parser.get_default("port"):
+                try:
+                    for line in forget_armband_wifi():
+                        print(f"armband WiFi: {line}")
+                except Exception as e:
+                    print(f"armband WiFi not forgotten: {e}")
 
 
 if __name__ == "__main__":
