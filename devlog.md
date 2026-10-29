@@ -2058,6 +2058,13 @@ preferred list: Ctrl+C on port 8000 forgot it with no admin password, a copy on 
 (Mac on the band's network at close) is not checked yet, it needs the real band. Closing the terminal window instead
 of Ctrl+C skips it.
 
+## 2026-10-29: hum from the ref and bias contact
+
+Hum over the 80 uV warning moved between ch 0, 3 and 5 (ch 5 up to 420 uV, its rest envelope 35 uV against 5 to 8
+on the others) with the band tight and the pads pressed hard. The threshold and `line_rms` are unchanged since
+2026-10-02. Pressing the main module in by hand cleared it: the ref and bias pads lose contact even when the band is
+tight, and hum then shows on whichever pads fit worst. Details in `hardware-status.md`.
+
 ## Open
 
 Now: control on the signs
