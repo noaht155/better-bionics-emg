@@ -2075,10 +2075,18 @@ the rest cues of recorded sessions.
   on the side of the hub clears it too. So a wire or joint at or inside the hub, not skin contact. Not yet checked
   that this wire is ch 3's by tapping its pad, and the hum level wasn't measured. Details in `hardware-status.md`.
 
+## 2026-11-02: hold to open, double to release
+
+Profile `protocol-f-default` had two_point held 0 s to open and two_point repeated 2 to release, so release never
+fired: a held rule takes back the episode's count once it fires, and at 0 s that is every episode. Held set to 0.4 s
+in the profile. Replayed on `Controller` with made-up inputs: a 1 s hold opens (0.80 to 0.70), one 0.2 s flick does
+nothing, two flicks 0.3 s apart release. Flicks have to be under the held time. Not yet tried on the arm.
+
 ## Open
 
 Now: control on the signs
 - Hum on ch 3: open the hub and check the wire on its side, then recheck hum on all channels.
+- Mapping page: a held 0 s rule silently cancels repeated rules on the same trigger, `check_rules` lets it through.
 - Sign network (in `ml/` with calibration since 2026-10-19; calibrated score flat from 1 training session on, see the
   2026-10-21 learning curve): try it live against the sign LDA, and trigger mode with
   it on the Control tab (sign map, clench level against the sign session's levels); decide whether open stays in the
