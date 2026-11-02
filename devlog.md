@@ -2069,9 +2069,16 @@ the rest cues of recorded sessions.
   not the 3.3 V in `pinmap.md`: the input pull-ups then pull the idle GPIOs towards 5 V (about 1 mA each into the
   protection diodes) and the 3 V motors get about 4.5 V. Back to 3.3 V, or strength about 60 % until then.
 
+## 2026-11-02: hum on ch 3
+
+- Hum mostly on ch 3. Pushing the main hub inwards clears it, pressing the ch 3 pad doesn't, and wiggling the wire
+  on the side of the hub clears it too. So a wire or joint at or inside the hub, not skin contact. Not yet checked
+  that this wire is ch 3's by tapping its pad, and the hum level wasn't measured. Details in `hardware-status.md`.
+
 ## Open
 
 Now: control on the signs
+- Hum on ch 3: open the hub and check the wire on its side, then recheck hum on all channels.
 - Sign network (in `ml/` with calibration since 2026-10-19; calibrated score flat from 1 training session on, see the
   2026-10-21 learning curve): try it live against the sign LDA, and trigger mode with
   it on the Control tab (sign map, clench level against the sign session's levels); decide whether open stays in the
