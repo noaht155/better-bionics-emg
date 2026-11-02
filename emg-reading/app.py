@@ -1312,8 +1312,10 @@ def main():
             print(f"hub for {', '.join(hub.devices()) or 'no devices yet (python hub.py add-device NAME)'}, "
                   f"at http://{socket.gethostname()}:{args.port}")
         try:
+            # An open preview stream never ends by itself, without the timeout Ctrl+C waits on it forever and a second
+            # Ctrl+C can cut off the cleanup below
             uvicorn.run(make_app(recorder, band, camera, tools, lan, args.hub), host=host, port=args.port,
-                        log_level="warning")
+                        log_level="warning", timeout_graceful_shutdown=2)
         finally:
             # Leaving the haptics thread running would leave the motors on until the ESP32 watchdog fires
             tools.haptics.stop()

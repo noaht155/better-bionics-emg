@@ -2087,6 +2087,13 @@ no longer takes the count back at its held time but at 0.4 s (`FLICK_MAX_S`), so
 counts. Profile back to held 0 s. Same made-up inputs: the hold opens from the first step (0.80 to 0.65), one flick
 opens slightly (0.77), two flicks release, a hold then two flicks release. Not yet tried on the arm.
 
+## 2026-11-02: Ctrl+C
+
+One Ctrl+C never stopped the app while a page showed the camera preview: uvicorn waits for open requests and the
+preview stream never ends (test copy with a video file, still running after 45 s). A second Ctrl+C could cut off the
+cleanup in `app.py` (motors off, recorder stop, freeing space). Added a 2 s shutdown timeout: exits in 3.4 s after one
+Ctrl+C, still printing the cancel tracebacks. Not tested with the real armband.
+
 ## Open
 
 Now: control on the signs
