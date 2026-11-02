@@ -28,8 +28,9 @@ mode "rules" (Noah, 2026-10-19) is trigger mode with the wiring as lists the use
 {"trigger": "clench" or one of the model's classes, "how": "held" or "repeated", "value": seconds or count,
 "action": "close", "open", "release" or a pose}. A clench is effort above pulse_level; a class is on while its probability is
 at least the threshold. Held fires once the trigger has been on that long; repeated counts short episodes (shorter
-than the trigger's held rule) and fires after gap_s without a new one, or straight away at the highest count any rule
-of that trigger asks for. The mapping has one list used while relaxed (no grip) and one while holding a grip, and
+than the trigger's held rule, or than FLICK_MAX_S if that rule is open or close, so the hand can open from 0 s and
+still listen for a double flick) and fires after gap_s without a new one, or straight away at the highest count any
+rule of that trigger asks for. The mapping has one list used while relaxed (no grip) and one while holding a grip, and
 either can hold any rule: a pose picks it (while holding it switches to it at the same closure), release goes back
 to relaxed, close and open move the hand for as long as their trigger stays on (speed set by effort), and do nothing
 while relaxed. Only the list of the current state runs, so a trigger can have a held rule in each, and the higher
@@ -82,6 +83,8 @@ STILL_S = 0.5
 STILL_MARGIN = 1.5
 # The release class has to drop out this long between two flicks, so a one window flicker isn't a second flick
 FLICK_GAP_S = 0.15
+# Rules mode: an episode this long stops counting as a repeat on a trigger whose held rule is open or close
+FLICK_MAX_S = 0.4
 # Same integration step as the drawn hands in web/app.js
 SPRING_STEP_S = 0.005
 # Sums of dt drift a little, 12 x 0.05 isn't exactly 0.6
@@ -380,7 +383,9 @@ class Controller:
                 run += dt
                 self.off_t[t] = 0.0
                 rule = held.get(t)
-                if not used and ((t == "clench" and class_on) or (rule and run >= rule["value"] - EPS)):
+                # Open and close move the hand from their held time on, a flick that moved it still counts as a repeat
+                long_s = rule and max(rule["value"], FLICK_MAX_S if rule["action"] in ("open", "close") else 0.0)
+                if not used and ((t == "clench" and class_on) or (rule and run >= long_s - EPS)):
                     used = True
                     self.counts[t] -= 1
                     if not (t == "clench" and class_on):

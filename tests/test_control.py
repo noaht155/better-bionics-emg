@@ -399,6 +399,30 @@ def test_rules_on_sign_classes_and_library_poses():
     assert "release" in events and c.state == "idle"
 
 
+def test_rules_open_from_0_s_still_counts_flicks():
+    def holding():
+        c = rules()
+        c.set_rules({"relaxed": [{"trigger": "clench", "how": "held", "value": 0.7, "action": "fist"}],
+                     "holding": [{"trigger": "point", "how": "repeated", "value": 2, "action": "release"},
+                                 {"trigger": "point", "how": "held", "value": 0.0, "action": "open"}]})
+        run(c, ("fist", 0.5, 14), ("rest", 0.0, 4))
+        c.closure = 0.8
+        return c
+    # Opens on the first step, and the flick that did it counts towards the release
+    c = holding()
+    run(c, ("point", 0.1, 1))
+    assert c.closure < 0.8
+    run(c, ("point", 0.1, 3), ("rest", 0.0, 4))
+    assert c.state == "active"
+    assert run(c, ("point", 0.1, 1)) == ["release"] and c.state == "idle"
+    # A long hold only opens, it isn't the first of two
+    c = holding()
+    run(c, ("point", 0.1, 10), ("rest", 0.0, 4))
+    opened = c.closure
+    assert opened < 0.8
+    assert run(c, ("point", 0.1, 4), ("rest", 0.0, 20)) == [] and c.state == "active"
+
+
 def test_rules_close_action_closes_while_its_trigger_stays_on():
     c = rules()
     c.set_rules({"relaxed": [{"trigger": "clench", "how": "held", "value": 0.7, "action": "fist"}],

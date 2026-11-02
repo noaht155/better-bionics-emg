@@ -2082,11 +2082,18 @@ fired: a held rule takes back the episode's count once it fires, and at 0 s that
 in the profile. Replayed on `Controller` with made-up inputs: a 1 s hold opens (0.80 to 0.70), one 0.2 s flick does
 nothing, two flicks 0.3 s apart release. Flicks have to be under the held time. Not yet tried on the arm.
 
+Then changed the controller so the hand opens with no wait (branch `open-while-counting`): a held open or close rule
+no longer takes the count back at its held time but at 0.4 s (`FLICK_MAX_S`), so a flick moves the hand and still
+counts. Profile back to held 0 s. Same made-up inputs: the hold opens from the first step (0.80 to 0.65), one flick
+opens slightly (0.77), two flicks release, a hold then two flicks release. Not yet tried on the arm.
+
 ## Open
 
 Now: control on the signs
 - Hum on ch 3: open the hub and check the wire on its side, then recheck hum on all channels.
-- Mapping page: a held 0 s rule silently cancels repeated rules on the same trigger, `check_rules` lets it through.
+- Mapping page: a held pose rule at 0 s silently cancels repeated rules on the same trigger, `check_rules` lets it
+  through (open and close no longer do since `FLICK_MAX_S`).
+- Try `open-while-counting` on the arm (0 s open, double two_point release), merge into `main` if it works.
 - Sign network (in `ml/` with calibration since 2026-10-19; calibrated score flat from 1 training session on, see the
   2026-10-21 learning curve): try it live against the sign LDA, and trigger mode with
   it on the Control tab (sign map, clench level against the sign session's levels); decide whether open stays in the
