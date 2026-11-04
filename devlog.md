@@ -2105,12 +2105,14 @@ Ctrl+C, still printing the cancel tracebacks. Not tested with the real armband.
 - Hum per channel (uV, ch 0 to 7), motors connected and idle, same fit. Earthed (bench supply, ESP32 on the desktop):
   460, 796, 307, 1412, 129, 648, 89, 173. Floating (motors on a laptop on battery, ESP32 on a power bank): 200, 119,
   26, 51, 84, 91, 49, 44, filtered rest 4 to 7 uV except ch 0 (23) and 1 (14). So the earth path is most of it.
+  Motors unplugged (ground and power): 40, 22, 8, 20, 18, 19, 9, 8, filtered 3 to 7. So the pads are fine and ch 0
+  and 1 still pick up the motors when floating, the laptop is a big conductor with its own pull to the room.
 
 ## Open
 
 Now: control on the signs
-- Hum from the motors: floating supplies cut most of it (2026-11-04). Still to do: hum with the motors running, what
-  is left on ch 0 and 1 (motors unplugged on the same fit), and a battery supply for the motors.
+- Hum from the motors: floating supplies cut most of it (2026-11-04). Still to do: hum with the motors running, and a
+  small battery supply for the motors to see if ch 0 and 1 drop to their unplugged 40 and 22 uV.
 - Hum on ch 3: open the hub and check the wire on its side, then recheck hum on all channels.
 - Mapping page: a held pose rule at 0 s silently cancels repeated rules on the same trigger, `check_rules` lets it
   through (open and close no longer do since `FLICK_MAX_S`).
