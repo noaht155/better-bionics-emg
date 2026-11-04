@@ -2107,6 +2107,7 @@ Ctrl+C, still printing the cancel tracebacks. Not tested with the real armband.
   26, 51, 84, 91, 49, 44, filtered rest 4 to 7 uV except ch 0 (23) and 1 (14). So the earth path is most of it.
   Motors unplugged (ground and power): 40, 22, 8, 20, 18, 19, 9, 8, filtered 3 to 7. So the pads are fine and ch 0
   and 1 still pick up the motors when floating, the laptop is a big conductor with its own pull to the room.
+- Hum test on System > Dev has M blocks for this now: unplugged and plugged in, three times each, 60 s, same table.
 
 ## Open
 

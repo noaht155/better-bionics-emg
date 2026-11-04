@@ -1,4 +1,5 @@
-"""Compare mains hum and resting noise between recording setups (desktop vs MacBook, charger in or out).
+"""Compare mains hum and resting noise between recording setups (desktop vs MacBook, charger in or out, motors
+plugged in or not).
 
 record: stream the band for some seconds with the arm relaxed and save the raw board data under a label.
 compare: one table per measure over every saved recording, or the ones named.
@@ -40,6 +41,13 @@ BLOCKS = [
     ("B3-mac-charger-touch", "Mac on the charger, free hand on the palm rest"),
     ("B4-mac-battery-touch", "Mac on battery, free hand on the palm rest"),
     ("A2-desktop", "desktop again, hands off"),
+    # Motors against no motors (devlog 2026-11-04): same fit, swap only what is plugged in between blocks
+    ("M1-off", "motors and ESP32 unplugged, hands off"),
+    ("M1-on", "motors and ESP32 plugged in and idle, hands off"),
+    ("M2-off", "unplugged again, hands off"),
+    ("M2-on", "plugged in again, hands off"),
+    ("M3-off", "unplugged again, hands off"),
+    ("M3-on", "plugged in again, hands off"),
 ]
 
 
