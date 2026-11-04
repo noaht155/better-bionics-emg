@@ -2094,9 +2094,18 @@ preview stream never ends (test copy with a video file, still running after 45 s
 cleanup in `app.py` (motors off, recorder stop, freeing space). Added a 2 s shutdown timeout: exits in 3.4 s after one
 Ctrl+C, still printing the cancel tracebacks. Not tested with the real armband.
 
+## 2026-11-04: hum from the motors
+
+- Hum high on the channels as soon as all motors are connected, even with the pads mostly capped. Same setup with
+  the motors unplugged: fine. So the motors or their driver put it there, not pad contact or the ESP32 code. The PWM
+  runs at 5 kHz and the hum check measures 60 Hz, so it looks like mains reaching the body through the motor side
+  (motor cases on the skin, or the driver's supply), not PWM noise. Path not found yet.
+
 ## Open
 
 Now: control on the signs
+- Hum from the motors: find the path. Run the laptop on battery with the motors connected, then insulate the motors
+  from the skin (tape under each), then one motor at a time. Needed before haptics and control run together.
 - Hum on ch 3: open the hub and check the wire on its side, then recheck hum on all channels.
 - Mapping page: a held pose rule at 0 s silently cancels repeated rules on the same trigger, `check_rules` lets it
   through (open and close no longer do since `FLICK_MAX_S`).
