@@ -2104,8 +2104,9 @@ Ctrl+C, still printing the cancel tracebacks. Not tested with the real armband.
 ## Open
 
 Now: control on the signs
-- Hum from the motors: find the path. Run the laptop on battery with the motors connected, then insulate the motors
-  from the skin (tape under each), then one motor at a time. Needed before haptics and control run together.
+- Hum from the motors: find the path. The motors are enclosed, so not skin contact. Power the ESP32 from a power bank
+  (commands over WiFi) instead of the desktop's USB, then one motor at a time, then twist each motor pair and route it
+  away from the pad wires. Needed before haptics and control run together.
 - Hum on ch 3: open the hub and check the wire on its side, then recheck hum on all channels.
 - Mapping page: a held pose rule at 0 s silently cancels repeated rules on the same trigger, `check_rules` lets it
   through (open and close no longer do since `FLICK_MAX_S`).
