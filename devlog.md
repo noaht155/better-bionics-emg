@@ -2108,6 +2108,9 @@ Ctrl+C, still printing the cancel tracebacks. Not tested with the real armband.
   Motors unplugged (ground and power): 40, 22, 8, 20, 18, 19, 9, 8, filtered 3 to 7. So the pads are fine and ch 0
   and 1 still pick up the motors when floating, the laptop is a big conductor with its own pull to the room.
 - Hum test on System > Dev has M blocks for this now: unplugged and plugged in, three times each, 60 s, same table.
+- ESP32 (HW-395B) fed 5 V on its 5V pin: power LED on, 5 V at the pins, but it never joins the armband WiFi, EN
+  not tried. Fed the same 5 V through a cut USB-C cable (red VBUS, bare drain wire GND) it joins in seconds. Cause not
+  confirmed, likely the unpowered USB chip or reset circuit holding it at boot. Power it through the USB-C.
 
 ## Open
 
