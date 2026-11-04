@@ -2099,14 +2099,18 @@ Ctrl+C, still printing the cancel tracebacks. Not tested with the real armband.
 - Hum high on the channels as soon as all motors are connected, even with the pads mostly capped. Same setup with
   the motors unplugged: fine. So the motors or their driver put it there, not pad contact or the ESP32 code. The PWM
   runs at 5 kHz and the hum check measures 60 Hz, so it looks like mains reaching the body through the motor side
-  (motor cases on the skin, or the driver's supply), not PWM noise. Path not found yet.
+  (motor cases on the skin, or the driver's supply), not PWM noise. Motors are enclosed behind TPU, so not contact:
+  the motor side sits at earth (driver ground to the ESP32 on the desktop's USB, bench supply) and couples to the
+  pads through the TPU, a few pF, enough for hundreds of uV through a dry pad.
+- Hum per channel (uV, ch 0 to 7), motors connected and idle, same fit. Earthed (bench supply, ESP32 on the desktop):
+  460, 796, 307, 1412, 129, 648, 89, 173. Floating (motors on a laptop on battery, ESP32 on a power bank): 200, 119,
+  26, 51, 84, 91, 49, 44, filtered rest 4 to 7 uV except ch 0 (23) and 1 (14). So the earth path is most of it.
 
 ## Open
 
 Now: control on the signs
-- Hum from the motors: find the path. The motors are enclosed, so not skin contact. Power the ESP32 from a power bank
-  (commands over WiFi) instead of the desktop's USB, then one motor at a time, then twist each motor pair and route it
-  away from the pad wires. Needed before haptics and control run together.
+- Hum from the motors: floating supplies cut most of it (2026-11-04). Still to do: hum with the motors running, what
+  is left on ch 0 and 1 (motors unplugged on the same fit), and a battery supply for the motors.
 - Hum on ch 3: open the hub and check the wire on its side, then recheck hum on all channels.
 - Mapping page: a held pose rule at 0 s silently cancels repeated rules on the same trigger, `check_rules` lets it
   through (open and close no longer do since `FLICK_MAX_S`).
