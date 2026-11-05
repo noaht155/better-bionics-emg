@@ -413,8 +413,8 @@
       </div>
       <div class="ctl-settings">
         <h2>Profile</h2>
-        <p class="muted">Settings, mapping and haptics together. Picking a profile applies it straight away. Changes
-          apply live, Save keeps them in the profile.</p>
+        <p class="muted">The settings and haptics, saved per person. Picking a profile applies it straight away.
+          Changes apply live, Save keeps them in the profile.</p>
         <div class="row filters">
           <label class="check"><input type="radio" name="ctl-profile-filter" value="all" checked> All profiles</label>
           <label class="check"><input type="radio" name="ctl-profile-filter" value="model"> Built on this model</label>
@@ -432,10 +432,12 @@
         <h2>Basic</h2>
         <div id="ctl-basic"></div>
         <div class="ctl-mapping">
-          <span>Mapping: <b id="ctl-mapping-name"></b></span>
+          <label>Mapping <select id="ctl-mapping-select"></select></label>
+          <span id="ctl-mapping-name"></span>
           <button id="ctl-mapping-open">Configure mapping</button>
-          <small>Which pattern picks which pose, and what each one plays on the motors. Rules mode uses all of it; lock,
-            blend and trigger only take which class stands for which grip from the held rules.</small>
+          <small>Which pattern picks which pose, and what each one plays on the motors. Picking a mapping applies it
+            straight away. Rules mode uses all of it; lock, blend and trigger only take which class stands for which
+            grip from the held rules.</small>
         </div>
         <h2>Haptics</h2>
         <div class="row filters">
@@ -463,9 +465,14 @@
       together. Hover a pose in the Then list to see it. Haptic is what the motors play when the rule fires, with
       the Selections haptics on: default is the event's own pattern (the grip's code, a fading buzz for release, a
       sweep for lock). Changes apply straight away.</p>
-    <p class="ctl-mapping">Editing profile <b id="ctl-mapping-profile"></b></p>
+    <p class="ctl-mapping">Editing mapping <b id="ctl-mapping-current"></b></p>
+    <div class="row narrow">
+      <label>New name <input id="ctl-mapping-save-name" placeholder="name"></label>
+    </div>
     <div class="controls">
-      <button id="ctl-mapping-save">Save to profile</button>
+      <button id="ctl-mapping-save">Save</button>
+      <button id="ctl-mapping-save-as">Save as new</button>
+      <button id="ctl-mapping-delete">Delete</button>
       <button id="ctl-mapping-default">Default for this model</button>
     </div>
     <p id="ctl-mapping-note" class="muted"></p>

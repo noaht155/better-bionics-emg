@@ -2147,16 +2147,16 @@ Ctrl+C, still printing the cancel tracebacks. Not tested with the real armband.
   session has, so mixing old and new F sessions trains without open. A network with open calibrated on a new session
   keeps an open output that never gets calibration windows.
 
-## 2026-11-05: Control profiles and haptics per rule
+## 2026-11-05: Control mapping dropdown and haptics per rule
 
-- One profile list on the Control tab: a profile holds settings, haptics, protocol and mapping, picking it applies it.
-  Edits apply live and mark it changed, Save writes them back, Save as new makes another; default is fixed.
-  Configure mapping edits the profile in use. The separate saved-mappings list is gone: without a profile file yet,
-  saved mappings become rules-mode profiles with default settings once (`app.saved_presets`), so
-  `protocol-f-v1` and `protocol-f-default` turn up as profiles.
+- Profiles (settings and haptics) and mappings (detection rules) stay separate (Noah: they can't be grouped). Both
+  are dropdowns on the Control tab and apply when picked; edits apply live and show as changed, Save writes them
+  back, Save as new makes another. Configure mapping edits the mapping picked there, its own saved list is gone.
+  A first version merged mappings into profiles and copied the two saved mappings into a profile file; that file
+  was removed again, `control_mappings.json` was never touched.
 - Each rule has a Haptic: default (the event's pattern as before), none, 1 to 3 short, 1 or 2 long, long short,
   fading buzz or sweep (`haptics.HAPTIC_CHOICES`). Plays with the Selections haptics. The rules table scrolls inside
-  the page on narrow windows. Checked headless on a test copy with scratch profile files, not yet on the arm.
+  the page on narrow windows. Checked headless on a test copy with scratch files, not yet on the arm.
 
 ## Open
 

@@ -190,7 +190,6 @@ These decide when the recorder marks a cue bad and redoes it.
 | `test_rules_are_checked` | Mappings with an unknown action or how, a value out of range, a fractional count, two rules on the same pattern, two held rules on one trigger in one list or no trigger are refused, either list takes poses and actions; grip models get the clench default, sign models the sign default without clench, and classes the model doesn't have are left out |
 | `test_rules_report_the_fired_rules_haptic` | The rule that fired passes its haptic on with the event; rules saved without one give auto |
 | `test_check_rules_refuses_an_unknown_haptic` | A mapping with a haptic that isn't a pattern is refused |
-| `test_saved_mappings_become_profiles_once` | Mappings saved on their own become profiles (rules mode, default settings, their protocol) when there is no profile file yet, and never again after, so a deleted profile stays deleted |
 | `test_rules_saved_as_one_list_split_by_action` | Mappings saved as one list before the split load with poses in the relaxed list and open, close, release in the holding list |
 | `test_rules_one_trigger_held_in_both_lists` | Open held 0 s while holding doesn't stop open held 0.7 s from picking a pose while relaxed, and still opens the hand once a grip is held |
 | `test_rules_pose_while_holding_switches_at_the_same_closure` | A pose rule in the holding list switches to that grip and keeps how far the hand is closed |

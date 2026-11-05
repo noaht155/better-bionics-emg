@@ -1,7 +1,8 @@
 // Control tab: the gesture model with the control layer (control.py) on its output. The server steps the
 // controller inside the model's loop and sends its state with the rest; the page draws it and posts setting changes.
 // Settings are split in basic and advanced (only the ones the mode uses), the mapping (rules mode's rule list) has
-// its own page. A profile holds both with the haptics; picking one applies it, edits apply live until saved.
+// its own page. Profiles (settings and haptics) and mappings are saved apart; picking either applies it, edits
+// apply live until saved.
 
 const ALL_MODES = ["lock", "blend", "trigger", "rules"];
 const CONTROL_PARAMS = [
@@ -53,7 +54,7 @@ const BASIC_PARAMS = CONTROL_PARAMS.filter((d) => d.basic);
 const ADVANCED_PARAMS = CONTROL_PARAMS.filter((d) => !d.basic);
 const TRACE_STEPS = 200;
 const ctlView = { yaw: 25, pitch: -20 };
-const ctl = { params: null, rules: null, mappingName: "", profile: null, changed: false, models: [], presets: {}, trace: [], lastStep: null, starts: 0, releases: 0 };
+const ctl = { params: null, rules: null, mappingName: "", profile: null, changed: false, mapping: null, mappingChanged: false, models: [], presets: {}, mappings: {}, trace: [], lastStep: null, starts: 0, releases: 0 };
 
 function showControlParams() {
   showParams(BASIC_PARAMS, "ctl-", ctl.params);
@@ -80,7 +81,8 @@ document.querySelectorAll("input[name=ctl-haptics-mode]").forEach((r) => r.addEv
 }));
 
 function editedParams() {
-  markChanged();
+  ctl.changed = true;
+  showProfileState();
   sendControlParams();
 }
 
@@ -106,8 +108,16 @@ function fillProfiles() {
   $("ctl-preset").value = ctl.profile || "";
 }
 
+// Every saved mapping; before one is picked the rules in use are the model's default or unsaved edits
+function fillMappings() {
+  const unsaved = ctl.mappingName === "default" ? "default for this model" : "rules in use, not saved";
+  $("ctl-mapping-select").innerHTML = (ctl.mapping ? "" : `<option value=''>${unsaved}</option>`)
+    + Object.keys(ctl.mappings).map((n) => `<option>${n}</option>`).join("");
+  $("ctl-mapping-select").value = ctl.mapping || "";
+}
+
 async function loadControlLists() {
-  const [lda, networks, presets] = await Promise.all(["/api/models", "/api/networks", "/api/control/presets"]
+  const [lda, networks, presets, mappings] = await Promise.all(["/api/models", "/api/networks", "/api/control/presets", "/api/control/mappings"]
     .map((u) => fetch(u).then((x) => x.json())));
   // Calibrated networks take their effort levels from the session they were calibrated on. Sign networks also run
   // uncalibrated, with the levels of their newest training session
@@ -116,7 +126,9 @@ async function loadControlLists() {
   const running = state?.tools?.predictor?.running && state.tools.predictor.control && state.tools.predictor.model;
   if (running && ctl.models.some((m) => m.name === running)) $("ctl-model").value = running;
   ctl.presets = presets;
+  ctl.mappings = mappings;
   fillProfiles();
+  fillMappings();
   if (ctl.params) showParamsForMode();
   if ($("ctl-model").value !== protocolModel) {
     protocolModel = $("ctl-model").value;
@@ -134,7 +146,7 @@ $("ctl-protocol").addEventListener("change", drawRules);
 let defaultModel = null;
 async function followModelDefault() {
   const model = $("ctl-model").value;
-  if (!ctl.rules || !model || model === defaultModel) return;
+  if (!ctl.rules || !model || model === defaultModel || ctl.mapping) return;
   if (ctl.mappingName && ctl.mappingName !== "default") return;
   const generic = await post("/api/control/default_rules", config.gesture_set);
   const wasDefault = ctl.mappingName === "default" || JSON.stringify(ctl.rules) === JSON.stringify(generic);
@@ -244,20 +256,17 @@ function disarm(button) {
 }
 
 $("ctl-preset-name").addEventListener("input", () => disarm($("ctl-save-as")));
+$("ctl-mapping-save-name").addEventListener("input", () => disarm($("ctl-mapping-save-as")));
 
-// Profiles
+// Profiles: the settings and haptics. Profiles saved before 2026-11-05 also hold a mapping, picking one leaves the
+// mapping alone
 
-// Picking applies the whole profile: settings, haptics, protocol and mapping (default has no mapping of its own and
-// takes the model's default one)
 async function applyProfile(name) {
   const preset = ctl.presets[name];
   if (!preset || !ctl.params) return;
   ctl.params = { ...ctl.params, ...preset.params };
   showControlParams();
   sendControlParams();
-  if (preset.protocol) $("ctl-protocol").value = preset.protocol;
-  const rules = preset.rules || await post("/api/control/default_rules", selectedModel()?.classes || config.gesture_set);
-  await setRules(rules, name);
   ctl.profile = name;
   ctl.changed = false;
   fillProfiles();
@@ -266,57 +275,35 @@ async function applyProfile(name) {
 
 $("ctl-preset").addEventListener("change", () => applyProfile($("ctl-preset").value));
 
-function markChanged() {
-  ctl.changed = true;
-  showProfileState();
-}
-
 function showProfileState(note) {
   $("ctl-preset-note").textContent = note || (ctl.changed && ctl.profile ? `${ctl.profile} changed, Save keeps the changes` : "");
-  $("ctl-mapping-profile").textContent = ctl.profile ? `${ctl.profile}${ctl.changed ? " (changed)" : ""}`
-    : "none, save it as a new profile on the Control page";
-  showMappingName();
 }
 
 async function saveProfile(name) {
-  await post("/api/control/presets", { name, params: ctl.params, rules: ctl.rules, model: $("ctl-model").value || null,
-    protocol: $("ctl-protocol").value });
+  try {
+    await post("/api/control/presets", { name, params: ctl.params, model: $("ctl-model").value || null });
+  } catch (err) {
+    showProfileState(err.message);
+    return;
+  }
   ctl.profile = name;
   ctl.changed = false;
-  ctl.mappingName = name;
   await loadControlLists();
   showProfileState(`saved ${name}`);
 }
 
 // Save writes the changes into the profile in use; default is fixed
-async function saveCurrent(noteId) {
-  if (!ctl.profile || ctl.profile === "default") {
-    $(noteId).textContent = "default is fixed: type a new name on the Control page and press Save as new";
-    return;
-  }
-  try {
-    await saveProfile(ctl.profile);
-    $(noteId).textContent = `saved ${ctl.profile}`;
-  } catch (err) {
-    $(noteId).textContent = err.message;
-  }
-}
-
-$("ctl-save").addEventListener("click", () => saveCurrent("ctl-preset-note"));
+$("ctl-save").addEventListener("click", () => {
+  if (!ctl.profile || ctl.profile === "default") showProfileState("default is fixed: type a new name and press Save as new");
+  else saveProfile(ctl.profile);
+});
 
 $("ctl-save-as").addEventListener("click", async () => {
   const name = $("ctl-preset-name").value.trim();
-  if (!name) {
-    $("ctl-preset-note").textContent = "type a name for the new profile first";
-    return;
-  }
+  if (!name) return showProfileState("type a name for the new profile first");
   if (!overwriteOk($("ctl-save-as"), ctl.presets, name, "ctl-preset-note")) return;
-  try {
-    await saveProfile(name);
-    $("ctl-preset-name").value = "";
-  } catch (err) {
-    $("ctl-preset-note").textContent = err.message;
-  }
+  await saveProfile(name);
+  $("ctl-preset-name").value = "";
 });
 
 $("ctl-delete").addEventListener("click", async () => {
@@ -327,6 +314,65 @@ $("ctl-delete").addEventListener("click", async () => {
   if (res.ok && ctl.profile === name) ctl.profile = null;
   await loadControlLists();
   showProfileState(detail || `deleted ${name}, its settings stay in use until another profile is picked`);
+});
+
+// Mappings: picked on the Control page, edited on the mapping page
+
+async function applyMapping(name) {
+  const m = ctl.mappings[name];
+  if (!m) return;
+  if (m.protocol) $("ctl-protocol").value = m.protocol;
+  if (!(await setRules(m.rules, name))) return;
+  ctl.mapping = name;
+  ctl.mappingChanged = false;
+  fillMappings();
+  showMappingState(`applied ${name}`);
+}
+
+$("ctl-mapping-select").addEventListener("change", () => applyMapping($("ctl-mapping-select").value));
+
+function showMappingState(note) {
+  $("ctl-mapping-note").textContent = note || (ctl.mappingChanged && ctl.mapping ? `${ctl.mapping} changed, Save keeps the changes` : "");
+  $("ctl-mapping-current").textContent = ctl.mapping ? `${ctl.mapping}${ctl.mappingChanged ? " (changed)" : ""}`
+    : "not saved yet, Save as new keeps it";
+  showMappingName();
+}
+
+async function saveMapping(name) {
+  try {
+    await post("/api/control/mappings", { name, rules: ctl.rules, model: $("ctl-model").value || null, protocol: $("ctl-protocol").value });
+  } catch (err) {
+    showMappingState(err.message);
+    return;
+  }
+  ctl.mapping = name;
+  ctl.mappingName = name;
+  ctl.mappingChanged = false;
+  await loadControlLists();
+  showMappingState(`saved ${name}`);
+}
+
+$("ctl-mapping-save").addEventListener("click", () => {
+  if (!ctl.mapping) showMappingState("not saved yet: type a name and press Save as new");
+  else saveMapping(ctl.mapping);
+});
+
+$("ctl-mapping-save-as").addEventListener("click", async () => {
+  const name = $("ctl-mapping-save-name").value.trim();
+  if (!name) return showMappingState("type a name for the new mapping first");
+  if (!overwriteOk($("ctl-mapping-save-as"), ctl.mappings, name, "ctl-mapping-note")) return;
+  await saveMapping(name);
+  $("ctl-mapping-save-name").value = "";
+});
+
+$("ctl-mapping-delete").addEventListener("click", async () => {
+  const name = ctl.mapping;
+  if (!name) return;
+  const res = await fetch(`/api/control/mappings/${encodeURIComponent(name)}`, { method: "DELETE" });
+  const detail = res.ok ? null : (await res.json()).detail;
+  if (res.ok) ctl.mapping = null;
+  await loadControlLists();
+  showMappingState(detail || `deleted ${name}, its rules stay in use until another mapping is picked`);
 });
 
 // Mapping page
@@ -350,6 +396,7 @@ async function setRules(rules, name) {
   ctl.rules = copyRules(rules);
   ctl.mappingName = name;
   drawRules();
+  fillMappings();
   return sendRules();
 }
 
@@ -365,14 +412,14 @@ async function sendRules() {
 }
 
 function changedRules() {
-  markChanged();
+  ctl.mappingChanged = true;
+  showMappingState();
   sendRules();
 }
 
 function showMappingName() {
   const n = ctl.rules ? ctl.rules.relaxed.length + ctl.rules.holding.length : 0;
-  const from = ctl.profile ? `${ctl.profile}${ctl.changed ? " (changed)" : ""}` : ctl.mappingName || "unsaved";
-  $("ctl-mapping-name").textContent = `${from}, ${n} rule${n === 1 ? "" : "s"}`;
+  $("ctl-mapping-name").textContent = `${ctl.mappingChanged && ctl.mapping ? "changed, " : ""}${n} rule${n === 1 ? "" : "s"}`;
 }
 
 const nice = (s) => s.replaceAll("_", " ");
@@ -603,13 +650,12 @@ for (const button of document.querySelectorAll(".ctl-rule-add")) {
   });
 }
 
-$("ctl-mapping-save").addEventListener("click", () => saveCurrent("ctl-mapping-note"));
-
+// Replaces the rules of the mapping being edited, Save keeps it
 $("ctl-mapping-default").addEventListener("click", async () => {
   const rules = await post("/api/control/default_rules", selectedModel()?.classes || config.gesture_set);
   if (await setRules(rules, "default")) {
-    markChanged();
-    $("ctl-mapping-note").textContent = "default mapping for this model";
+    ctl.mappingChanged = true;
+    showMappingState("default mapping for this model");
   }
 });
 
@@ -669,7 +715,7 @@ function drawControl(c, p) {
   if (!ctl.rules && c.rules) {
     ctl.rules = copyRules(c.rules);
     drawRules();
-    showProfileState();
+    showMappingState();
     followModelDefault();
   }
   const running = !!(p.running && p.control);
