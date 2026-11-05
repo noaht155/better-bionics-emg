@@ -2112,10 +2112,18 @@ Ctrl+C, still printing the cancel tracebacks. Not tested with the real armband.
   not tried. Fed the same 5 V through a cut USB-C cable (red VBUS, bare drain wire GND) it joins in seconds. Cause not
   confirmed, likely the unpowered USB chip or reset circuit holding it at boot. Power it through the USB-C.
 
+## 2026-11-05: motor hum parked
+
+- All on the laptop on battery, ESP32 fed through USB-C, haptics connected and idle: clean right after connecting,
+  then within about a minute ch 0, 1, 4, 5 at 94 to 138 uV, others 25 to 62 (unplugged on the same fit: 40, 22).
+  Same rise on 2026-11-04 (32 / 34 to 163 / 247 on ch 0 / 1 in a minute). Not the haptics link starting, it was
+  connected from the start. Cause not found, parked for robustness training on the networks.
+
 ## Open
 
 Now: control on the signs
-- Hum from the motors: floating supplies cut most of it (2026-11-04). Still to do: hum with the motors running, and a
+- Hum from the motors (parked 2026-11-05): floating supplies cut most of it, it still rises about a minute after
+  connecting. `diagnostics/motor_pickup.py` already runs the motors in timed blocks against the band. Still to do: hum with the motors running, and a
   small battery supply for the motors to see if ch 0 and 1 drop to their unplugged 40 and 22 uV.
 - Hum on ch 3: open the hub and check the wire on its side, then recheck hum on all channels.
 - Mapping page: a held pose rule at 0 s silently cancels repeated rules on the same trigger, `check_rules` lets it
