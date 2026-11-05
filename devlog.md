@@ -2163,6 +2163,25 @@ Ctrl+C, still printing the cancel tracebacks. Not tested with the real armband.
   channel lost and lose a few under heavy hum. One seed, synthetic hum. Next: check on real hummy cues (the ones
   marked bad), then put it in `ml/` with live masking (`quality.hum_recent` over a limit, lost contact).
 
+## 2026-11-05: adaptive line canceller against the notches
+
+`diagnostics/robust/line_canceller.py`, all causal after the same band-pass. Hum left (synthetic, % of raw) / 60 Hz
+left on `141651` and `113719` (raw 16 and 21 uV) / change in window RMS against the live filter:
+
+| filter | synthetic | real, uV | window RMS |
+|---|---|---|---|
+| live notches (500 Hz, Q 30) | 10.7 % | 2.1 / 1.9 | 0 |
+| notches at the real rate | 7.0 % | 1.6 / 1.4 | -0.1 % |
+| notches at the real rate, Q 10 | 2.5 % | 0.8 / 0.7 | -9 % |
+| line canceller, tau 0.05 s | 2.4 % | 0.8 / 0.8 | +7 % |
+| line canceller, tau 0.1 s | 4.7 % | 1.2 / 1.1 | +6 % |
+| line canceller, tau 0.3 to 1 s | 12 to 24 % | 2.0 to 4.8 | |
+
+The canceller is no better than a wider notch: to follow hum whose level wanders at 1 to 2 Hz it has to be about as
+wide, and a slow one is worse than the live notch. A wide notch or a fast canceller leaves about a quarter of the
+hum but changes the EMG level by 7 to 9 %, and either means a filter version bump and retraining. Not changed: the
+hum-trained network already copes (sign network entry above). Revisit if hum gets worse than about 300 uV.
+
 ## 2026-11-05: open hand out of protocol F
 
 - `open-while-counting` merged into `main` untested on the arm: Noah had run it for over a week and has dropped open
@@ -2191,7 +2210,7 @@ Ctrl+C, still printing the cancel tracebacks. Not tested with the real armband.
 
 Now: control on the signs
 - Robustness (2026-11-05): hum augmentation and channel drop with a missing-channel input work on synthetic hum.
-  Check on real hummy cues, then into `ml/` with live masking. Line canceller after that.
+  Check on real hummy cues, then into `ml/` with live masking. Line canceller tested, no better than a wider notch.
 - Hum from the motors (parked 2026-11-05): floating supplies cut most of it, it still rises about a minute after
   connecting. `diagnostics/motor_pickup.py` already runs the motors in timed blocks against the band. Still to do: hum with the motors running, and a
   small battery supply for the motors to see if ch 0 and 1 drop to their unplugged 40 and 22 uV.
