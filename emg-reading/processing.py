@@ -2,12 +2,17 @@ import numpy as np
 from scipy import signal
 
 # Chosen on recorded sessions from 2026-09-30, see filtering.md
-# Bump FILTER_VERSION whenever the filter changes, saved calibrations are then refused
-FILTER_VERSION = 2
+# Bump FILTER_VERSION whenever the filter changes, saved calibrations and models are then refused
+FILTER_VERSION = 3
 BAND_LOW = 40.0
 BAND_HIGH = 200.0
 MAINS_HZ = (60.0, 120.0, 180.0)
-NOTCH_Q = 30.0
+# About 6 Hz wide: real hum wanders round 60 Hz as its level changes, Q 30 (2 Hz) let 10 % of it through. Gained
+# about 9 points on the sign network under heavy hum for under a point on clean data (devlog 2026-11-05)
+NOTCH_Q = 10.0
+# The armband's clock runs slow, 499.1 to 499.6 Hz against the 500 it reports (session.sample_times), so the notches
+# are placed for 499.3 Hz or they sit 0.08 Hz off the mains lines
+CLOCK_RATIO = 499.3 / 500
 
 ENVELOPE_MS = 150
 # Kept as a safety margin after the start of a block, the filter starts in steady state so there is little to settle
@@ -24,7 +29,7 @@ def design_filter(rate):
     sections = [signal.butter(4, [BAND_LOW, min(BAND_HIGH, 0.8 * nyquist)], "bandpass", fs=rate, output="sos")]
     for hz in MAINS_HZ:
         if hz + 2 < nyquist:
-            b, a = signal.iirnotch(hz, NOTCH_Q, fs=rate)
+            b, a = signal.iirnotch(hz, NOTCH_Q, fs=rate * CLOCK_RATIO)
             sections.append(signal.tf2sos(b, a))
     return np.vstack(sections)
 

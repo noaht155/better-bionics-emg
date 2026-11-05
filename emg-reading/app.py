@@ -41,7 +41,7 @@ from gestures import (C_CLOSE_S, C_MOVE_S, C_ROUNDS, CATEGORIES, D_ACTIVITY_S, D
 from hand_angles import JOINTS, RELIABLE
 from haptics import (FADE, GAP_MS, GRIP_CODES, HAPTIC_DEFAULTS, LONG_MS, OTHER_CODE, SHORT_MS, STEP_MS, SWEEP,
                      haptic_settings)
-from processing import spectrum
+from processing import FILTER_VERSION, spectrum
 from recorder import Recorder
 from session import DATA_DIR
 from tools import POSES, Tools, forget_armband_wifi, model_path
@@ -419,9 +419,12 @@ def session_list():
 
 
 def model_list():
+    """Saved LDA models for the current filter, newest first. Older ones stay on disk, loading them is refused."""
     out = []
     for path in sorted(gesture_model.MODEL_DIR.glob("*.joblib"), reverse=True):
         model = joblib.load(path)
+        if model["filter_version"] != FILTER_VERSION:
+            continue
         loso = (model.get("evaluation") or {}).get("loso", {}).get(model["vote"])
         out.append({"name": path.name, "subject": model["subject"], "trained": model["trained"],
                     "sessions": model["sessions"], "classes": model["classes"], "options": model["options"],
@@ -433,7 +436,8 @@ def model_list():
 
 
 def network_list():
-    """Saved networks, newest first. Empty where torch isn't installed (it's only on the training desktop)."""
+    """Saved networks for the current filter, newest first (networks saved before filter version 3 don't say, they were
+    version 2). Empty where torch isn't installed (it's only on the training desktop)."""
     try:
         import torch
     except ImportError:
@@ -441,6 +445,8 @@ def network_list():
     out = []
     for path in sorted(NETWORK_DIR.glob("*.pt"), reverse=True):
         blob = torch.load(path, map_location="cpu", weights_only=True)
+        if blob["info"].get("filter_version", 2) != FILTER_VERSION:
+            continue
         out.append(dict(blob["info"], name=path.name, classes=blob["classes"]))
     return out
 

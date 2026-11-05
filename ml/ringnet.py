@@ -22,6 +22,7 @@ import torch.nn.functional as F
 
 from hand_angles import RELIABLE, JOINTS
 from ml.gesture_model import vote_winner
+from processing import FILTER_VERSION
 
 # Filtered EMG is a few uV at rest and a few hundred in a grip. Dividing by this brings it near unit scale
 INPUT_SCALE_UV = 50.0
@@ -112,11 +113,16 @@ def rotation_check(model, x):
 def save(model, info, path):
     """info: plain values only (strings, numbers, lists), so loading never has to run pickled code."""
     path.parent.mkdir(parents=True, exist_ok=True)
+    info = dict(info, filter_version=FILTER_VERSION)
     torch.save({"state": model.state_dict(), "classes": model.classes, "info": info}, path)
 
 
-def load(path, device="cpu"):
+def load(path, device="cpu", any_filter=False):
+    """Refuses a network trained on windows from another filter (networks saved before version 3 don't say, they
+    were all version 2) unless any_filter."""
     blob = torch.load(path, map_location=device, weights_only=True)
+    if not any_filter and blob["info"].get("filter_version", 2) != FILTER_VERSION:
+        raise ValueError(f"{path.name} was trained with an older filter, train it again")
     # Networks saved before the effort head existed load without it
     model = RingNet(blob["classes"], effort="effort_head.weight" in blob["state"]).to(device)
     model.load_state_dict(blob["state"])

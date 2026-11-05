@@ -27,7 +27,7 @@ The models are trained on sessions filtered all at once (`filter_block`), but li
 | `test_chunks_match_whole_recording` | Filtering 20 s in 10-sample packets (how the recorder gets them from the armband) gives the same output as filtering it in one go, to 1e-6 uV |
 | `test_uneven_chunks` | The same with random packet sizes of 1 to 40 samples |
 | `test_offset_removed_without_startup_spike` | The tens of mV of DC offset are removed and the filter doesn't ring at the start (it starts in steady state) |
-| `test_mains_removed` | 100 uV at 60, 120 and 180 Hz comes out under 1 uV RMS |
+| `test_mains_removed` | 100 uV at 60, 120 and 180 Hz, sampled at the band's real 499.3 Hz, comes out under 1 uV RMS |
 
 ### Network (`tests/test_network.py`)
 

@@ -8,7 +8,7 @@ Chosen on 2026-09-30 from a guided recording session (about 6 minutes, 12 segmen
 ```
 raw EMG (8 channels, 500 Hz, µV)
   → band-pass 40 to 200 Hz      4th order Butterworth
-  → notch 60, 120, 180 Hz       iirnotch, Q 30
+  → notch 60, 120, 180 Hz       iirnotch, Q 10, placed for the band's real 499.3 Hz clock
   → envelope                    RMS over the last 150 ms
 ```
 
@@ -64,6 +64,7 @@ Classification: LDA on 150 ms envelopes, trained on one repetition and tested on
 
 Other results:
 - The notches: `iirnotch` at Q 30 removes the hum as well as ±2 Hz Butterworth band-stops, with about half the delay and far less computation.
+- 2026-11-05, filter version 3: notches widened to Q 10 and placed for the band's real clock (499.1 to 499.6 Hz, it reports 500). Real hum wanders round 60 Hz as its level changes and Q 30 let about 10 % of it through. Under heavy hum the sign network gained about 9 points, clean data lost under a point, the signal level is about 9 % lower (devlog 2026-11-05).
 - Streaming vs re-filtering the last second every update: identical output, less work.
 - Contact loss: caught only on the one pad that actually lost contact, zero false flags on every other segment (tugs and hardest clenches included). Holding the flag for 0.5 to 2 s after a burst covered only a few more bad updates and switched off many good ones, so there is no hold.
 

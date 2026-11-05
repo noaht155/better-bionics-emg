@@ -45,7 +45,8 @@ def test_offset_removed_without_startup_spike():
 
 
 def test_mains_removed():
-    t = np.arange(10 * RATE) / RATE
+    """Mains lines as the armband samples them: its clock runs at about 499.3 Hz, not 500."""
+    t = np.arange(10 * RATE) / 499.3
     hum = np.vstack([100 * np.sin(2 * np.pi * f * t) for f in (60, 120, 180)])
     y = filter_block(hum, RATE)[:, 2 * RATE:]
     assert np.sqrt(np.mean(y ** 2)) < 1

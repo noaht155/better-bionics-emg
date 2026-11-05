@@ -273,10 +273,9 @@ def load_sessions(folders, options, log=None):
     """log(text, share): called after each session, share of the folders loaded."""
     out = {}
     for k, folder in enumerate(folders, 1):
+        # Sessions keep the raw data and are filtered here, so the filter version they were recorded with doesn't matter
         data = load_session(folder)
         meta = data["meta"]
-        if meta.get("filter_version") != FILTER_VERSION:
-            raise ValueError(f"{Path(folder).name} was recorded with another filter version")
         windows = session_windows(data, meta["rate"], options)
         labelled = sum(l is not None for l in windows[2])
         if log:

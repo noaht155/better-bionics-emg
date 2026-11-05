@@ -2215,6 +2215,17 @@ train on `141651` break, the known bump), calibrated 92.4 / 0.9 against 91.3 / 1
 levels: r 0.995 to 0.999 per session, mean difference 0.005 to 0.013, a clench level crossed differently in 0.7 to
 1.5 % of steps. So about a point or less clean, against about 9 points under heavy hum.
 
+## 2026-11-05: wider notches, filter version 3 (branch `wide-notch`)
+
+- `processing.py`: notches at Q 10 (was 30), placed for the band's real clock (`CLOCK_RATIO`, 499.3 / 500).
+  `FILTER_VERSION` 3. Numbers behind it in the two entries below.
+- Sessions are no longer refused for being recorded with another filter version: they keep the raw data and every
+  training filters it again (all 47 sessions said version 2). Models still are: LDA models and calibrations as
+  before, and networks now save `filter_version` and are refused by `ringnet.load` when it differs (older ones
+  don't say, they were version 2). The model lists only show models for the current filter.
+- General network retrained on the new filter from the same 15 sessions and 15 epochs as
+  `ringnet_2026-10-16_112322`: `ringnet_2026-11-05_140756` (208 s, loss 0.602). `evaluate.SIGN_BASE` points at it.
+
 ## 2026-11-05: open hand out of protocol F
 
 - `open-while-counting` merged into `main` untested on the arm: Noah had run it for over a week and has dropped open
