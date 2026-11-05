@@ -2208,6 +2208,13 @@ for all, wrong 3.0 % live against 3.7 % for the wider ones. So under heavy hum a
 calibrated and costs nothing clean; the canceller ties with the wide notch, which is simpler (fixed, linear, easy
 on the ESP32). One seed. Adopting it means a filter version bump and retraining every model, Noah's call.
 
+Cost on clean data (`diagnostics/robust/filter_cost.py`, leave one session out over 9 F sessions, open left out),
+current against wider notch, balanced / wrong %: sign LDA uncalibrated 78.7 / 8.3 against 78.4 / 8.4, calibrated
+95.4 / 2.2 against 95.3 / 2.3; sign network uncalibrated 45.8 / 29.5 against 46.2 / 29.3 (low for both: folds that
+train on `141651` break, the known bump), calibrated 92.4 / 0.9 against 91.3 / 1.0. Effort with each filter's own
+levels: r 0.995 to 0.999 per session, mean difference 0.005 to 0.013, a clench level crossed differently in 0.7 to
+1.5 % of steps. So about a point or less clean, against about 9 points under heavy hum.
+
 ## 2026-11-05: open hand out of protocol F
 
 - `open-while-counting` merged into `main` untested on the arm: Noah had run it for over a week and has dropped open
