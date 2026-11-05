@@ -4,7 +4,7 @@ import pytest
 
 import ml  # noqa: F401
 import calibrate
-from haptics import GRIP_CODES, OUTPUTS, TICK_OUTPUT, level, output_duties, pattern, scaled_duty
+from haptics import GAP, GRIP_CODES, OUTPUTS, SHORT, TICK_OUTPUT, level, output_duties, pattern, scaled_duty
 from ml import dataset
 from processing import common_average, envelope_series, filter_block
 from session import load_session, segments
@@ -88,3 +88,14 @@ def test_tick_never_cuts_a_pick():
     assert h._cue[2] == "tick"
     h.cue("release")
     assert h._cue[2] == "release"
+
+
+def test_rule_haptic_replaces_the_event_pattern():
+    """A mapping rule's own pattern: a pulse code on every motor, fade and sweep borrow release and lock, none is
+    silent and auto keeps the event's pattern."""
+    assert pattern("start", 100, "pinch", "auto") == pattern("start", 100, "pinch")
+    assert pattern("release", 100, None, "LL") == pattern("start", 100, "point")
+    assert pattern("start", 70, "fist", "fade") == pattern("release", 70)
+    assert pattern("release", 100, None, "sweep") == pattern("lock", 100)
+    assert pattern("start", 100, "fist", "none") == []
+    assert len(pattern("start", 100, "fist", "SS")) == 2 * SHORT + GAP

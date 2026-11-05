@@ -580,7 +580,7 @@ def test_selection_haptics_follow_control_events():
         state = {"running": True}
         cues = []
 
-        def cue(self, kind, grip=None):
+        def cue(self, kind, grip=None, haptic="auto"):
             self.cues.append((kind, grip))
 
     haptics = FakeHaptics()
@@ -599,3 +599,42 @@ def test_selection_haptics_follow_control_events():
         for _ in range(n):
             control.advance(probs("rest"), e, 0.05)
     assert haptics.cues == []
+
+
+def test_rules_report_the_fired_rules_haptic():
+    from gestures import LIBRARY
+    poses = dict(POSES, cylinder=LIBRARY["cylinder"]["angles"])
+    c = Controller({**BASE, "mode": "rules"}, GESTURE_SET, poses)
+    c.set_rules({"relaxed": [{"trigger": "little_out", "how": "held", "value": 0.2, "action": "cylinder",
+                              "haptic": "LL"}],
+                 "holding": [{"trigger": "two_point", "how": "repeated", "value": 2, "action": "release"}]})
+    sign = lambda name: {name: 0.9, "rest": 0.1}
+    outs = [c.step(sign("little_out"), 0.3) for _ in range(4)]
+    assert [o["haptic"] for o in outs if o["event"] == "start"] == ["LL"]
+    for name, steps in (("rest", 4), ("two_point", 3), ("rest", 4), ("two_point", 3)):
+        outs = [c.step(sign(name), 0.0) for _ in range(steps)]
+    # Rules saved without a haptic play the event's own pattern
+    assert [o["haptic"] for o in outs if o["event"] == "release"] == ["auto"]
+
+
+def test_check_rules_refuses_an_unknown_haptic():
+    from control import check_rules
+    rule = {"trigger": "clench", "how": "held", "value": 0.5, "action": "fist"}
+    check_rules({"relaxed": [dict(rule, haptic="SS")], "holding": []}, POSES)
+    with pytest.raises(ValueError):
+        check_rules({"relaxed": [dict(rule, haptic="buzz")], "holding": []}, POSES)
+
+
+def test_saved_mappings_become_profiles_once(tmp_path, monkeypatch):
+    import json
+    import app
+    monkeypatch.setattr(app, "PRESET_FILE", tmp_path / "presets.json")
+    monkeypatch.setattr(app, "MAPPING_FILE", tmp_path / "mappings.json")
+    rules = {"relaxed": [{"trigger": "two_point", "how": "held", "value": 0.5, "action": "fist"}], "holding": []}
+    app.MAPPING_FILE.write_text(json.dumps({"mine": {"rules": rules, "model": "m.pt", "protocol": "F"}}))
+    profiles = app.saved_presets()
+    assert profiles["mine"]["rules"] == rules and profiles["mine"]["protocol"] == "F"
+    assert profiles["mine"]["params"]["mode"] == "rules" and "haptics" in profiles["mine"]["params"]
+    # Once there is a profile file the mappings file is left alone, so a deleted profile stays deleted
+    app.PRESET_FILE.write_text("{}")
+    assert app.saved_presets() == {}

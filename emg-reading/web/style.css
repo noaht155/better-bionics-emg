@@ -483,6 +483,8 @@ th { color: var(--muted); font: 400 11px var(--font-mono); letter-spacing: 0.12e
 }
 .row.filters input { position: absolute; opacity: 0; pointer-events: none; }
 .row.filters label:has(input:focus-visible) { outline: 1px solid var(--text); }
+/* Eight columns don't fit a phone or a narrow window: the table scrolls inside the page instead of widening it */
+.ctl-rules { display: block; max-width: 100%; overflow-x: auto; }
 .ctl-rules input { width: 100%; min-width: 6em; }
 .ctl-rules .drag { cursor: grab; color: var(--muted); user-select: none; padding-right: 0; font-size: 18px; }
 .ctl-rules tr.dragging { opacity: 0.35; }

@@ -43,6 +43,8 @@ import math
 
 import numpy as np
 
+from haptics import HAPTIC_CHOICES
+
 # Best on the replay of 9 protocol A sessions (2026-10-14): the LDA is often wrong on the rise into a grip, so a long
 # vote waits that out, and light grips (pinch, key) only reach about 0.15 effort, so the start level sits near zero.
 # Arm and wrist movement that isn't a grip (protocol D, 2026-10-15) lands far from every calibrated grip but still
@@ -124,6 +126,8 @@ def _check_list(rules, poses):
             raise ValueError(f"{r['how']}: a rule is held or repeated")
         if r["action"] not in RULE_ACTIONS and r["action"] not in poses:
             raise ValueError(f"{r['action']} is not a pose or action")
+        if r.get("haptic", "auto") not in HAPTIC_CHOICES:
+            raise ValueError(f"{r['haptic']} is not a haptic pattern")
         if r["how"] == "held" and not 0 <= r["value"] <= MAX_HELD_S:
             raise ValueError(f"held time is 0 to {MAX_HELD_S:g} s")
         if r["how"] == "repeated" and (r["value"] != int(r["value"]) or not 1 <= r["value"] <= MAX_REPEATS):
@@ -400,7 +404,7 @@ class Controller:
                     self.counts[t] = 0
             self.run_t[t], self.used[t] = run, used
 
-        event = None
+        event, haptic = None, "auto"
         # Two rules firing on the same step: the higher one in the list wins
         events.sort(key=lambda r: next(i for i, x in enumerate(rules) if x is r))
         for r in events:
@@ -416,6 +420,7 @@ class Controller:
                 self.closure, event = closure, "start"
             else:
                 continue
+            haptic = r.get("haptic", "auto")
             # Whatever is still on carried the pick or release, it has to go off before it counts again
             self.stuck = {t for t in on if on[t]}
             self.run_t, self.off_t, self.counts, self.used = {}, {}, {}, {}
@@ -435,7 +440,8 @@ class Controller:
                 self.closure += (effort - p["hold_level"]) * p["gain"] * dt
             self.closure = float(np.clip(self.closure, 0.0, 1.0))
         return {"state": self.state, "grip": self.grip, "closure": self.closure, "angles": self._spring(dt),
-                "event": event, "pulses": self.counts.get("clench", 0), "locked": self.locked, "counted": counted}
+                "event": event, "pulses": self.counts.get("clench", 0), "locked": self.locked, "counted": counted,
+                "haptic": haptic}
 
     def _choose(self, grip):
         self.state, self.grip, self.closure = "active", grip, 0.0

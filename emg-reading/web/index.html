@@ -413,18 +413,19 @@
       </div>
       <div class="ctl-settings">
         <h2>Profile</h2>
-        <p class="muted">Settings and the mapping together, saved per person. Loading one also loads its mapping.</p>
+        <p class="muted">Settings, mapping and haptics together. Picking a profile applies it straight away. Changes
+          apply live, Save keeps them in the profile.</p>
         <div class="row filters">
           <label class="check"><input type="radio" name="ctl-profile-filter" value="model" checked> Built on this model</label>
           <label class="check"><input type="radio" name="ctl-profile-filter" value="all"> All profiles</label>
         </div>
         <div class="row">
-          <label>Saved <select id="ctl-preset"></select></label>
-          <label>Save as <input id="ctl-preset-name" placeholder="name"></label>
+          <label>Profile <select id="ctl-preset"></select></label>
+          <label>New name <input id="ctl-preset-name" placeholder="name"></label>
         </div>
         <div class="controls">
-          <button id="ctl-load">Load</button>
           <button id="ctl-save">Save</button>
+          <button id="ctl-save-as">Save as new</button>
           <button id="ctl-delete">Delete</button>
         </div>
         <p id="ctl-preset-note" class="muted"></p>
@@ -433,8 +434,8 @@
         <div class="ctl-mapping">
           <span>Mapping: <b id="ctl-mapping-name"></b></span>
           <button id="ctl-mapping-open">Configure mapping</button>
-          <small>Which pattern picks which pose. Rules mode uses all of it; lock, blend and trigger only take which
-            class stands for which grip from the held rules.</small>
+          <small>Which pattern picks which pose, and what each one plays on the motors. Rules mode uses all of it; lock,
+            blend and trigger only take which class stands for which grip from the held rules.</small>
         </div>
         <h2>Haptics</h2>
         <div class="row filters">
@@ -459,20 +460,12 @@
       in between; held 0 s acts on the first step the trigger is on. The first list runs while relaxed (no grip),
       the second while holding a grip. A pose picks it (while holding it switches at the same closure), release goes
       back to relaxed, close and open move the hand while their trigger stays on. The higher rule wins when two fire
-      together. Hover a pose in the Then list to see it. Changes apply straight away.</p>
-    <h2>Saved mappings</h2>
-    <div class="row filters">
-      <label class="check"><input type="radio" name="ctl-mapping-filter" value="model" checked> Built on this model</label>
-      <label class="check"><input type="radio" name="ctl-mapping-filter" value="all"> All mappings</label>
-    </div>
-    <div class="row narrow">
-      <label>Saved <select id="ctl-mapping-select"></select></label>
-      <label>Save as <input id="ctl-mapping-save-name" placeholder="name"></label>
-    </div>
+      together. Hover a pose in the Then list to see it. Haptic is what the motors play when the rule fires, with
+      the Selections haptics on: default is the event's own pattern (the grip's code, a fading buzz for release, a
+      sweep for lock). Changes apply straight away.</p>
+    <p class="ctl-mapping">Editing profile <b id="ctl-mapping-profile"></b></p>
     <div class="controls">
-      <button id="ctl-mapping-load">Load</button>
-      <button id="ctl-mapping-save">Save</button>
-      <button id="ctl-mapping-delete">Delete</button>
+      <button id="ctl-mapping-save">Save to profile</button>
       <button id="ctl-mapping-default">Default for this model</button>
     </div>
     <p id="ctl-mapping-note" class="muted"></p>

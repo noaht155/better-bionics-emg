@@ -39,7 +39,7 @@ from gestures import (C_CLOSE_S, C_MOVE_S, C_ROUNDS, CATEGORIES, D_ACTIVITY_S, D
                       F_ROUNDS, F_SIGN_S, F_SIGNS, F_SIGNS_DEFAULT, GESTURE_SET, GESTURES, GRIP_CLOSE_S, LIBRARY, POSTURES, QUICK_REPS,
                       plan_for)
 from hand_angles import JOINTS, RELIABLE
-from haptics import HAPTIC_DEFAULTS
+from haptics import HAPTIC_CHOICES, HAPTIC_DEFAULTS
 from processing import spectrum
 from recorder import Recorder
 from session import DATA_DIR
@@ -262,6 +262,8 @@ class Rule(BaseModel):
     how: Literal["held", "repeated"]
     value: float = Field(ge=0, le=10)
     action: str = Field(max_length=60)
+    # Rules saved before 2026-11-05 play the event's own pattern
+    haptic: Literal[HAPTIC_CHOICES] = "auto"
 
 
 class RuleLists(BaseModel):
@@ -271,11 +273,13 @@ class RuleLists(BaseModel):
 
 
 class ControlPreset(BaseModel):
-    """A profile: settings, the mapping in use when it was saved and the model it was built on."""
+    """A profile: settings with the haptics, the mapping, the protocol its triggers come from and the model it was
+    built on."""
     name: str = Field(pattern=r"^[A-Za-z0-9 _-]{1,40}$")
     params: ControlParams
     rules: RuleLists | None = None
     model: str | None = None
+    protocol: Literal["grips", "F"] | None = None
 
 
 class ControlMapping(BaseModel):
@@ -438,7 +442,14 @@ def network_list():
 
 
 def saved_presets():
-    """{name: {"params", "rules", "model"}}. Presets saved before profiles were only the params."""
+    """{name: {"params", "rules", "model", "protocol"}}. Presets saved before profiles were only the params. Mappings
+    were saved on their own until 2026-11-05: without a profile file yet, they become profiles with the default
+    settings, once."""
+    if not PRESET_FILE.exists() and MAPPING_FILE.exists():
+        params = ControlParams(**dict(CONTROL_DEFAULTS, **HAPTIC_DEFAULTS, mode="rules")).model_dump()
+        PRESET_FILE.write_text(json.dumps({k: {"params": params, "rules": v["rules"], "model": v.get("model"),
+                                               "protocol": v.get("protocol")} for k, v in saved_mappings().items()},
+                                          indent=2) + "\n")
     presets = json.loads(PRESET_FILE.read_text()) if PRESET_FILE.exists() else {}
     presets = {k: v if "params" in v else {"params": v, "rules": None, "model": None} for k, v in presets.items()}
     return {k: dict(v, rules=v["rules"] and split_rules(v["rules"])) for k, v in presets.items()}
@@ -915,7 +926,13 @@ def make_app(recorder, band, camera, tools, lan=True, serving=False):
         if preset.name == "default":
             refuse("default is fixed, pick another name")
         presets = saved_presets()
+        if preset.rules is not None:
+            try:
+                check_rules(preset.rules.model_dump(), POSES)
+            except ValueError as e:
+                refuse(e)
         presets[preset.name] = {"params": preset.params.model_dump(), "model": preset.model,
+                                "protocol": preset.protocol,
                                 "rules": None if preset.rules is None else preset.rules.model_dump()}
         PRESET_FILE.parent.mkdir(parents=True, exist_ok=True)
         PRESET_FILE.write_text(json.dumps(presets, indent=2) + "\n")

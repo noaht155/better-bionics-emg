@@ -1,7 +1,7 @@
 // Control tab: the gesture model with the control layer (control.py) on its output. The server steps the
 // controller inside the model's loop and sends its state with the rest; the page draws it and posts setting changes.
 // Settings are split in basic and advanced (only the ones the mode uses), the mapping (rules mode's rule list) has
-// its own page, and profiles save both.
+// its own page. A profile holds both with the haptics; picking one applies it, edits apply live until saved.
 
 const ALL_MODES = ["lock", "blend", "trigger", "rules"];
 const CONTROL_PARAMS = [
@@ -46,11 +46,14 @@ const HAPTICS_HELP = {
   effort: "each motor follows the effort of the channels under it, off at rest",
   selections: "motors only buzz on the control layer's events: grip picked (fist one long, pinch one short, tripod two, key three, point two long), release a fading buzz, lock and unlock a sweep round the band, each counted clench or flick a tick on the first motor",
 };
+// A rule's own pattern on the motors (haptics.HAPTIC_CHOICES)
+const HAPTIC_OPTIONS = { auto: "default", none: "none", S: "1 short", SS: "2 short", SSS: "3 short", L: "1 long",
+  LL: "2 long", LS: "long, short", fade: "fading buzz", sweep: "sweep round the band" };
 const BASIC_PARAMS = CONTROL_PARAMS.filter((d) => d.basic);
 const ADVANCED_PARAMS = CONTROL_PARAMS.filter((d) => !d.basic);
 const TRACE_STEPS = 200;
 const ctlView = { yaw: 25, pitch: -20 };
-const ctl = { params: null, rules: null, mappingName: "", models: [], presets: {}, mappings: {}, trace: [], lastStep: null, starts: 0, releases: 0 };
+const ctl = { params: null, rules: null, mappingName: "", profile: null, changed: false, models: [], presets: {}, trace: [], lastStep: null, starts: 0, releases: 0 };
 
 function showControlParams() {
   showParams(BASIC_PARAMS, "ctl-", ctl.params);
@@ -73,8 +76,13 @@ function showParamsForMode() {
 }
 document.querySelectorAll("input[name=ctl-haptics-mode]").forEach((r) => r.addEventListener("change", () => {
   ctl.params.haptics = r.value;
-  sendControlParams();
+  editedParams();
 }));
+
+function editedParams() {
+  markChanged();
+  sendControlParams();
+}
 
 function sendControlParams() {
   showParamsForMode();
@@ -87,17 +95,19 @@ function selectedModel() {
 
 const filterValue = (name) => document.querySelector(`input[name=${name}]:checked`).value;
 
-// Saved profiles or mappings, all of them or only those built on the chosen model
-function fillSaved(select, saved, filter, fixed) {
+// Saved profiles, all of them or only those built on the chosen model. Before one is picked the settings in use
+// are nobody's
+function fillProfiles() {
   const model = $("ctl-model").value;
-  const names = Object.keys(saved).filter((n) => n === fixed || filterValue(filter) === "all" || saved[n].model === model);
-  const current = select.value;
-  select.innerHTML = names.map((n) => `<option>${n}</option>`).join("") || "<option value=''>none for this model</option>";
-  if (names.includes(current)) select.value = current;
+  const names = Object.keys(ctl.presets).filter((n) => n === "default" || n === ctl.profile
+    || filterValue("ctl-profile-filter") === "all" || ctl.presets[n].model === model);
+  $("ctl-preset").innerHTML = (ctl.profile ? "" : "<option value=''>settings in use, not saved</option>")
+    + names.map((n) => `<option>${n}</option>`).join("");
+  $("ctl-preset").value = ctl.profile || "";
 }
 
 async function loadControlLists() {
-  const [lda, networks, presets, mappings] = await Promise.all(["/api/models", "/api/networks", "/api/control/presets", "/api/control/mappings"]
+  const [lda, networks, presets] = await Promise.all(["/api/models", "/api/networks", "/api/control/presets"]
     .map((u) => fetch(u).then((x) => x.json())));
   // Calibrated networks take their effort levels from the session they were calibrated on. Sign networks also run
   // uncalibrated, with the levels of their newest training session
@@ -106,9 +116,7 @@ async function loadControlLists() {
   const running = state?.tools?.predictor?.running && state.tools.predictor.control && state.tools.predictor.model;
   if (running && ctl.models.some((m) => m.name === running)) $("ctl-model").value = running;
   ctl.presets = presets;
-  ctl.mappings = mappings;
-  fillSaved($("ctl-preset"), presets, "ctl-profile-filter", "default");
-  fillSaved($("ctl-mapping-select"), mappings, "ctl-mapping-filter");
+  fillProfiles();
   if (ctl.params) showParamsForMode();
   if ($("ctl-model").value !== protocolModel) {
     protocolModel = $("ctl-model").value;
@@ -137,8 +145,7 @@ async function followModelDefault() {
 }
 
 $("ctl-model").addEventListener("change", loadControlLists);
-document.querySelectorAll("input[name=ctl-profile-filter]").forEach((r) => r.addEventListener("change", () => fillSaved($("ctl-preset"), ctl.presets, "ctl-profile-filter", "default")));
-document.querySelectorAll("input[name=ctl-mapping-filter]").forEach((r) => r.addEventListener("change", () => fillSaved($("ctl-mapping-select"), ctl.mappings, "ctl-mapping-filter")));
+document.querySelectorAll("input[name=ctl-profile-filter]").forEach((r) => r.addEventListener("change", fillProfiles));
 
 $("ctl-start").addEventListener("click", async () => {
   $("ctl-haptics").textContent = "";
@@ -232,36 +239,81 @@ function overwriteOk(button, saved, name, note) {
 
 function disarm(button) {
   delete button.dataset.armed;
-  button.textContent = "Save";
+  button.textContent = "Save as new";
   button.classList.remove("danger");
 }
 
-$("ctl-preset-name").addEventListener("input", () => disarm($("ctl-save")));
-$("ctl-mapping-save-name").addEventListener("input", () => disarm($("ctl-mapping-save")));
+$("ctl-preset-name").addEventListener("input", () => disarm($("ctl-save-as")));
 
 // Profiles
 
-$("ctl-load").addEventListener("click", async () => {
-  const name = $("ctl-preset").value;
-  const preset = ctl.presets?.[name];
+// Picking applies the whole profile: settings, haptics, protocol and mapping (default has no mapping of its own and
+// takes the model's default one)
+async function applyProfile(name) {
+  const preset = ctl.presets[name];
   if (!preset || !ctl.params) return;
   ctl.params = { ...ctl.params, ...preset.params };
   showControlParams();
   sendControlParams();
-  if (preset.rules) await setRules(preset.rules, `from profile ${name}`);
-  $("ctl-preset-note").textContent = `loaded ${name}${preset.rules ? " and its mapping" : ""}`;
-  $("ctl-preset-name").value = name;
-  disarm($("ctl-save"));
-});
+  if (preset.protocol) $("ctl-protocol").value = preset.protocol;
+  const rules = preset.rules || await post("/api/control/default_rules", selectedModel()?.classes || config.gesture_set);
+  await setRules(rules, name);
+  ctl.profile = name;
+  ctl.changed = false;
+  fillProfiles();
+  showProfileState(`applied ${name}`);
+}
 
-$("ctl-save").addEventListener("click", async () => {
-  const name = $("ctl-preset-name").value.trim();
-  if (!overwriteOk($("ctl-save"), ctl.presets, name, "ctl-preset-note")) return;
+$("ctl-preset").addEventListener("change", () => applyProfile($("ctl-preset").value));
+
+function markChanged() {
+  ctl.changed = true;
+  showProfileState();
+}
+
+function showProfileState(note) {
+  $("ctl-preset-note").textContent = note || (ctl.changed && ctl.profile ? `${ctl.profile} changed, Save keeps the changes` : "");
+  $("ctl-mapping-profile").textContent = ctl.profile ? `${ctl.profile}${ctl.changed ? " (changed)" : ""}`
+    : "none, save it as a new profile on the Control page";
+  showMappingName();
+}
+
+async function saveProfile(name) {
+  await post("/api/control/presets", { name, params: ctl.params, rules: ctl.rules, model: $("ctl-model").value || null,
+    protocol: $("ctl-protocol").value });
+  ctl.profile = name;
+  ctl.changed = false;
+  ctl.mappingName = name;
+  await loadControlLists();
+  showProfileState(`saved ${name}`);
+}
+
+// Save writes the changes into the profile in use; default is fixed
+async function saveCurrent(noteId) {
+  if (!ctl.profile || ctl.profile === "default") {
+    $(noteId).textContent = "default is fixed: type a new name on the Control page and press Save as new";
+    return;
+  }
   try {
-    await post("/api/control/presets", { name, params: ctl.params, rules: ctl.rules, model: $("ctl-model").value || null });
-    $("ctl-preset-note").textContent = `saved ${name} with the mapping in use`;
-    await loadControlLists();
-    $("ctl-preset").value = name;
+    await saveProfile(ctl.profile);
+    $(noteId).textContent = `saved ${ctl.profile}`;
+  } catch (err) {
+    $(noteId).textContent = err.message;
+  }
+}
+
+$("ctl-save").addEventListener("click", () => saveCurrent("ctl-preset-note"));
+
+$("ctl-save-as").addEventListener("click", async () => {
+  const name = $("ctl-preset-name").value.trim();
+  if (!name) {
+    $("ctl-preset-note").textContent = "type a name for the new profile first";
+    return;
+  }
+  if (!overwriteOk($("ctl-save-as"), ctl.presets, name, "ctl-preset-note")) return;
+  try {
+    await saveProfile(name);
+    $("ctl-preset-name").value = "";
   } catch (err) {
     $("ctl-preset-note").textContent = err.message;
   }
@@ -269,9 +321,12 @@ $("ctl-save").addEventListener("click", async () => {
 
 $("ctl-delete").addEventListener("click", async () => {
   const name = $("ctl-preset").value;
+  if (!name || name === "default") return;
   const res = await fetch(`/api/control/presets/${encodeURIComponent(name)}`, { method: "DELETE" });
-  $("ctl-preset-note").textContent = res.ok ? `deleted ${name}` : (await res.json()).detail;
-  loadControlLists();
+  const detail = res.ok ? null : (await res.json()).detail;
+  if (res.ok && ctl.profile === name) ctl.profile = null;
+  await loadControlLists();
+  showProfileState(detail || `deleted ${name}, its settings stay in use until another profile is picked`);
 });
 
 // Mapping page
@@ -310,14 +365,14 @@ async function sendRules() {
 }
 
 function changedRules() {
-  if (ctl.mappingName && !ctl.mappingName.endsWith("(changed)")) ctl.mappingName += " (changed)";
-  showMappingName();
+  markChanged();
   sendRules();
 }
 
 function showMappingName() {
   const n = ctl.rules ? ctl.rules.relaxed.length + ctl.rules.holding.length : 0;
-  $("ctl-mapping-name").textContent = `${ctl.mappingName || "unsaved"}, ${n} rule${n === 1 ? "" : "s"}`;
+  const from = ctl.profile ? `${ctl.profile}${ctl.changed ? " (changed)" : ""}` : ctl.mappingName || "unsaved";
+  $("ctl-mapping-name").textContent = `${from}, ${n} rule${n === 1 ? "" : "s"}`;
 }
 
 const nice = (s) => s.replaceAll("_", " ");
@@ -418,13 +473,14 @@ function drawRules() {
   showMappingName();
   if ($("ctl-mapping-page").hidden) return;
   for (const table of document.querySelectorAll(".ctl-rules")) {
-    table.innerHTML = "<tr><th></th><th>If</th><th>How</th><th>Seconds or times</th><th>Then</th><th></th><th></th></tr>"
+    table.innerHTML = "<tr><th></th><th>If</th><th>How</th><th>Seconds or times</th><th>Then</th><th>Haptic</th><th></th><th></th></tr>"
       + ctl.rules[table.dataset.section].map((r, i) => `<tr data-i="${i}">
         <td class="drag" draggable="true" title="drag to move">&#8801;</td>
         <td><select data-k="trigger">${triggerOptions(r.trigger)}</select></td>
         <td><select data-k="how"><option ${r.how === "held" ? "selected" : ""}>held</option><option ${r.how === "repeated" ? "selected" : ""}>repeated</option></select></td>
         <td><input data-k="value" type="number" min="${r.how === "held" ? 0 : 1}" max="${r.how === "held" ? 5 : 6}" step="${r.how === "held" ? 0.05 : 1}" value="${r.value}"></td>
         <td><button class="pose-pick">${actionLabel(r.action)} &#9662;</button></td>
+        <td><select data-k="haptic">${Object.entries(HAPTIC_OPTIONS).map(([k, v]) => `<option value="${k}" ${k === (r.haptic || "auto") ? "selected" : ""}>${v}</option>`).join("")}</select></td>
         <td class="order"><button data-move="-1" title="up" ${table.dataset.section === "relaxed" && i === 0 ? "disabled" : ""}>&#8593;</button><button data-move="1" title="down" ${table.dataset.section === "holding" && i === ctl.rules.holding.length - 1 ? "disabled" : ""}>&#8595;</button></td>
         <td><button data-remove="${i}">Remove</button></td></tr>`).join("");
     table.querySelectorAll("tr[data-i]").forEach((row) => rowRule.set(row, ctl.rules[table.dataset.section][Number(row.dataset.i)]));
@@ -541,48 +597,20 @@ for (const button of document.querySelectorAll(".ctl-rule-add")) {
     const protocol = $("ctl-protocol").value;
     const trigger = protocol === "grips" ? "clench" : protocolClasses(protocol)[0];
     const holding = button.dataset.section === "holding";
-    ctl.rules[button.dataset.section].push({ trigger, how: holding ? "repeated" : "held", value: holding ? 2 : 0.5, action: holding ? "release" : "fist" });
+    ctl.rules[button.dataset.section].push({ trigger, how: holding ? "repeated" : "held", value: holding ? 2 : 0.5, action: holding ? "release" : "fist", haptic: "auto" });
     drawRules();
     changedRules();
   });
 }
 
-$("ctl-mapping-load").addEventListener("click", async () => {
-  const name = $("ctl-mapping-select").value;
-  const m = ctl.mappings[name];
-  if (!m) return;
-  if (m.protocol) $("ctl-protocol").value = m.protocol;
-  if (!(await setRules(m.rules, name))) return;
-  $("ctl-mapping-note").textContent = `loaded ${name}`;
-  $("ctl-mapping-save-name").value = name;
-  disarm($("ctl-mapping-save"));
-});
-
-$("ctl-mapping-save").addEventListener("click", async () => {
-  const name = $("ctl-mapping-save-name").value.trim();
-  if (!overwriteOk($("ctl-mapping-save"), ctl.mappings, name, "ctl-mapping-note")) return;
-  try {
-    await post("/api/control/mappings", { name, rules: ctl.rules, model: $("ctl-model").value || null, protocol: $("ctl-protocol").value });
-    ctl.mappingName = name;
-    showMappingName();
-    $("ctl-mapping-note").textContent = `saved ${name}`;
-    await loadControlLists();
-    $("ctl-mapping-select").value = name;
-  } catch (err) {
-    $("ctl-mapping-note").textContent = err.message;
-  }
-});
-
-$("ctl-mapping-delete").addEventListener("click", async () => {
-  const name = $("ctl-mapping-select").value;
-  const res = await fetch(`/api/control/mappings/${encodeURIComponent(name)}`, { method: "DELETE" });
-  $("ctl-mapping-note").textContent = res.ok ? `deleted ${name}` : (await res.json()).detail;
-  loadControlLists();
-});
+$("ctl-mapping-save").addEventListener("click", () => saveCurrent("ctl-mapping-note"));
 
 $("ctl-mapping-default").addEventListener("click", async () => {
   const rules = await post("/api/control/default_rules", selectedModel()?.classes || config.gesture_set);
-  if (await setRules(rules, "default")) $("ctl-mapping-note").textContent = "default mapping for this model";
+  if (await setRules(rules, "default")) {
+    markChanged();
+    $("ctl-mapping-note").textContent = "default mapping for this model";
+  }
 });
 
 // Drawing
@@ -633,14 +661,15 @@ function drawControl(c, p) {
   if (!c) return;
   if (!ctl.params) {
     ctl.params = { ...c.params };
-    buildParams($("ctl-basic"), BASIC_PARAMS, "ctl-", () => ctl.params, sendControlParams);
-    buildParams($("ctl-params"), ADVANCED_PARAMS, "ctl-", () => ctl.params, sendControlParams);
-    buildParams($("ctl-haptic-params"), HAPTIC_PARAMS, "ctl-", () => ctl.params, sendControlParams);
+    buildParams($("ctl-basic"), BASIC_PARAMS, "ctl-", () => ctl.params, editedParams);
+    buildParams($("ctl-params"), ADVANCED_PARAMS, "ctl-", () => ctl.params, editedParams);
+    buildParams($("ctl-haptic-params"), HAPTIC_PARAMS, "ctl-", () => ctl.params, editedParams);
     showControlParams();
   }
   if (!ctl.rules && c.rules) {
     ctl.rules = copyRules(c.rules);
     drawRules();
+    showProfileState();
     followModelDefault();
   }
   const running = !!(p.running && p.control);

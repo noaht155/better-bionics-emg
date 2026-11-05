@@ -468,12 +468,12 @@ class Haptics(Tool):
     def stop(self):
         self._stop.set()
 
-    def cue(self, kind, grip=None):
-        """Plays haptics.pattern(kind) from the next update, in selections mode. A newer event cuts the one playing,
-        except that a tick never cuts a pick or release."""
+    def cue(self, kind, grip=None, haptic="auto"):
+        """Plays haptics.pattern(kind) from the next update, in selections mode, or the rule's own pattern (haptic). A
+        newer event cuts the one playing, except that a tick never cuts a pick or release."""
         if self._cue and self._cue[2] != "tick" and kind == "tick" and self._pattern_step(self._cue) is not None:
             return
-        self._cue = (pattern(kind, int(self._settings["haptic_strength"]), grip), time.perf_counter(), kind)
+        self._cue = (pattern(kind, int(self._settings["haptic_strength"]), grip, haptic), time.perf_counter(), kind)
 
     @staticmethod
     def _pattern_step(cue):
@@ -737,7 +737,7 @@ class Control:
         if self.params["haptics"] == "selections" and self.haptics is not None and self.haptics.state["running"]:
             # The open hand picked in lock mode leaves the hand where it is, nothing to feel
             if out["event"] in ("start", "release", "lock", "unlock"):
-                self.haptics.cue(out["event"], out["grip"])
+                self.haptics.cue(out["event"], out["grip"], out.get("haptic", "auto"))
             elif out.get("counted"):
                 self.haptics.cue("tick")
         s = self.state
