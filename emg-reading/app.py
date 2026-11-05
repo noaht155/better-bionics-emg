@@ -36,7 +36,7 @@ from camera import Camera
 from control import DEFAULTS as CONTROL_DEFAULTS, check_rules, rules_for, split_rules
 from esp32_link import WIFI_IP
 from gestures import (C_CLOSE_S, C_MOVE_S, C_ROUNDS, CATEGORIES, D_ACTIVITY_S, D_ROUNDS, E_ROUNDS, E_SIGN_S,
-                      F_ROUNDS, F_SIGN_S, F_SIGNS, GESTURE_SET, GESTURES, GRIP_CLOSE_S, LIBRARY, POSTURES, QUICK_REPS,
+                      F_ROUNDS, F_SIGN_S, F_SIGNS, F_SIGNS_DEFAULT, GESTURE_SET, GESTURES, GRIP_CLOSE_S, LIBRARY, POSTURES, QUICK_REPS,
                       plan_for)
 from hand_angles import JOINTS, RELIABLE
 from haptics import HAPTIC_DEFAULTS
@@ -83,6 +83,7 @@ class PlanSettings(BaseModel):
     e_sign_s: float = Field(E_SIGN_S, ge=3, le=15)
     f_rounds: int = Field(F_ROUNDS, ge=1, le=20)
     f_sign_s: float = Field(F_SIGN_S, ge=3, le=15)
+    f_signs: list[Literal[tuple(F_SIGNS)]] = Field(default_factory=lambda: list(F_SIGNS_DEFAULT), min_length=1)
     # Quick calibration after putting the band on: protocol A without the single fingers, or F, in every ticked
     # posture (calibrating at the table only lost 7 to 16 points with the arm forward, devlog 2026-10-22)
     quick: bool = False
@@ -527,7 +528,7 @@ def make_app(recorder, band, camera, tools, lan=True, serving=False):
         return {"joints": JOINTS, "reliable": RELIABLE, "channels": band.channels, "rate": band.rate,
                 "source": band.source, "calibration": calibration,
                 "gestures": {name: {"text": text, "angles": angles} for name, (text, angles) in GESTURES.items()},
-                "gesture_set": GESTURE_SET, "sign_sets": {"F": F_SIGNS}, "library": LIBRARY, "categories": CATEGORIES,
+                "gesture_set": GESTURE_SET, "sign_sets": {"F": F_SIGNS}, "f_signs_default": F_SIGNS_DEFAULT, "library": LIBRARY, "categories": CATEGORIES,
                 "cue_timing": {"grip_close_s": GRIP_CLOSE_S, "c_close_s": C_CLOSE_S},
                 "postures": POSTURES, "camera": camera is not None, "hum_blocks": hum_test.BLOCKS,
                 "tracked_hand": camera.hand if camera else None, "esp32_wifi_ip": WIFI_IP, "platform": sys.platform,

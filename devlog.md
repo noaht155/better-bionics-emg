@@ -2138,6 +2138,15 @@ Ctrl+C, still printing the cancel tracebacks. Not tested with the real armband.
   Same rise on 2026-11-04 (32 / 34 to 163 / 247 on ch 0 / 1 in a minute). Not the haptics link starting, it was
   connected from the start. Cause not found, parked for robustness training on the networks.
 
+## 2026-11-05: open hand out of protocol F
+
+- `open-while-counting` merged into `main` untested on the arm: Noah had run it for over a week and has dropped open
+  from his mapping, so the flick fix matters less.
+- Protocol F has a Signs box on the start page, open unticked by default (`F_SIGNS_DEFAULT`, saved as `f_signs` in
+  the session settings; older sessions without it had all four). Training already keeps only the signs every chosen
+  session has, so mixing old and new F sessions trains without open. A network with open calibrated on a new session
+  keeps an open output that never gets calibration windows.
+
 ## Open
 
 Now: control on the signs
@@ -2147,11 +2156,10 @@ Now: control on the signs
 - Hum on ch 3: open the hub and check the wire on its side, then recheck hum on all channels.
 - Mapping page: a held pose rule at 0 s silently cancels repeated rules on the same trigger, `check_rules` lets it
   through (open and close no longer do since `FLICK_MAX_S`).
-- Try `open-while-counting` on the arm (0 s open, double two_point release), merge into `main` if it works.
 - Sign network (in `ml/` with calibration since 2026-10-19; calibrated score flat from 1 training session on, see the
   2026-10-21 learning curve): try it live against the sign LDA, and trigger mode with
-  it on the Control tab (sign map, clench level against the sign session's levels); decide whether open stays in the
-  set (seven F sessions 2026-10-20: calibrated mean 95.3 % without it, 91.5 % with, worst 91.9 / 85.6 %). Epochs: 20 since the 2026-10-19 sweep, recheck with
+  it on the Control tab (sign map, clench level against the sign session's levels). Open is out of new F sessions
+  (2026-11-05); a network for control should be trained or calibrated on sessions without it. Epochs: 20 since the 2026-10-19 sweep, recheck with
   more sessions. Later: one label path for grips and signs (both are held positions), without changing grip
   training results.
 - Trigger mode on the arm: tune clench level and timings live, count wrong picks (short clench read as two, a grab

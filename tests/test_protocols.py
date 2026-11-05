@@ -237,6 +237,19 @@ def test_f_plan_holds_the_sign_set_once_per_round_in_every_posture():
     assert plan_for(settings, seed=0) == protocol_f_plan(["table"], 3, 7, 2, 0)
 
 
+def test_f_plan_leaves_out_unticked_signs():
+    import app
+    settings = {"protocol": "F", "postures": ["table"], "reps": 3, "hold_s": 4, "rest_s": 2, "f_rounds": 2,
+                "f_sign_s": 5, "f_signs": ["two_point", "little_out"]}
+    signs = {c["label"] for c in plan_for(settings, seed=0) if c["kind"] == "custom"}
+    assert signs == {"two_point", "little_out"}
+    # New sessions leave open out unless it's ticked
+    s = app.PlanSettings(postures=["table"], protocol="F", reps=3, hold_s=4, rest_s=2)
+    assert "open" not in s.f_signs and set(s.f_signs) < set(F_SIGNS)
+    with pytest.raises(ValueError):
+        app.PlanSettings(postures=["table"], protocol="F", reps=3, hold_s=4, rest_s=2, f_signs=[])
+
+
 def test_f_session_stays_out_of_grip_training(tmp_path):
     """The sign set's open hand is a sign here, not the protocol A open grip, and the session has no grip holds."""
     folder = tmp_path / "2026-10-16_130000_test"

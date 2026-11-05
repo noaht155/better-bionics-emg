@@ -594,14 +594,18 @@ F_SIGN_S = 6.0
 # Protocol F, the sign set chosen from the first screening (2026-10-16_140854: best 4-sign set over all
 # combinations, diagnostics/signs/vet_sets.py), recorded for training like the grips of protocol A
 F_SIGNS = ["open", "two_point", "little_out", "move_thumb_abd"]
+# Open hand is left out of new sessions by default since 2026-11-05: control no longer maps it (Noah). Training only
+# keeps the signs every chosen session has, so mixing in older sessions drops open there too
+F_SIGNS_DEFAULT = [s for s in F_SIGNS if s != "open"]
 
 
-def protocol_f_plan(postures=("table", "forward"), rounds=F_ROUNDS, sign_s=F_SIGN_S, rest_s=3.0, seed=None):
-    """Training data for the chosen sign set: in every posture each F_SIGNS sign and the two held wrist bends of
+def protocol_f_plan(postures=("table", "forward"), rounds=F_ROUNDS, sign_s=F_SIGN_S, rest_s=3.0, seed=None,
+                    signs=F_SIGNS):
+    """Training data for the chosen sign set: in every posture each of the signs and the two held wrist bends of
     protocol E once per round, shuffled, with rest in between. Same cue kinds as protocol E (signs "custom", wrist
     bends "nogrip"), so the sessions can be pooled with E sessions and stay out of grip training."""
     rng = random.Random(seed)
-    items = [("custom", s) for s in F_SIGNS] + [("nogrip", w) for w in E_NOT_SIGNS]
+    items = [("custom", s) for s in signs] + [("nogrip", w) for w in E_NOT_SIGNS]
     cues = []
     for posture in postures:
         cues += _setup(rest_s, posture)
@@ -621,7 +625,8 @@ def plan_for(settings, seed=None):
     """The cue list for a session's settings, any protocol."""
     if settings.get("protocol", "A") == "F":
         return protocol_f_plan(settings["postures"], settings.get("f_rounds", F_ROUNDS),
-                               settings.get("f_sign_s", F_SIGN_S), settings["rest_s"], seed)
+                               settings.get("f_sign_s", F_SIGN_S), settings["rest_s"], seed,
+                               settings.get("f_signs", F_SIGNS))
     if settings.get("protocol", "A") == "E":
         return protocol_e_plan(settings["postures"], settings.get("e_rounds", E_ROUNDS),
                                settings.get("e_sign_s", E_SIGN_S), settings["rest_s"], seed)
