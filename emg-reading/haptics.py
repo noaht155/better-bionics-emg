@@ -39,9 +39,15 @@ GRIP_CODES = {"fist": "L", "pinch": "S", "tripod": "SS", "key": "SSS", "point": 
 # Any other pose a rule can pick
 OTHER_CODE = "LS"
 RELEASE_STEPS = 12
-# A mapping rule's own pattern: "auto" plays the event's pattern above, a code of short and long pulses on every
-# motor, "fade" the release pattern, "sweep" the lock pattern, "none" nothing
-HAPTIC_CHOICES = ("auto", "none", "S", "SS", "SSS", "L", "LL", "LS", "fade", "sweep")
+STEP_MS = 1000 // UPDATE_HZ
+# A mapping rule's own haptic, as settings: buzz (pulses of [on ms, off ms] on every motor), fade (ms, end as % of
+# the start), sweep (one motor at a time, round or back, step_ms per motor, rounds), none, or default (the event's
+# own pattern, for lock rules: one rule locks and unlocks, the sweep runs back for unlock). strength is % of the
+# profile's strength. Times play in STEP_MS steps
+HAPTIC_PATTERNS = ("buzz", "fade", "sweep", "none", "default")
+SHORT_MS, LONG_MS, GAP_MS = SHORT * STEP_MS, LONG * STEP_MS, GAP * STEP_MS
+FADE = {"pattern": "fade", "ms": RELEASE_STEPS * STEP_MS, "end": 40, "strength": 100}
+SWEEP = {"pattern": "sweep", "direction": "round", "step_ms": STEP_MS, "rounds": 1, "strength": 100}
 # A counted clench or flick only ticks the first motor, so it can't be taken for a pick
 TICK_OUTPUT = 0
 
@@ -56,34 +62,94 @@ def scaled_duty(level_, floor):
     return int(round(floor + (100 - floor) * level_)) if level_ > 0 else 0
 
 
+def buzz(code):
+    """A buzz from a grip code: S a short pulse, L a long one."""
+    return {"pattern": "buzz", "pulses": [[LONG_MS if c == "L" else SHORT_MS, GAP_MS] for c in code], "strength": 100}
+
+
 def rule_haptic(action):
     """The pattern a mapping rule's action played before rules had their own: the grip's code for a pose, the fade
-    for release, nothing for open and close (they move the hand, no event). Lock and unlock stay auto: one rule
-    plays the sweep one way to lock and the other way to unlock."""
+    for release, nothing for open and close (they move the hand, no event), default for lock and unlock."""
     if action in ("lock", "unlock"):
-        return "auto"
+        return {"pattern": "default"}
     if action == "release":
-        return "fade"
+        return dict(FADE)
     if action in ("open", "close"):
-        return "none"
-    return GRIP_CODES.get(action, OTHER_CODE)
+        return {"pattern": "none"}
+    return buzz(GRIP_CODES.get(action, OTHER_CODE))
 
 
-def pattern(kind, strength=100, grip=None, haptic="auto"):
+def _within(h, key, lo, hi, what):
+    v = h.get(key)
+    if not isinstance(v, (int, float)) or not lo <= v <= hi:
+        raise ValueError(f"{what} is {lo:g} to {hi:g}")
+
+
+def haptic_settings(haptic, action=None):
+    """A rule's haptic as checked settings. Rules saved before 2026-11-06 have none ("auto": what the action played
+    before, rule_haptic) or a name: a grip code like "SS", "fade", "sweep" or "none". Raises ValueError."""
+    if haptic in (None, "auto"):
+        return rule_haptic(action) if action else {"pattern": "default"}
+    if isinstance(haptic, str):
+        if haptic in ("none", "fade", "sweep"):
+            return {"none": {"pattern": "none"}, "fade": dict(FADE), "sweep": dict(SWEEP)}[haptic]
+        if haptic and set(haptic) <= {"S", "L"} and len(haptic) <= 8:
+            return buzz(haptic)
+        raise ValueError(f"{haptic} is not a haptic pattern")
+    h = dict(haptic)
+    kind = h.get("pattern")
+    if kind not in HAPTIC_PATTERNS:
+        raise ValueError(f"{kind} is not a haptic pattern")
+    if kind in ("buzz", "fade", "sweep"):
+        _within(h, "strength", 10, 100, "haptic strength")
+    if kind == "buzz":
+        pulses = h.get("pulses")
+        if not isinstance(pulses, list) or not 1 <= len(pulses) <= 8:
+            raise ValueError("a buzz is 1 to 8 pulses")
+        for p in pulses:
+            if not (isinstance(p, list) and len(p) == 2 and STEP_MS <= p[0] <= 2000 and 0 <= p[1] <= 2000):
+                raise ValueError(f"a pulse is on {STEP_MS} to 2000 ms, off 0 to 2000 ms")
+    elif kind == "fade":
+        _within(h, "ms", 2 * STEP_MS, 3000, "fade ms")
+        _within(h, "end", 0, 100, "fade end %")
+    elif kind == "sweep":
+        if h.get("direction") not in ("round", "back"):
+            raise ValueError("a sweep goes round or back")
+        _within(h, "step_ms", STEP_MS, 500, "sweep ms per motor")
+        _within(h, "rounds", 1, 5, "sweep rounds")
+    return h
+
+
+def _steps(ms):
+    return max(1, int(round(ms / STEP_MS)))
+
+
+def pattern(kind, strength=100, grip=None, haptic=None):
     """Duties per step (one list of len(OUTPUTS) per 1 / UPDATE_HZ) for a control event. kind: "start" (grip picked,
     grip says which), "release", "lock", "unlock" or "tick" (a clench or flick counted towards a pattern). haptic: the
-    rule's own pattern from HAPTIC_CHOICES, in place of the event's."""
+    rule's own settings (haptic_settings) in place of the event's pattern; None or default keeps the event's."""
     n = len(OUTPUTS)
-    all_on, off = [strength] * n, [0] * n
-    if haptic == "none":
+    h = haptic_settings(haptic) if haptic is not None else {"pattern": "default"}
+    if h["pattern"] == "none":
         return []
-    if haptic in ("fade", "sweep"):
-        kind = "release" if haptic == "fade" else "lock"
-    elif haptic != "auto":
-        kind, grip = "code", haptic
-    if kind in ("start", "code"):
+    if h["pattern"] != "default":
+        s = int(round(strength * h["strength"] / 100))
+        if h["pattern"] == "buzz":
+            steps = []
+            for on, off in h["pulses"]:
+                steps += [[s] * n] * _steps(on) + [[0] * n] * (_steps(off) if off else 0)
+            while steps and not any(steps[-1]):
+                steps.pop()
+            return steps
+        if h["pattern"] == "fade":
+            k = _steps(h["ms"])
+            return [[int(round(s * (1 - (1 - h["end"] / 100) * i / (k - 1))))] * n for i in range(k)]
+        order = list(range(n)) if h["direction"] == "round" else list(range(n - 1, -1, -1))
+        return [[s if j == i else 0 for j in range(n)] for i in order * h["rounds"] for _ in range(_steps(h["step_ms"]))]
+    all_on, off = [strength] * n, [0] * n
+    if kind == "start":
         steps = []
-        for c in grip if kind == "code" else GRIP_CODES.get(grip, OTHER_CODE):
+        for c in GRIP_CODES.get(grip, OTHER_CODE):
             steps += [all_on] * (LONG if c == "L" else SHORT) + [off] * GAP
         return steps[:-GAP]
     if kind == "release":

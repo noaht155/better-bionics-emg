@@ -47,15 +47,102 @@ const HAPTICS_HELP = {
   effort: "each motor follows the effort of the channels under it, off at rest",
   selections: "motors only buzz once a rule is confirmed, with the rule's haptic from the mapping (picks start as the grip's code: fist one long, pinch one short, tripod two, key three, point two long; release a fading buzz; lock and unlock a sweep round the band). Clenches and flicks on the way to a pattern play nothing",
 };
-// A rule's own pattern on the motors (haptics.HAPTIC_CHOICES)
-const HAPTIC_OPTIONS = { auto: "default", none: "none", S: "1 short", SS: "2 short", SSS: "3 short", L: "1 long",
-  LL: "2 long", LS: "long, short", fade: "fading buzz", sweep: "sweep round the band" };
+// A rule's haptic as settings (haptics.haptic_settings). The smart settings (times, length, speed) set the ms, the
+// advanced ones show them; times play in steps of config.haptic_codes.step_ms
+const HAPTIC_NAMES = { buzz: "buzz", fade: "fading buzz", sweep: "sweep round the band", none: "none",
+  default: "default (lock: sweep round, unlock: back)" };
+const codeHaptic = (code) => ({ pattern: "buzz", strength: 100,
+  pulses: [...code].map((c) => [c === "L" ? config.haptic_codes.long_ms : config.haptic_codes.short_ms, config.haptic_codes.gap_ms]) });
+
 // What an action played before rules had their own pattern, as haptics.rule_haptic: new rules start with it
 function ruleHaptic(action) {
-  if (action === "lock" || action === "unlock") return "auto";
-  if (action === "release") return "fade";
-  if (action === "open" || action === "close") return "none";
-  return config.haptic_codes.grips[action] || config.haptic_codes.other;
+  const c = config.haptic_codes;
+  if (action === "lock" || action === "unlock") return { pattern: "default" };
+  if (action === "release") return { ...c.fade };
+  if (action === "open" || action === "close") return { pattern: "none" };
+  return codeHaptic(c.grips[action] || c.other);
+}
+
+// short or long when every pulse is that preset with the usual gap, custom otherwise
+function buzzLength(h) {
+  const c = config.haptic_codes;
+  for (const [name, ms] of [["short", c.short_ms], ["long", c.long_ms]]) {
+    if (h.pulses.every(([on, off]) => on === ms && off === c.gap_ms)) return name;
+  }
+  return "custom";
+}
+const fadeLength = (h) => (h.ms === config.haptic_codes.fade.ms ? "long" : h.ms === config.haptic_codes.fade.ms / 2 ? "short" : "custom");
+const sweepSpeed = (h) => (h.step_ms === config.haptic_codes.sweep.step_ms ? "fast" : h.step_ms === 2 * config.haptic_codes.sweep.step_ms ? "slow" : "custom");
+
+function hapticLabel(h) {
+  if (h.pattern === "buzz") {
+    const len = buzzLength(h);
+    if (len !== "custom") return `${h.pulses.length} ${len}`;
+    const c = config.haptic_codes;
+    const codes = h.pulses.map(([on, off]) => (off !== c.gap_ms ? null : on === c.long_ms ? "long" : on === c.short_ms ? "short" : null));
+    return codes.every(Boolean) ? codes.join(", ") : `${h.pulses.length} custom`;
+  }
+  if (h.pattern === "fade") return `fade ${h.ms} ms`;
+  if (h.pattern === "sweep") return `sweep ${h.direction}${h.rounds > 1 ? ` x${h.rounds}` : ""}`;
+  return h.pattern;
+}
+
+// The settings row under a rule: pattern, its smart settings and strength, Advanced for the ms
+function hapticEditor(h) {
+  const num = (k, v, min, max, step, label, p = "") => `<label>${label} <input type="number" data-h="${k}" ${p} min="${min}" max="${max}" step="${step}" value="${v}"></label>`;
+  const sel = (k, v, opts, label) => `<label>${label} <select data-h="${k}">${Object.entries(opts)
+    .map(([o, t]) => `<option value="${o}" ${o === String(v) ? "selected" : ""}>${t}</option>`).join("")}</select></label>`;
+  const lengths = (v) => ({ short: "short", long: "long", ...(v === "custom" ? { custom: "custom" } : {}) });
+  const step = config.haptic_codes.step_ms;
+  let smart = sel("pattern", h.pattern, HAPTIC_NAMES, "Pattern"), adv = "";
+  if (h.pattern === "buzz") {
+    smart += num("times", h.pulses.length, 1, 8, 1, "Times") + sel("length", buzzLength(h), lengths(buzzLength(h)), "Length");
+    adv = h.pulses.map(([on, off], i) => num("on", on, step, 2000, step, `Pulse ${i + 1} on ms`, `data-p="${i}"`)
+      + num("off", off, 0, 2000, step, "off ms", `data-p="${i}"`)).join("");
+  } else if (h.pattern === "fade") {
+    smart += sel("length", fadeLength(h), lengths(fadeLength(h)), "Length");
+    adv = num("ms", h.ms, 2 * step, 3000, step, "Length ms") + num("end", h.end, 0, 100, 5, "Ends at % of start");
+  } else if (h.pattern === "sweep") {
+    const speed = sweepSpeed(h);
+    smart += sel("direction", h.direction, { round: "round", back: "back" }, "Direction")
+      + sel("speed", speed, { fast: "fast", slow: "slow", ...(speed === "custom" ? { custom: "custom" } : {}) }, "Speed")
+      + num("rounds", h.rounds, 1, 5, 1, "Rounds");
+    adv = num("step_ms", h.step_ms, step, 500, step, "Ms per motor");
+  }
+  if (adv) smart += num("strength", h.strength, 10, 100, 5, "Strength % of the profile's");
+  const note = h.pattern === "default" ? `<small>The event's own pattern: picks play the grip's code, lock sweeps round the band and unlock sweeps back.</small>`
+    : h.pattern === "none" ? "<small>Nothing plays when this rule fires.</small>" : "";
+  return `<div class="haptic-edit"><div class="row narrow">${smart}</div>${note}
+    ${adv ? `<label class="check"><input type="checkbox" data-h="advanced" ${ctl.hapticAdvanced ? "checked" : ""}> Advanced: exact times, in ${step} ms steps</label>` : ""}
+    ${adv && ctl.hapticAdvanced ? `<div class="row narrow">${adv}</div>` : ""}
+    ${h.pattern !== "none" ? `<div class="controls"><button data-h="play">Play on the motors</button></div>` : ""}</div>`;
+}
+
+const clampNum = (v, min, max) => Math.min(max, Math.max(min, Number(v) || min));
+
+// One change in the settings row: the smart settings rewrite the ms, the advanced ones set them directly
+function editHaptic(h, key, value, p) {
+  const c = config.haptic_codes;
+  if (key === "pattern") return value === "buzz" ? codeHaptic("S") : value === "fade" ? { ...c.fade } : value === "sweep" ? { ...c.sweep } : { pattern: value };
+  h = { ...h, pulses: h.pulses && h.pulses.map((x) => [...x]) };
+  if (key === "times") {
+    const n = clampNum(Math.round(value), 1, 8);
+    h.pulses = Array.from({ length: n }, (_, i) => [...(h.pulses[i] || h.pulses.at(-1))]);
+  } else if (key === "length" && h.pattern === "buzz" && value !== "custom") {
+    h.pulses = h.pulses.map(() => [value === "long" ? c.long_ms : c.short_ms, c.gap_ms]);
+  } else if (key === "length" && value !== "custom") {
+    h.ms = value === "long" ? c.fade.ms : c.fade.ms / 2;
+  } else if (key === "speed" && value !== "custom") {
+    h.step_ms = value === "slow" ? 2 * c.sweep.step_ms : c.sweep.step_ms;
+  } else if (key === "on" || key === "off") {
+    h.pulses[p][key === "on" ? 0 : 1] = clampNum(Math.round(value / c.step_ms) * c.step_ms, key === "on" ? c.step_ms : 0, 2000);
+  } else if (key === "direction") {
+    h.direction = value;
+  } else if (key in { strength: 1, rounds: 1, ms: 1, end: 1, step_ms: 1 }) {
+    const [min, max] = { strength: [10, 100], rounds: [1, 5], ms: [2 * c.step_ms, 3000], end: [0, 100], step_ms: [c.step_ms, 500] }[key];
+    h[key] = clampNum(key === "rounds" || key === "strength" || key === "end" ? Math.round(value) : Math.round(value / c.step_ms) * c.step_ms, min, max);
+  }
+  return h;
 }
 const BASIC_PARAMS = CONTROL_PARAMS.filter((d) => d.basic);
 const ADVANCED_PARAMS = CONTROL_PARAMS.filter((d) => !d.basic);
@@ -513,7 +600,7 @@ $("ctl-pose-list").addEventListener("click", (e) => {
   const item = e.target.closest(".pick-item");
   if (!item || pickerRule == null) return;
   // A haptic still at the old action's pattern follows the new action, one picked by hand stays
-  if ((pickerRule.haptic || "auto") === ruleHaptic(pickerRule.action)) pickerRule.haptic = ruleHaptic(item.dataset.action);
+  if (JSON.stringify(pickerRule.haptic) === JSON.stringify(ruleHaptic(pickerRule.action))) pickerRule.haptic = ruleHaptic(item.dataset.action);
   pickerRule.action = item.dataset.action;
   closePicker();
   drawRules();
@@ -536,11 +623,15 @@ function drawRules() {
         <td><select data-k="how"><option ${r.how === "held" ? "selected" : ""}>held</option><option ${r.how === "repeated" ? "selected" : ""}>repeated</option></select></td>
         <td><input data-k="value" type="number" min="${r.how === "held" ? 0 : 1}" max="${r.how === "held" ? 5 : 6}" step="${r.how === "held" ? 0.05 : 1}" value="${r.value}"></td>
         <td><button class="pose-pick">${actionLabel(r.action)} &#9662;</button></td>
-        <td><select data-k="haptic">${Object.entries(HAPTIC_OPTIONS).map(([k, v]) => `<option value="${k}" ${k === (r.haptic || "auto") ? "selected" : ""}>${v}</option>`).join("")}</select></td>
+        <td><button class="haptic-pick${ctl.hapticOpen === r ? " open" : ""}">${hapticLabel(r.haptic)} &#9662;</button></td>
         <td class="order"><button data-move="-1" title="up" ${table.dataset.section === "relaxed" && i === 0 ? "disabled" : ""}>&#8593;</button><button data-move="1" title="down" ${table.dataset.section === "holding" && i === ctl.rules.holding.length - 1 ? "disabled" : ""}>&#8595;</button></td>
-        <td><button data-remove="${i}">Remove</button></td></tr>`).join("");
+        <td><button data-remove="${i}">Remove</button></td></tr>${ctl.hapticOpen === r
+          ? `<tr class="haptic-row"><td colspan="8">${hapticEditor(r.haptic)}</td></tr>` : ""}`).join("");
     table.querySelectorAll("tr[data-i]").forEach((row) => rowRule.set(row, ctl.rules[table.dataset.section][Number(row.dataset.i)]));
   }
+  // Slides open only when it was just opened, not on every redraw while editing
+  if (ctl.hapticOpening) document.querySelector(".haptic-edit")?.classList.add("opening");
+  ctl.hapticOpening = false;
 }
 
 // Rules move by dragging the handle, the other rows making room as it passes, or with the arrows. Order is priority
@@ -591,6 +682,9 @@ for (const table of document.querySelectorAll(".ctl-rules")) {
     const handle = e.target.closest(".drag");
     if (!handle) return;
     closePicker();
+    // The settings row isn't a rule, it would be carried along with the rows
+    document.querySelector(".haptic-row")?.remove();
+    ctl.hapticOpen = null;
     dragRow = handle.closest("tr");
     dragStart = Object.fromEntries(SECTIONS.map((s) => [s, [...ctl.rules[s]]]));
     e.dataTransfer.effectAllowed = "move";
@@ -620,6 +714,14 @@ for (const table of document.querySelectorAll(".ctl-rules")) {
     dropped = true;
   });
   table.addEventListener("change", (e) => {
+    const hk = e.target.dataset.h;
+    if (hk && ctl.hapticOpen) {
+      if (hk === "advanced") ctl.hapticAdvanced = e.target.checked;
+      else ctl.hapticOpen.haptic = editHaptic(ctl.hapticOpen.haptic, hk, e.target.value, Number(e.target.dataset.p));
+      drawRules();
+      if (hk !== "advanced") changedRules();
+      return;
+    }
     const key = e.target.dataset.k;
     if (!e.target.closest("tr") || !key) return;
     const rule = ruleAt(e.target);
@@ -631,6 +733,23 @@ for (const table of document.querySelectorAll(".ctl-rules")) {
   });
 
   table.addEventListener("click", (e) => {
+    const hapticPick = e.target.closest(".haptic-pick");
+    if (hapticPick) {
+      const rule = ruleAt(hapticPick);
+      ctl.hapticOpening = ctl.hapticOpen !== rule;
+      ctl.hapticOpen = ctl.hapticOpening ? rule : null;
+      // Advanced starts open when the settings aren't one of the smart presets
+      if (ctl.hapticOpening) ctl.hapticAdvanced = hapticLabel(rule.haptic).includes("custom") || (rule.haptic.pattern === "sweep" && sweepSpeed(rule.haptic) === "custom");
+      drawRules();
+      return;
+    }
+    const h = e.target.dataset.h && ctl.hapticOpen;
+    if (h && e.target.dataset.h === "play") {
+      post("/api/control/play_haptic", { haptic: ctl.hapticOpen.haptic })
+        .then(() => { $("ctl-mapping-note").textContent = "played"; })
+        .catch((err) => { $("ctl-mapping-note").textContent = err.message; });
+      return;
+    }
     const pick = e.target.closest(".pose-pick");
     if (pick) {
       if (pickerRule === ruleAt(pick)) closePicker();

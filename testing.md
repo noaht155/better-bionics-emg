@@ -104,6 +104,7 @@ These decide when the recorder marks a cue bad and redoes it.
 | `test_effort_floor` | Effort mode's lowest duty: 0 stays off, above 0 starts at the floor, full effort is 100 %; floor 0 gives the old proportional duties |
 | `test_selection_patterns_tell_events_apart` | Every grip's pick pattern is different and on all motors, release fades, lock and unlock sweep opposite ways, a tick only uses one motor |
 | `test_tick_never_cuts_a_pick` | A tick doesn't cut a pick that is still playing, plays once it has finished, and any other event cuts a tick |
+| `test_haptic_settings_play_as_set` | Buzz pulses play their on and off ms in steps (last off dropped), strength is % of the profile's, a fade runs down to its end %, a sweep goes back and repeats as set, default keeps the event's pattern |
 | `test_rule_haptic_replaces_the_event_pattern` | A mapping rule's own haptic: a pulse code on every motor, fade and sweep borrow release and lock, none is silent, auto keeps the event's pattern |
 
 ### Shared evaluation (`tests/test_evaluate.py`)
@@ -189,7 +190,7 @@ These decide when the recorder marks a cue bad and redoes it.
 | `test_rules_still_gate` | With the still gate on, nothing is picked while the arm moves |
 | `test_rules_are_checked` | Mappings with an unknown action or how, a value out of range, a fractional count, two rules on the same pattern, two held rules on one trigger in one list or no trigger are refused, either list takes poses and actions; grip models get the clench default, sign models the sign default without clench, and classes the model doesn't have are left out |
 | `test_rules_report_the_fired_rules_haptic` | The rule that fired passes its haptic on with the event; a rule saved without one gives its action's old pattern |
-| `test_check_rules_refuses_an_unknown_haptic` | A mapping with a haptic that isn't a pattern is refused |
+| `test_check_rules_refuses_an_unknown_haptic` | A mapping with a haptic that isn't a pattern, or with settings out of range (no pulses, a pulse under one step, a fade too short, an unknown direction, strength 0), is refused; valid settings pass |
 | `test_rules_saved_as_one_list_split_by_action` | Mappings saved as one list before the split load with poses in the relaxed list and open, close, release in the holding list |
 | `test_rules_one_trigger_held_in_both_lists` | Open held 0 s while holding doesn't stop open held 0.7 s from picking a pose while relaxed, and still opens the hand once a grip is held |
 | `test_rules_pose_while_holding_switches_at_the_same_closure` | A pose rule in the holding list switches to that grip and keeps how far the hand is closed |

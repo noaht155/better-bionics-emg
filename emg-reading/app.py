@@ -39,7 +39,8 @@ from gestures import (C_CLOSE_S, C_MOVE_S, C_ROUNDS, CATEGORIES, D_ACTIVITY_S, D
                       F_ROUNDS, F_SIGN_S, F_SIGNS, F_SIGNS_DEFAULT, GESTURE_SET, GESTURES, GRIP_CLOSE_S, LIBRARY, POSTURES, QUICK_REPS,
                       plan_for)
 from hand_angles import JOINTS, RELIABLE
-from haptics import GRIP_CODES, HAPTIC_CHOICES, HAPTIC_DEFAULTS, OTHER_CODE
+from haptics import (FADE, GAP_MS, GRIP_CODES, HAPTIC_DEFAULTS, LONG_MS, OTHER_CODE, SHORT_MS, STEP_MS, SWEEP,
+                     haptic_settings)
 from processing import spectrum
 from recorder import Recorder
 from session import DATA_DIR
@@ -262,8 +263,13 @@ class Rule(BaseModel):
     how: Literal["held", "repeated"]
     value: float = Field(ge=0, le=10)
     action: str = Field(max_length=60)
-    # Rules saved before 2026-11-05 play the event's own pattern
-    haptic: Literal[HAPTIC_CHOICES] = "auto"
+    # Settings (haptics.haptic_settings, checked with the rules); rules saved before 2026-11-06 have a name or none
+    haptic: dict | str = "auto"
+
+
+class HapticPlay(BaseModel):
+    """A rule's haptic settings, played once on the motors from the mapping page."""
+    haptic: dict
 
 
 class RuleLists(BaseModel):
@@ -531,7 +537,8 @@ def make_app(recorder, band, camera, tools, lan=True, serving=False):
                 "source": band.source, "calibration": calibration,
                 "gestures": {name: {"text": text, "angles": angles} for name, (text, angles) in GESTURES.items()},
                 "gesture_set": GESTURE_SET, "sign_sets": {"F": F_SIGNS}, "f_signs_default": F_SIGNS_DEFAULT,
-                "haptic_codes": {"grips": GRIP_CODES, "other": OTHER_CODE}, "library": LIBRARY, "categories": CATEGORIES,
+                "haptic_codes": {"grips": GRIP_CODES, "other": OTHER_CODE, "short_ms": SHORT_MS, "long_ms": LONG_MS,
+                                 "gap_ms": GAP_MS, "step_ms": STEP_MS, "fade": FADE, "sweep": SWEEP}, "library": LIBRARY, "categories": CATEGORIES,
                 "cue_timing": {"grip_close_s": GRIP_CLOSE_S, "c_close_s": C_CLOSE_S},
                 "postures": POSTURES, "camera": camera is not None, "hum_blocks": hum_test.BLOCKS,
                 "tracked_hand": camera.hand if camera else None, "esp32_wifi_ip": WIFI_IP, "platform": sys.platform,
@@ -863,6 +870,18 @@ def make_app(recorder, band, camera, tools, lan=True, serving=False):
     @app.post("/api/control/params")
     def control_params(params: ControlParams):
         tools.control.set_params(params.model_dump())
+        return {"ok": True}
+
+    @app.post("/api/control/play_haptic")
+    def play_haptic(play: HapticPlay):
+        try:
+            settings = haptic_settings(play.haptic)
+        except ValueError as e:
+            refuse(e)
+        if not tools.haptics.state["running"] or tools.haptics.state.get("mode") != "selections":
+            refuse("plays with the haptics running in Selections: start the model on the Control tab with the motors "
+                   "connected and Selections picked")
+        tools.haptics.cue("start", None, settings)
         return {"ok": True}
 
     @app.post("/api/control/reset")

@@ -493,6 +493,15 @@ th { color: var(--muted); font: 400 11px var(--font-mono); letter-spacing: 0.12e
 .ctl-rules .drag { cursor: grab; color: var(--muted); user-select: none; padding-right: 0; font-size: 18px; }
 .ctl-rules tr.dragging { opacity: 0.35; }
 .ctl-rules .order { white-space: nowrap; padding-right: 0; }
+.ctl-rules .haptic-pick { white-space: nowrap; }
+.ctl-rules .haptic-pick.open { border-color: var(--text); }
+.ctl-rules .haptic-row > td { padding-top: 0; }
+/* Held to the visible width while the rules table scrolls sideways on a narrow window */
+.haptic-edit { position: sticky; left: 0; box-sizing: border-box; max-width: calc(100vw - 80px); border: 1px solid var(--line); border-radius: 2px; padding: 10px 12px; margin-bottom: 6px; }
+.haptic-edit small { display: block; color: var(--muted); margin: 4px 0; }
+/* Opening the settings row is a change of state: a short drop into place */
+.haptic-edit.opening { animation: haptic-open 150ms ease-out; }
+@keyframes haptic-open { from { opacity: 0; transform: translateY(-6px); } }
 .ctl-rules .order button { padding: 4px 9px; }
 .ctl-rules .order button + button { margin-left: 4px; }
 .rules-title { margin: 22px 0 6px; color: var(--muted); font: 400 12px var(--font-mono); letter-spacing: 0.12em; text-transform: uppercase; }

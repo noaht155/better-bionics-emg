@@ -4,7 +4,8 @@ import pytest
 
 import ml  # noqa: F401
 import calibrate
-from haptics import GAP, GRIP_CODES, OUTPUTS, SHORT, TICK_OUTPUT, level, output_duties, pattern, scaled_duty
+from haptics import (FADE, GAP, GRIP_CODES, OUTPUTS, SHORT, STEP_MS, SWEEP, TICK_OUTPUT, buzz, level, output_duties,
+                     pattern, scaled_duty)
 from ml import dataset
 from processing import common_average, envelope_series, filter_block
 from session import load_session, segments
@@ -99,3 +100,17 @@ def test_rule_haptic_replaces_the_event_pattern():
     assert pattern("release", 100, None, "sweep") == pattern("lock", 100)
     assert pattern("start", 100, "fist", "none") == []
     assert len(pattern("start", 100, "fist", "SS")) == 2 * SHORT + GAP
+
+
+def test_haptic_settings_play_as_set():
+    """Buzz pulses play their on and off times in steps, the last off is dropped; strength is % of the profile's;
+    a fade runs from the start down to its end %; a sweep goes one motor at a time, back reverses it, rounds repeat
+    it; default keeps the event's own pattern (lock and unlock sweep opposite ways)."""
+    steps = pattern("start", 80, None, {"pattern": "buzz", "pulses": [[300, 100], [100, 200]], "strength": 50})
+    assert [d[0] for d in steps] == [40] * (300 // STEP_MS) + [0] * (100 // STEP_MS) + [40] * (100 // STEP_MS)
+    fade = [d[0] for d in pattern("release", 100, None, dict(FADE, ms=500, end=0))]
+    assert len(fade) == 500 // STEP_MS and fade[0] == 100 and fade[-1] == 0
+    back = pattern("lock", 100, None, dict(SWEEP, direction="back", step_ms=2 * STEP_MS, rounds=2))
+    assert [d.index(100) for d in back] == [i for i in range(len(OUTPUTS) - 1, -1, -1) for _ in range(2)] * 2
+    assert pattern("unlock", 100, None, {"pattern": "default"}) == pattern("unlock", 100)
+    assert pattern("start", 100, "pinch", buzz("S")) == pattern("start", 100, "pinch")

@@ -43,7 +43,7 @@ import math
 
 import numpy as np
 
-from haptics import HAPTIC_CHOICES, rule_haptic
+from haptics import haptic_settings
 
 # Best on the replay of 9 protocol A sessions (2026-10-14): the LDA is often wrong on the rise into a grip, so a long
 # vote waits that out, and light grips (pinch, key) only reach about 0.15 effort, so the start level sits near zero.
@@ -95,16 +95,16 @@ EPS = 1e-9
 
 def split_rules(rules):
     """A copy of a mapping as its two lists. Mappings saved as one list (before 2026-10-19) split by their action:
-    poses were only picked while relaxed, open, close and release only acted while holding. Rules without a haptic of
-    their own (before 2026-11-05) get the pattern their action played then, so the mapping page shows it."""
+    poses were only picked while relaxed, open, close and release only acted while holding. Every rule's haptic comes
+    out as settings (haptics.haptic_settings): rules without one get the pattern their action played before, so the
+    mapping page shows it."""
     if isinstance(rules, dict):
         out = {s: [dict(r) for r in rules.get(s, [])] for s in SECTIONS}
     else:
         out = {"relaxed": [dict(r) for r in rules if r["action"] not in RULE_ACTIONS],
                "holding": [dict(r) for r in rules if r["action"] in RULE_ACTIONS]}
     for r in out["relaxed"] + out["holding"]:
-        if r.get("haptic", "auto") == "auto":
-            r["haptic"] = rule_haptic(r["action"])
+        r["haptic"] = haptic_settings(r.get("haptic"), r["action"])
     return out
 
 
@@ -132,8 +132,7 @@ def _check_list(rules, poses):
             raise ValueError(f"{r['how']}: a rule is held or repeated")
         if r["action"] not in RULE_ACTIONS and r["action"] not in poses:
             raise ValueError(f"{r['action']} is not a pose or action")
-        if r.get("haptic", "auto") not in HAPTIC_CHOICES:
-            raise ValueError(f"{r['haptic']} is not a haptic pattern")
+        haptic_settings(r.get("haptic"), r["action"])
         if r["how"] == "held" and not 0 <= r["value"] <= MAX_HELD_S:
             raise ValueError(f"held time is 0 to {MAX_HELD_S:g} s")
         if r["how"] == "repeated" and (r["value"] != int(r["value"]) or not 1 <= r["value"] <= MAX_REPEATS):

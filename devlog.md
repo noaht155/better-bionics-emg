@@ -2163,6 +2163,17 @@ Ctrl+C, still printing the cancel tracebacks. Not tested with the real armband.
   channel lost and lose a few under heavy hum. One seed, synthetic hum. Next: check on real hummy cues (the ones
   marked bad), then put it in `ml/` with live masking (`quality.hum_recent` over a limit, lost contact).
 
+## 2026-11-06: haptic settings per rule
+
+- A rule's haptic is now settings instead of a name (`haptics.haptic_settings`): buzz (pulses of on and off ms),
+  fade (ms, end % of the start), sweep (round or back, ms per motor, rounds), none, or default (lock: the sweep
+  there and back). Strength is % of the profile's. Older names and rules without one load as the same settings, so
+  saved mappings play as before. Times play in 50 ms steps (20 Hz updates).
+- Mapping page: the Haptic button opens a settings row under the rule (hidden until opened, a 150 ms drop): pattern,
+  smart settings (buzz times and short or long, fade short or long, sweep direction, speed and rounds), strength,
+  and Advanced for the exact ms per pulse. Play on the motors plays it once while the haptics run in Selections
+  (`/api/control/play_haptic`). Checked headless, not yet on the motors.
+
 ## 2026-11-05: adaptive line canceller against the notches
 
 `diagnostics/robust/line_canceller.py`, all causal after the same band-pass. Hum left (synthetic, % of raw) / 60 Hz

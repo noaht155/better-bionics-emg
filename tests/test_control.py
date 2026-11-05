@@ -4,6 +4,7 @@ import pytest
 
 import ml  # noqa: F401
 from control import Controller, movement, still_limit
+from haptics import FADE, SWEEP, buzz
 from gestures import GESTURE_SET, GESTURES
 from hand_angles import JOINTS
 
@@ -611,11 +612,11 @@ def test_rules_report_the_fired_rules_haptic():
                  "holding": [{"trigger": "two_point", "how": "repeated", "value": 2, "action": "release"}]})
     sign = lambda name: {name: 0.9, "rest": 0.1}
     outs = [c.step(sign("little_out"), 0.3) for _ in range(4)]
-    assert [o["haptic"] for o in outs if o["event"] == "start"] == ["LL"]
+    assert [o["haptic"] for o in outs if o["event"] == "start"] == [buzz("LL")]
     for name, steps in (("rest", 4), ("two_point", 3), ("rest", 4), ("two_point", 3)):
         outs = [c.step(sign(name), 0.0) for _ in range(steps)]
     # A rule saved without a haptic plays what its action played before, the fade for release
-    assert [o["haptic"] for o in outs if o["event"] == "release"] == ["fade"]
+    assert [o["haptic"] for o in outs if o["event"] == "release"] == [FADE]
 
 
 def test_check_rules_refuses_an_unknown_haptic():
@@ -624,6 +625,12 @@ def test_check_rules_refuses_an_unknown_haptic():
     check_rules({"relaxed": [dict(rule, haptic="SS")], "holding": []}, POSES)
     with pytest.raises(ValueError):
         check_rules({"relaxed": [dict(rule, haptic="buzz")], "holding": []}, POSES)
+    check_rules({"relaxed": [dict(rule, haptic={"pattern": "buzz", "pulses": [[300, 100], [100, 0]], "strength": 60})],
+                 "holding": []}, POSES)
+    for bad in ({"pattern": "buzz", "pulses": [], "strength": 100}, {"pattern": "buzz", "pulses": [[20, 0]], "strength": 100},
+                dict(FADE, ms=50), dict(SWEEP, direction="sideways"), dict(SWEEP, strength=0), {"pattern": "wobble"}):
+        with pytest.raises(ValueError):
+            check_rules({"relaxed": [dict(rule, haptic=bad)], "holding": []}, POSES)
 
 
 
@@ -636,7 +643,7 @@ def test_rules_without_a_haptic_get_their_old_pattern():
                                      {"trigger": "clench", "how": "repeated", "value": 3, "action": "lock"},
                                      {"trigger": "clench", "how": "repeated", "value": 2, "action": "release",
                                       "haptic": "SS"}]})
-    assert [r["haptic"] for r in rules["relaxed"]] == ["L", "LS"]
-    assert [r["haptic"] for r in rules["holding"]] == ["fade", "none", "auto", "SS"]
-    assert all(r["haptic"] != "auto" or r["action"] in ("lock", "unlock")
+    assert [r["haptic"] for r in rules["relaxed"]] == [buzz("L"), buzz("LS")]
+    assert [r["haptic"] for r in rules["holding"]] == [FADE, {"pattern": "none"}, {"pattern": "default"}, buzz("SS")]
+    assert all(r["haptic"]["pattern"] != "default" or r["action"] in ("lock", "unlock")
                for s in ("relaxed", "holding") for r in rules_for(GESTURE_SET)[s])
