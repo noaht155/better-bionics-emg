@@ -104,6 +104,7 @@ These decide when the recorder marks a cue bad and redoes it.
 | `test_effort_floor` | Effort mode's lowest duty: 0 stays off, above 0 starts at the floor, full effort is 100 %; floor 0 gives the old proportional duties |
 | `test_selection_patterns_tell_events_apart` | Every grip's pick pattern is different and on all motors, release fades, lock and unlock sweep opposite ways, a tick only uses one motor |
 | `test_tick_never_cuts_a_pick` | A tick doesn't cut a pick that is still playing, plays once it has finished, and any other event cuts a tick |
+| `test_rule_haptic_replaces_the_event_pattern` | A mapping rule's own haptic: a pulse code on every motor, fade and sweep borrow release and lock, none is silent, auto keeps the event's pattern |
 
 ### Shared evaluation (`tests/test_evaluate.py`)
 
@@ -187,6 +188,8 @@ These decide when the recorder marks a cue bad and redoes it.
 | `test_rules_clench_with_a_rule_class_on_is_that_class` | Effort that comes with a rule's class (opening) is not counted as a clench |
 | `test_rules_still_gate` | With the still gate on, nothing is picked while the arm moves |
 | `test_rules_are_checked` | Mappings with an unknown action or how, a value out of range, a fractional count, two rules on the same pattern, two held rules on one trigger in one list or no trigger are refused, either list takes poses and actions; grip models get the clench default, sign models the sign default without clench, and classes the model doesn't have are left out |
+| `test_rules_report_the_fired_rules_haptic` | The rule that fired passes its haptic on with the event; a rule saved without one gives its action's old pattern |
+| `test_check_rules_refuses_an_unknown_haptic` | A mapping with a haptic that isn't a pattern is refused |
 | `test_rules_saved_as_one_list_split_by_action` | Mappings saved as one list before the split load with poses in the relaxed list and open, close, release in the holding list |
 | `test_rules_one_trigger_held_in_both_lists` | Open held 0 s while holding doesn't stop open held 0.7 s from picking a pose while relaxed, and still opens the hand once a grip is held |
 | `test_rules_pose_while_holding_switches_at_the_same_closure` | A pose rule in the holding list switches to that grip and keeps how far the hand is closed |
@@ -194,7 +197,8 @@ These decide when the recorder marks a cue bad and redoes it.
 | `test_rules_lock_freezes_the_hand_until_unlocked` | A lock rule while holding freezes the hand: squeezing, open, a pose and the release pattern change nothing until the lock trigger fires again or an unlock rule does; squeezing closes again after |
 | `test_simulated_model_drives_the_control_layer` | Simulate on the Control tab: the page's class, certainty and effort reach the control layer at the model step without a band or model, an unknown class is refused, Stop ends it |
 | `test_counted_clenches_for_haptic_ticks` | Trigger and rules mode flag each short clench counted towards a pattern once, for the selection haptics' tick |
-| `test_selection_haptics_follow_control_events` | In selections mode the Control tab cues a tick per counted clench and the pick pattern with its grip; effort mode cues nothing |
+| `test_selection_haptics_follow_control_events` | In selections mode the Control tab only cues the confirmed pick with its grip, nothing for each counted clench; effort mode cues nothing |
+| `test_rules_without_a_haptic_get_their_old_pattern` | Rules saved without a haptic get the pattern their action played before (grip code, fade for release, none for open and close, lock stays auto), set ones are kept, and the default mappings come with them |
 | `test_trigger_double_point_goes_back_and_open_only_opens` | Trigger mode, release with point (default): opening twice only opens, a point flick neither opens nor closes, two point flicks go back, and the point still held after that can't pick point until it drops out |
 
 ### Protocols (`tests/test_protocols.py`)
@@ -213,6 +217,7 @@ These decide when the recorder marks a cue bad and redoes it.
 | `test_e_plan_holds_every_sign_once_per_round` | Protocol E has every screening sign and held wrist bend once per round, 3 rounds in the first posture and one fewer in the next, signs as `custom` and wrist bends as `nogrip` cues, rest after each, and `plan_for` passes its own fields |
 | `test_e_session_stays_out_of_grip_training` | An E session has no grip holds, so it is not a good session for grip and network training, and its signs (fist, open, point, pinch among them) never get a grip label |
 | `test_f_plan_holds_the_sign_set_once_per_round_in_every_posture` | Protocol F has each sign of the chosen set and both held wrist bends once per round in every ticked posture, as `custom` and `nogrip` cues with rest after each, and `plan_for` passes its own fields |
+| `test_f_plan_leaves_out_unticked_signs` | Protocol F only cues the ticked signs, new sessions leave open out by default, and an empty choice is refused |
 | `test_sign_sessions_train_their_signs_and_refuse_a_mix` | The Train tab's LDA on E and F sessions learns the signs they share, rest and the wrist bends (`notsign`); grip sessions train the 7 grips as before; a mix of the two is refused. Positions left out (`exclude`) get no label in sign and grip sessions, and rest can't be left out |
 | `test_haptic_levels_from_a_sign_session` | A sign session has no grip holds, so `calibrate.from_session` takes the max level from its held signs, which lets the Control tab and the haptics run with a sign model |
 | `test_quick_plan_is_the_grip_block_only` | A quick calibration plan (protocol A, `quick`) is the setup and each grip held twice with rest, no single fingers, in the same order as the full plan's grip block |

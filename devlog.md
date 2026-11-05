@@ -2163,6 +2163,30 @@ Ctrl+C, still printing the cancel tracebacks. Not tested with the real armband.
   channel lost and lose a few under heavy hum. One seed, synthetic hum. Next: check on real hummy cues (the ones
   marked bad), then put it in `ml/` with live masking (`quality.hum_recent` over a limit, lost contact).
 
+## 2026-11-05: open hand out of protocol F
+
+- `open-while-counting` merged into `main` untested on the arm: Noah had run it for over a week and has dropped open
+  from his mapping, so the flick fix matters less.
+- Protocol F has a Signs box on the start page, open unticked by default (`F_SIGNS_DEFAULT`, saved as `f_signs` in
+  the session settings; older sessions without it had all four). Training already keeps only the signs every chosen
+  session has, so mixing old and new F sessions trains without open. A network with open calibrated on a new session
+  keeps an open output that never gets calibration windows.
+
+## 2026-11-05: Control mapping dropdown and haptics per rule
+
+- Profiles (settings and haptics) and mappings (detection rules) stay separate (Noah: they can't be grouped). Both
+  are dropdowns on the Control tab and apply when picked; edits apply live and show as changed, Save writes them
+  back, Save as new makes another. Configure mapping edits the mapping picked there, its own saved list is gone.
+  A first version merged mappings into profiles and copied the two saved mappings into a profile file; that file
+  was removed again, `control_mappings.json` was never touched.
+- Each rule has a Haptic: default (the event's pattern as before), none, 1 to 3 short, 1 or 2 long, long short,
+  fading buzz or sweep (`haptics.HAPTIC_CHOICES`). Plays with the Selections haptics. The rules table scrolls inside
+  the page on narrow windows. Checked headless on a test copy with scratch files, not yet on the arm.
+- Noah checked profiles, mappings and rule haptics on the setup. Then: rules saved without a haptic get what their
+  action played before (grip code, fade for release, none for open and close; lock stays default since one rule
+  sweeps both ways), so the page shows it (`haptics.rule_haptic` in `split_rules`). New rules start with it and it
+  follows a changed pose. The tick per counted clench or flick is gone: only confirmed rules play (Noah).
+
 ## Open
 
 Now: control on the signs
@@ -2174,11 +2198,10 @@ Now: control on the signs
 - Hum on ch 3: open the hub and check the wire on its side, then recheck hum on all channels.
 - Mapping page: a held pose rule at 0 s silently cancels repeated rules on the same trigger, `check_rules` lets it
   through (open and close no longer do since `FLICK_MAX_S`).
-- Try `open-while-counting` on the arm (0 s open, double two_point release), merge into `main` if it works.
 - Sign network (in `ml/` with calibration since 2026-10-19; calibrated score flat from 1 training session on, see the
   2026-10-21 learning curve): try it live against the sign LDA, and trigger mode with
-  it on the Control tab (sign map, clench level against the sign session's levels); decide whether open stays in the
-  set (seven F sessions 2026-10-20: calibrated mean 95.3 % without it, 91.5 % with, worst 91.9 / 85.6 %). Epochs: 20 since the 2026-10-19 sweep, recheck with
+  it on the Control tab (sign map, clench level against the sign session's levels). Open is out of new F sessions
+  (2026-11-05); a network for control should be trained or calibrated on sessions without it. Epochs: 20 since the 2026-10-19 sweep, recheck with
   more sessions. Later: one label path for grips and signs (both are held positions), without changing grip
   training results.
 - Trigger mode on the arm: tune clench level and timings live, count wrong picks (short clench read as two, a grab

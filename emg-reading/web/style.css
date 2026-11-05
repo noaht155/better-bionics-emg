@@ -450,7 +450,11 @@ th { color: var(--muted); font: 400 11px var(--font-mono); letter-spacing: 0.12e
 }
 #ctl-hand { display: block; width: min(100%, calc(45vh * 1.2)); margin: 0 auto; background: var(--bg); border: 1px solid var(--line); border-radius: 2px; cursor: grab; touch-action: none; }
 #ctl-trace, #ctl-probs { width: 100%; }
-.ctl-mapping { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin: 10px 0; color: var(--text); }
+/* The dropdown's label sits above it, so the row lines up on the bottom edge and the button takes the dropdown's height */
+.ctl-mapping { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 8px 12px; margin: 10px 0; color: var(--text); }
+.ctl-mapping > label { margin: 0; }
+.ctl-mapping > span { padding-bottom: 7px; }
+.ctl-mapping > button { padding-top: 6px; padding-bottom: 6px; }
 .ctl-mapping small { flex-basis: 100%; color: var(--muted); }
 /* Two-way radio choices as a pill switch with a gradient edge */
 .row.filters {
@@ -483,6 +487,8 @@ th { color: var(--muted); font: 400 11px var(--font-mono); letter-spacing: 0.12e
 }
 .row.filters input { position: absolute; opacity: 0; pointer-events: none; }
 .row.filters label:has(input:focus-visible) { outline: 1px solid var(--text); }
+/* Eight columns don't fit a phone or a narrow window: the table scrolls inside the page instead of widening it */
+.ctl-rules { display: block; max-width: 100%; overflow-x: auto; }
 .ctl-rules input { width: 100%; min-width: 6em; }
 .ctl-rules .drag { cursor: grab; color: var(--muted); user-select: none; padding-right: 0; font-size: 18px; }
 .ctl-rules tr.dragging { opacity: 0.35; }

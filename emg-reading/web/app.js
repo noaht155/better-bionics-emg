@@ -108,6 +108,12 @@ function loadSettings() {
     label.innerHTML = `<input type="checkbox" name="posture" value="${name}" checked> ${text}`;
     $("postures").append(label);
   }
+  for (const sign of config.sign_sets.F) {
+    const label = document.createElement("label");
+    label.innerHTML = `<input type="checkbox" name="f_sign" value="${sign}"> ${config.library[sign].name}`;
+    label.firstChild.checked = (saved.f_signs || config.f_signs_default).includes(sign);
+    $("f-signs").append(label);
+  }
   buildPicker();
   for (const [k, v] of Object.entries(saved)) {
     if (PER_SESSION.includes(k)) continue;
@@ -167,15 +173,16 @@ function readSettings() {
     moves: [...form.querySelectorAll("[name=move]:checked")].map((c) => c.value),
     c_rounds: num("c_rounds"), c_move_s: num("c_move_s"), d_rounds: num("d_rounds"), d_activity_s: num("d_activity_s"),
     e_rounds: num("e_rounds"), e_sign_s: num("e_sign_s"), f_rounds: num("f_rounds"), f_sign_s: num("f_sign_s"),
+    f_signs: [...form.querySelectorAll("[name=f_sign]:checked")].map((c) => c.value),
     practice: form.practice.checked,
   };
 }
 
 function planBody() {
   const { postures, protocol, quick, reps, hold_s, rest_s, rounds, move_s, moves, c_rounds, c_move_s, d_rounds,
-    d_activity_s, e_rounds, e_sign_s, f_rounds, f_sign_s } = readSettings();
+    d_activity_s, e_rounds, e_sign_s, f_rounds, f_sign_s, f_signs } = readSettings();
   return { postures, protocol, quick, reps, hold_s, rest_s, rounds, move_s, moves, c_rounds, c_move_s, d_rounds,
-    d_activity_s, e_rounds, e_sign_s, f_rounds, f_sign_s };
+    d_activity_s, e_rounds, e_sign_s, f_rounds, f_sign_s, f_signs };
 }
 
 // Protocol C movement picker: checkboxes grouped by category, the hand above plays the one under the pointer
@@ -263,6 +270,10 @@ async function updateDuration() {
   const s = readSettings();
   if (!s.postures.length) {
     $("duration").textContent = "Tick at least one posture";
+    return;
+  }
+  if (s.protocol === "F" && !s.f_signs.length) {
+    $("duration").textContent = "Tick at least one sign";
     return;
   }
   if (s.protocol === "C" && !s.moves.length) {

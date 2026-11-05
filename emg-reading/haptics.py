@@ -39,6 +39,9 @@ GRIP_CODES = {"fist": "L", "pinch": "S", "tripod": "SS", "key": "SSS", "point": 
 # Any other pose a rule can pick
 OTHER_CODE = "LS"
 RELEASE_STEPS = 12
+# A mapping rule's own pattern: "auto" plays the event's pattern above, a code of short and long pulses on every
+# motor, "fade" the release pattern, "sweep" the lock pattern, "none" nothing
+HAPTIC_CHOICES = ("auto", "none", "S", "SS", "SSS", "L", "LL", "LS", "fade", "sweep")
 # A counted clench or flick only ticks the first motor, so it can't be taken for a pick
 TICK_OUTPUT = 0
 
@@ -53,14 +56,34 @@ def scaled_duty(level_, floor):
     return int(round(floor + (100 - floor) * level_)) if level_ > 0 else 0
 
 
-def pattern(kind, strength=100, grip=None):
+def rule_haptic(action):
+    """The pattern a mapping rule's action played before rules had their own: the grip's code for a pose, the fade
+    for release, nothing for open and close (they move the hand, no event). Lock and unlock stay auto: one rule
+    plays the sweep one way to lock and the other way to unlock."""
+    if action in ("lock", "unlock"):
+        return "auto"
+    if action == "release":
+        return "fade"
+    if action in ("open", "close"):
+        return "none"
+    return GRIP_CODES.get(action, OTHER_CODE)
+
+
+def pattern(kind, strength=100, grip=None, haptic="auto"):
     """Duties per step (one list of len(OUTPUTS) per 1 / UPDATE_HZ) for a control event. kind: "start" (grip picked,
-    grip says which), "release", "lock", "unlock" or "tick" (a clench or flick counted towards a pattern)."""
+    grip says which), "release", "lock", "unlock" or "tick" (a clench or flick counted towards a pattern). haptic: the
+    rule's own pattern from HAPTIC_CHOICES, in place of the event's."""
     n = len(OUTPUTS)
     all_on, off = [strength] * n, [0] * n
-    if kind == "start":
+    if haptic == "none":
+        return []
+    if haptic in ("fade", "sweep"):
+        kind = "release" if haptic == "fade" else "lock"
+    elif haptic != "auto":
+        kind, grip = "code", haptic
+    if kind in ("start", "code"):
         steps = []
-        for c in GRIP_CODES.get(grip, OTHER_CODE):
+        for c in grip if kind == "code" else GRIP_CODES.get(grip, OTHER_CODE):
             steps += [all_on] * (LONG if c == "L" else SHORT) + [off] * GAP
         return steps[:-GAP]
     if kind == "release":
