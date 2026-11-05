@@ -2190,8 +2190,23 @@ left on `141651` and `113719` (raw 16 and 21 uV) / change in window RMS against 
 
 The canceller is no better than a wider notch: to follow hum whose level wanders at 1 to 2 Hz it has to be about as
 wide, and a slow one is worse than the live notch. A wide notch or a fast canceller leaves about a quarter of the
-hum but changes the EMG level by 7 to 9 %, and either means a filter version bump and retraining. Not changed: the
-hum-trained network already copes (sign network entry above). Revisit if hum gets worse than about 300 uV.
+hum but changes the EMG level by 7 to 9 %, and either means a filter version bump and retraining. Not changed yet,
+see the network test below.
+
+Through the network (`diagnostics/robust/filter_net.py`): a hum-trained sign network per filter, hum added to the
+benchmark sessions' raw data before filtering. Balanced % / wrong %, calibrated, `092314` + `105110`:
+
+| test | live notches | real rate, Q 10 | canceller 0.05 s | canceller 0.1 s |
+|---|---|---|---|---|
+| clean | 96.2 / 1.0 | 96.5 / 1.0 | 96.7 / 0.9 | 96.8 / 1.0 |
+| hum on all channels, 100 uV | 95.4 / 1.4 | 96.3 / 1.0 | 96.5 / 1.0 | 96.5 / 1.1 |
+| hum on all channels, 300 uV | 86.6 / 3.3 | 95.5 / 1.3 | 95.6 / 1.2 | 92.9 / 2.0 |
+| hum on one channel, 1000 uV | 85.3 / 4.3 | 95.5 / 1.3 | 96.0 / 1.2 | 93.3 / 1.9 |
+
+Uncalibrated (all three sessions) the same order, 80 to 81 % against 86 % under heavy hum, clean 87.5 to 88.5 %
+for all, wrong 3.0 % live against 3.7 % for the wider ones. So under heavy hum a wider notch gains about 9 points
+calibrated and costs nothing clean; the canceller ties with the wide notch, which is simpler (fixed, linear, easy
+on the ESP32). One seed. Adopting it means a filter version bump and retraining every model, Noah's call.
 
 ## 2026-11-05: open hand out of protocol F
 
@@ -2221,7 +2236,8 @@ hum-trained network already copes (sign network entry above). Revisit if hum get
 
 Now: control on the signs
 - Robustness (2026-11-05): hum augmentation and channel drop with a missing-channel input work on synthetic hum.
-  Check on real hummy cues, then into `ml/` with live masking. Line canceller tested, no better than a wider notch.
+  Real hummy cues: only one cue was ever paused for hum, too few. Into `ml/` with live masking next. A wider notch
+  (real rate, Q 10) gains about 9 points under heavy hum, the canceller ties with it: decide whether to adopt it.
 - Hum from the motors (parked 2026-11-05): floating supplies cut most of it, it still rises about a minute after
   connecting. `diagnostics/motor_pickup.py` already runs the motors in timed blocks against the band. Still to do: hum with the motors running, and a
   small battery supply for the motors to see if ch 0 and 1 drop to their unplugged 40 and 22 uV.
