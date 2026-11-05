@@ -497,11 +497,17 @@ th { color: var(--muted); font: 400 11px var(--font-mono); letter-spacing: 0.12e
 .ctl-rules .haptic-pick.open { border-color: var(--text); }
 .ctl-rules .haptic-row > td { padding-top: 0; }
 /* Held to the visible width while the rules table scrolls sideways on a narrow window */
-.haptic-edit { position: sticky; left: 0; box-sizing: border-box; max-width: calc(100vw - 80px); border: 1px solid var(--line); border-radius: 2px; padding: 10px 12px; margin-bottom: 6px; }
-.haptic-edit small { display: block; color: var(--muted); margin: 4px 0; }
-/* Opening the settings row is a change of state: a short drop into place */
-.haptic-edit.opening { animation: haptic-open 150ms ease-out; }
-@keyframes haptic-open { from { opacity: 0; transform: translateY(-6px); } }
+/* contain keeps its width out of the table's, so opening it doesn't widen the columns */
+.haptic-edit { position: sticky; left: 0; box-sizing: border-box; max-width: calc(100vw - 80px); contain: inline-size; border: 1px solid var(--line); border-radius: 2px; padding: 8px 12px; margin-bottom: 6px; }
+.haptic-edit small { display: block; color: var(--muted); margin: 4px 0 0; }
+.haptic-line { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 8px 12px; }
+.haptic-line + .haptic-line { margin-top: 8px; }
+.haptic-line label { margin: 0; }
+.haptic-line select { width: auto; }
+.ctl-rules .haptic-line input[type=number] { width: 6.5em; min-width: 0; }
+.ctl-rules .haptic-line input[type=checkbox] { width: auto; min-width: 0; margin: 0; }
+.haptic-line label.check { display: flex; align-items: center; gap: 6px; padding-bottom: 8px; }
+.haptic-line button { padding-top: 6px; padding-bottom: 6px; }
 .ctl-rules .order button { padding: 4px 9px; }
 .ctl-rules .order button + button { margin-left: 4px; }
 .rules-title { margin: 22px 0 6px; color: var(--muted); font: 400 12px var(--font-mono); letter-spacing: 0.12em; text-transform: uppercase; }

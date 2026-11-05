@@ -49,8 +49,7 @@ const HAPTICS_HELP = {
 };
 // A rule's haptic as settings (haptics.haptic_settings). The smart settings (times, length, speed) set the ms, the
 // advanced ones show them; times play in steps of config.haptic_codes.step_ms
-const HAPTIC_NAMES = { buzz: "buzz", fade: "fading buzz", sweep: "sweep round the band", none: "none",
-  default: "default (lock: sweep round, unlock: back)" };
+const HAPTIC_NAMES = { buzz: "buzz", fade: "fading buzz", sweep: "sweep", none: "none", default: "default" };
 const codeHaptic = (code) => ({ pattern: "buzz", strength: 100,
   pulses: [...code].map((c) => [c === "L" ? config.haptic_codes.long_ms : config.haptic_codes.short_ms, config.haptic_codes.gap_ms]) });
 
@@ -109,13 +108,14 @@ function hapticEditor(h) {
       + num("rounds", h.rounds, 1, 5, 1, "Rounds");
     adv = num("step_ms", h.step_ms, step, 500, step, "Ms per motor");
   }
-  if (adv) smart += num("strength", h.strength, 10, 100, 5, "Strength % of the profile's");
+  if (adv) smart += num("strength", h.strength, 10, 100, 5, "Strength %");
   const note = h.pattern === "default" ? `<small>The event's own pattern: picks play the grip's code, lock sweeps round the band and unlock sweeps back.</small>`
     : h.pattern === "none" ? "<small>Nothing plays when this rule fires.</small>" : "";
-  return `<div class="haptic-edit"><div class="row narrow">${smart}</div>${note}
-    ${adv ? `<label class="check"><input type="checkbox" data-h="advanced" ${ctl.hapticAdvanced ? "checked" : ""}> Advanced: exact times, in ${step} ms steps</label>` : ""}
-    ${adv && ctl.hapticAdvanced ? `<div class="row narrow">${adv}</div>` : ""}
-    ${h.pattern !== "none" ? `<div class="controls"><button data-h="play">Play on the motors</button></div>` : ""}</div>`;
+  // One line: the pattern, its settings, Advanced and Play; the exact times go on a second line when Advanced is on
+  return `<div class="haptic-edit"><div class="haptic-line">${smart}
+    ${adv ? `<label class="check" title="exact times, in ${step} ms steps"><input type="checkbox" data-h="advanced" ${ctl.hapticAdvanced ? "checked" : ""}> Advanced</label>` : ""}
+    ${h.pattern !== "none" ? `<button data-h="play">Play</button>` : ""}</div>${note}
+    ${adv && ctl.hapticAdvanced ? `<div class="haptic-line">${adv}</div>` : ""}</div>`;
 }
 
 const clampNum = (v, min, max) => Math.min(max, Math.max(min, Number(v) || min));
@@ -630,8 +630,18 @@ function drawRules() {
     table.querySelectorAll("tr[data-i]").forEach((row) => rowRule.set(row, ctl.rules[table.dataset.section][Number(row.dataset.i)]));
   }
   // Slides open only when it was just opened, not on every redraw while editing
-  if (ctl.hapticOpening) document.querySelector(".haptic-edit")?.classList.add("opening");
+  if (ctl.hapticOpening) slideHaptic(document.querySelector(".haptic-edit"), true);
   ctl.hapticOpening = false;
+}
+
+// The settings row slides open and shut: its height between 0 and its own, about a quarter second (Noah, 2026-11-05)
+function slideHaptic(el, open) {
+  if (!el || matchMedia("(prefers-reduced-motion: reduce)").matches) return Promise.resolve();
+  const shut = { height: "0px", paddingTop: "0px", paddingBottom: "0px", opacity: 0 };
+  const full = { height: `${el.offsetHeight}px`, opacity: 1 };
+  el.style.overflow = "hidden";
+  const anim = el.animate(open ? [shut, full] : [full, shut], { duration: open ? 260 : 220, easing: open ? "ease-out" : "ease-in", fill: "forwards" });
+  return anim.finished.then(() => { if (open) { anim.cancel(); el.style.overflow = ""; } });
 }
 
 // Rules move by dragging the handle, the other rows making room as it passes, or with the arrows. Order is priority
@@ -736,10 +746,18 @@ for (const table of document.querySelectorAll(".ctl-rules")) {
     const hapticPick = e.target.closest(".haptic-pick");
     if (hapticPick) {
       const rule = ruleAt(hapticPick);
-      ctl.hapticOpening = ctl.hapticOpen !== rule;
-      ctl.hapticOpen = ctl.hapticOpening ? rule : null;
+      if (ctl.hapticOpen === rule) {
+        slideHaptic(document.querySelector(".haptic-edit"), false).then(() => {
+          if (ctl.hapticOpen !== rule) return;
+          ctl.hapticOpen = null;
+          drawRules();
+        });
+        return;
+      }
+      ctl.hapticOpening = true;
+      ctl.hapticOpen = rule;
       // Advanced starts open when the settings aren't one of the smart presets
-      if (ctl.hapticOpening) ctl.hapticAdvanced = hapticLabel(rule.haptic).includes("custom") || (rule.haptic.pattern === "sweep" && sweepSpeed(rule.haptic) === "custom");
+      ctl.hapticAdvanced = hapticLabel(rule.haptic).includes("custom") || (rule.haptic.pattern === "sweep" && sweepSpeed(rule.haptic) === "custom");
       drawRules();
       return;
     }
