@@ -2138,9 +2138,36 @@ Ctrl+C, still printing the cancel tracebacks. Not tested with the real armband.
   Same rise on 2026-11-04 (32 / 34 to 163 / 247 on ch 0 / 1 in a minute). Not the haptics link starting, it was
   connected from the start. Cause not found, parked for robustness training on the networks.
 
+## 2026-11-05: sign network against hum and a lost channel
+
+- The notches are designed for 500 Hz but the band samples at 499.1 to 499.6 Hz, so a steady 60 Hz sits 0.08 Hz off
+  the notch and 8 % of it gets through (0 % with the notch at the real rate). On real sessions the gain is small
+  (17 uV session `113719`: 10.8 to 8.6 % left) because real hum wanders round 60 Hz. Not changed.
+- `diagnostics/robust/hum_dropout.py`: the Train tab's sign network (F, open left out) with extra augmentation,
+  trained on the 6 non-benchmark F sessions, scored on the benchmark. Synthetic hum made raw (60/120/180 Hz, level
+  wandering up to 1.5 Hz, mains drifting) and passed through the live filter; 11 to 23 % of it gets through, live it
+  was 8 to 15 % on 2026-11-04. Variants: base, hum, hum + a zeroed channel, and the same with a missing-channel input.
+- Balanced % / wrong at threshold %, calibrated, mean of `092314` and `105110` (`141651` calibrates to about 50 % in
+  every variant, the known band bump):
+
+  | test | base | hum | hum + drop + mask |
+  |---|---|---|---|
+  | clean | 96.9 / 1.0 | 96.5 / 0.9 | 96.2 / 1.0 |
+  | hum on all channels, 100 uV | 76.3 / 18.0 | 95.7 / 1.1 | 95.5 / 1.3 |
+  | hum on all channels, 300 uV | 48.5 / 42.0 | 86.4 / 3.5 | 82.9 / 4.8 |
+  | hum on one channel, 1000 uV | 68.2 / 14.5 | 90.4 / 2.0 | 88.6 / 2.7 |
+  | one channel lost | 84.8 / 5.8 | 83.3 / 6.1 | 88.7 / 3.2 |
+
+  Uncalibrated, all three sessions: hum on all channels at 100 uV 58.1 / 36.9 % base, 87.5 / 2.6 % with everything;
+  one channel lost 67.6 to 81.8 %. Hum augmentation costs nothing clean; drop and mask add 4 to 14 points with a
+  channel lost and lose a few under heavy hum. One seed, synthetic hum. Next: check on real hummy cues (the ones
+  marked bad), then put it in `ml/` with live masking (`quality.hum_recent` over a limit, lost contact).
+
 ## Open
 
 Now: control on the signs
+- Robustness (2026-11-05): hum augmentation and channel drop with a missing-channel input work on synthetic hum.
+  Check on real hummy cues, then into `ml/` with live masking. Line canceller after that.
 - Hum from the motors (parked 2026-11-05): floating supplies cut most of it, it still rises about a minute after
   connecting. `diagnostics/motor_pickup.py` already runs the motors in timed blocks against the band. Still to do: hum with the motors running, and a
   small battery supply for the motors to see if ch 0 and 1 drop to their unplugged 40 and 22 uV.
