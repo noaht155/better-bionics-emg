@@ -2069,6 +2069,25 @@ the rest cues of recorded sessions.
   not the 3.3 V in `pinmap.md`: the input pull-ups then pull the idle GPIOs towards 5 V (about 1 mA each into the
   protection diodes) and the 3 V motors get about 4.5 V. Back to 3.3 V, or strength about 60 % until then.
 
+## 2026-10-27: forget the armband WiFi on close
+
+When the app closes (armband source, default port only, so a test copy on 8010 leaves it alone) it forgets every
+`Mindrove_ARB_` network, so a computer doesn't join the band by itself later and take it while the other one
+records (`tools.forget_armband_wifi`). Connect armband WiFi joins it again (it already forgot and re-added the
+profile on Windows). Windows: `netsh wlan delete profile` works without admin rights, checked on the desktop with a
+test profile. Mac: removed from the preferred list, and if the Mac is on the band's network WiFi is switched off
+and on so it goes back to the home network. Checked on the MacBook with a fake `Mindrove_ARB_fake01` in the
+preferred list: Ctrl+C on port 8000 forgot it with no admin password, a copy on 8010 left it. The off and on branch
+(Mac on the band's network at close) is not checked yet, it needs the real band. Closing the terminal window instead
+of Ctrl+C skips it.
+
+## 2026-10-29: hum from the ref and bias contact
+
+Hum over the 80 uV warning moved between ch 0, 3 and 5 (ch 5 up to 420 uV, its rest envelope 35 uV against 5 to 8
+on the others) with the band tight and the pads pressed hard. The threshold and `line_rms` are unchanged since
+2026-10-02. Pressing the main module in by hand cleared it: the ref and bias pads lose contact even when the band is
+tight, and hum then shows on whichever pads fit worst. Details in `hardware-status.md`.
+
 ## 2026-11-02: hum on ch 3
 
 - Hum mostly on ch 3. Pushing the main hub inwards clears it, pressing the ch 3 pad doesn't, and wiggling the wire

@@ -49,6 +49,8 @@ CHECK_S = 5.0
 COUNTDOWN_S = 3
 WIFI_SCRIPT = Path(__file__).with_name("connect_armband.ps1")
 WIFI_CHECK_S = 2.0
+# One profile line of `netsh wlan show profiles`, e.g. "    All User Profile     : Mindrove_ARB_66bb04"
+WIN_PROFILE_LINE = re.compile(rf"(?m)^\s*[\w ]+Profile\s*:\s*({mac_wifi.ARMBAND_PREFIX}.*?)\s*$")
 # Random gaps between mode switches, so a switch never lines up with the band's packet rhythm
 DELAY_GAP_S = (0.3, 0.6)
 # The page's clock and this computer's agree to a few ms when the page runs here
@@ -205,6 +207,22 @@ class ArmbandWifi(Tool):
         finally:
             Path(log).unlink(missing_ok=True)
             self._reconnect_if_lost()
+
+
+def forget_armband_wifi():
+    """Forgets the armband's network when the app closes, so this computer doesn't join it by itself later and take
+    the band while another computer records. Connect armband WiFi joins it again. Returns what it did."""
+    if sys.platform == "darwin":
+        return mac_wifi.forget(mac_wifi.device())
+    if sys.platform != "win32":
+        return []
+    out = subprocess.run(["netsh", "wlan", "show", "profiles"], capture_output=True, text=True).stdout
+    done = []
+    # Deleting a profile needs no admin rights, unlike the address changes in connect_armband.ps1
+    for name in WIN_PROFILE_LINE.findall(out):
+        gone = subprocess.run(["netsh", "wlan", "delete", "profile", f"name={name}"], capture_output=True).returncode == 0
+        done.append(f"{'forgot' if gone else 'could not forget'} {name}")
+    return done
 
 
 class RoundTrip(Tool):

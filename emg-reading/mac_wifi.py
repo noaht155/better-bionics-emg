@@ -57,6 +57,30 @@ def join(dev, name, password):
         raise RuntimeError(f"joining {name} failed: {out}")
 
 
+def saved_armbands(dev):
+    """Armband networks in the preferred list, the ones the Mac would join by itself."""
+    lines = _run("networksetup", "-listpreferredwirelessnetworks", dev).splitlines()[1:]
+    return [line.strip() for line in lines if line.strip().startswith(ARMBAND_PREFIX)]
+
+
+def forget(dev):
+    """Removes the armband networks from the preferred list. If the Mac is on one, WiFi is switched off and on so it
+    goes back to a remembered network. Returns what it did."""
+    done = []
+    for name in saved_armbands(dev):
+        _run("networksetup", "-removepreferredwirelessnetwork", dev, name)
+        done.append(f"forgot {name}")
+    left = saved_armbands(dev)
+    if left:
+        done.append(f"couldn't forget {', '.join(left)} (macOS may want an admin password for it)")
+    now = current(dev)
+    if now and now.startswith(ARMBAND_PREFIX):
+        _run("networksetup", "-setairportpower", dev, "off")
+        _run("networksetup", "-setairportpower", dev, "on")
+        done.append(f"left {now}")
+    return done
+
+
 def wait_for_address(dev, timeout=ADDRESS_TIMEOUT_S):
     until = time.time() + timeout
     while time.time() < until:
