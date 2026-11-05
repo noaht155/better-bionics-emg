@@ -2225,6 +2225,14 @@ levels: r 0.995 to 0.999 per session, mean difference 0.005 to 0.013, a clench l
   don't say, they were version 2). The model lists only show models for the current filter.
 - General network retrained on the new filter from the same 15 sessions and 15 epochs as
   `ringnet_2026-10-16_112322`: `ringnet_2026-11-05_140756` (208 s, loss 0.602). `evaluate.SIGN_BASE` points at it.
+- Old filter with the old general network against the new filter with the new one, sign network, leave one session
+  out over 9 F sessions, 3 seeds each (`diagnostics/robust/filter_seeds.py`): calibrated 92.0 % (runs 92.0, 91.4,
+  92.6) against 91.1 % (91.1, 91.4, 90.7), wrong 1.1 against 0.9 %, uncalibrated 40.5 against 40.4 %. Per session,
+  calibrated, 8 of 9 differ by -1.0 to +0.3 (mean -0.2); the rest is `141651` (bump, 54 against 47 %). So the clean
+  cost is about 0.2 points.
+- For live use, trained on the same 7 F sessions as `..._signs_2026-10-20_122442`, open left out: sign network
+  `ringnet_2026-11-05_140756_signs_2026-11-05_143835`, sign LDA `noah_2026-11-05_143909` (leave one posture out,
+  balanced: forward 84.9 %, table 81.5 %). Both still need calibrating on the arm.
 
 ## 2026-11-05: open hand out of protocol F
 
