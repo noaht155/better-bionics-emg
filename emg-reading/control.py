@@ -43,7 +43,7 @@ import math
 
 import numpy as np
 
-from haptics import HAPTIC_CHOICES
+from haptics import HAPTIC_CHOICES, rule_haptic
 
 # Best on the replay of 9 protocol A sessions (2026-10-14): the LDA is often wrong on the rise into a grip, so a long
 # vote waits that out, and light grips (pinch, key) only reach about 0.15 effort, so the start level sits near zero.
@@ -95,11 +95,17 @@ EPS = 1e-9
 
 def split_rules(rules):
     """A copy of a mapping as its two lists. Mappings saved as one list (before 2026-10-19) split by their action:
-    poses were only picked while relaxed, open, close and release only acted while holding."""
+    poses were only picked while relaxed, open, close and release only acted while holding. Rules without a haptic of
+    their own (before 2026-11-05) get the pattern their action played then, so the mapping page shows it."""
     if isinstance(rules, dict):
-        return {s: [dict(r) for r in rules.get(s, [])] for s in SECTIONS}
-    return {"relaxed": [dict(r) for r in rules if r["action"] not in RULE_ACTIONS],
-            "holding": [dict(r) for r in rules if r["action"] in RULE_ACTIONS]}
+        out = {s: [dict(r) for r in rules.get(s, [])] for s in SECTIONS}
+    else:
+        out = {"relaxed": [dict(r) for r in rules if r["action"] not in RULE_ACTIONS],
+               "holding": [dict(r) for r in rules if r["action"] in RULE_ACTIONS]}
+    for r in out["relaxed"] + out["holding"]:
+        if r.get("haptic", "auto") == "auto":
+            r["haptic"] = rule_haptic(r["action"])
+    return out
 
 
 def rules_for(classes):

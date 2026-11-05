@@ -462,9 +462,10 @@
       in between; held 0 s acts on the first step the trigger is on. The first list runs while relaxed (no grip),
       the second while holding a grip. A pose picks it (while holding it switches at the same closure), release goes
       back to relaxed, close and open move the hand while their trigger stays on. The higher rule wins when two fire
-      together. Hover a pose in the Then list to see it. Haptic is what the motors play when the rule fires, with
-      the Selections haptics on: default is the event's own pattern (the grip's code, a fading buzz for release, a
-      sweep for lock). Changes apply straight away.</p>
+      together. Hover a pose in the Then list to see it. Haptic is what the motors play once the rule fires, with
+      the Selections haptics on; nothing plays while a pattern is still being counted. New rules start with what
+      their action played before (the grip's code, a fading buzz for release); default is only needed for lock,
+      which sweeps one way to lock and back to unlock. Changes apply straight away.</p>
     <p class="ctl-mapping">Editing mapping <b id="ctl-mapping-current"></b></p>
     <div class="row narrow">
       <label>New name <input id="ctl-mapping-save-name" placeholder="name"></label>

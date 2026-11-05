@@ -735,11 +735,10 @@ class Control:
             probs = grips
         out = self._controller.step(probs, e, dt, distance, moving)
         if self.params["haptics"] == "selections" and self.haptics is not None and self.haptics.state["running"]:
-            # The open hand picked in lock mode leaves the hand where it is, nothing to feel
+            # Only confirmed events play, not each clench or flick counted on the way (Noah, 2026-11-05). The open
+            # hand picked in lock mode leaves the hand where it is, nothing to feel
             if out["event"] in ("start", "release", "lock", "unlock"):
                 self.haptics.cue(out["event"], out["grip"], out.get("haptic", "auto"))
-            elif out.get("counted"):
-                self.haptics.cue("tick")
         s = self.state
         s.update(step=s["step"] + 1, state=out["state"], grip=out["grip"], closure=round(out["closure"], 3),
                  effort=round(e, 3), angles=[round(a, 1) for a in out["angles"]],

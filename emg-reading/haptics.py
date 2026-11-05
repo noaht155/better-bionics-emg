@@ -56,6 +56,19 @@ def scaled_duty(level_, floor):
     return int(round(floor + (100 - floor) * level_)) if level_ > 0 else 0
 
 
+def rule_haptic(action):
+    """The pattern a mapping rule's action played before rules had their own: the grip's code for a pose, the fade
+    for release, nothing for open and close (they move the hand, no event). Lock and unlock stay auto: one rule
+    plays the sweep one way to lock and the other way to unlock."""
+    if action in ("lock", "unlock"):
+        return "auto"
+    if action == "release":
+        return "fade"
+    if action in ("open", "close"):
+        return "none"
+    return GRIP_CODES.get(action, OTHER_CODE)
+
+
 def pattern(kind, strength=100, grip=None, haptic="auto"):
     """Duties per step (one list of len(OUTPUTS) per 1 / UPDATE_HZ) for a control event. kind: "start" (grip picked,
     grip says which), "release", "lock", "unlock" or "tick" (a clench or flick counted towards a pattern). haptic: the

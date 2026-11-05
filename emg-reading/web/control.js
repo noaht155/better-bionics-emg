@@ -45,11 +45,18 @@ const HAPTIC_PARAMS = [
 ];
 const HAPTICS_HELP = {
   effort: "each motor follows the effort of the channels under it, off at rest",
-  selections: "motors only buzz on the control layer's events: grip picked (fist one long, pinch one short, tripod two, key three, point two long), release a fading buzz, lock and unlock a sweep round the band, each counted clench or flick a tick on the first motor",
+  selections: "motors only buzz once a rule is confirmed, with the rule's haptic from the mapping (picks start as the grip's code: fist one long, pinch one short, tripod two, key three, point two long; release a fading buzz; lock and unlock a sweep round the band). Clenches and flicks on the way to a pattern play nothing",
 };
 // A rule's own pattern on the motors (haptics.HAPTIC_CHOICES)
 const HAPTIC_OPTIONS = { auto: "default", none: "none", S: "1 short", SS: "2 short", SSS: "3 short", L: "1 long",
   LL: "2 long", LS: "long, short", fade: "fading buzz", sweep: "sweep round the band" };
+// What an action played before rules had their own pattern, as haptics.rule_haptic: new rules start with it
+function ruleHaptic(action) {
+  if (action === "lock" || action === "unlock") return "auto";
+  if (action === "release") return "fade";
+  if (action === "open" || action === "close") return "none";
+  return config.haptic_codes.grips[action] || config.haptic_codes.other;
+}
 const BASIC_PARAMS = CONTROL_PARAMS.filter((d) => d.basic);
 const ADVANCED_PARAMS = CONTROL_PARAMS.filter((d) => !d.basic);
 const TRACE_STEPS = 200;
@@ -505,6 +512,8 @@ $("ctl-pose-list").addEventListener("mouseleave", () => pickerRule != null && dr
 $("ctl-pose-list").addEventListener("click", (e) => {
   const item = e.target.closest(".pick-item");
   if (!item || pickerRule == null) return;
+  // A haptic still at the old action's pattern follows the new action, one picked by hand stays
+  if ((pickerRule.haptic || "auto") === ruleHaptic(pickerRule.action)) pickerRule.haptic = ruleHaptic(item.dataset.action);
   pickerRule.action = item.dataset.action;
   closePicker();
   drawRules();
@@ -644,7 +653,7 @@ for (const button of document.querySelectorAll(".ctl-rule-add")) {
     const protocol = $("ctl-protocol").value;
     const trigger = protocol === "grips" ? "clench" : protocolClasses(protocol)[0];
     const holding = button.dataset.section === "holding";
-    ctl.rules[button.dataset.section].push({ trigger, how: holding ? "repeated" : "held", value: holding ? 2 : 0.5, action: holding ? "release" : "fist", haptic: "auto" });
+    ctl.rules[button.dataset.section].push({ trigger, how: holding ? "repeated" : "held", value: holding ? 2 : 0.5, action: holding ? "release" : "fist", haptic: ruleHaptic(holding ? "release" : "fist") });
     drawRules();
     changedRules();
   });

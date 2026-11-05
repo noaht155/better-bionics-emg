@@ -590,7 +590,8 @@ def test_selection_haptics_follow_control_events():
     for grip, e, n in [SHORT, PAUSE, SHORT, PAUSE, GAP]:
         for _ in range(n):
             control.advance(probs("rest"), e, 0.05)
-    assert haptics.cues == [("tick", None), ("tick", None), ("start", "tripod")]
+    # Counted clenches play nothing, only the confirmed pick does
+    assert haptics.cues == [("start", "tripod")]
     # Effort mode leaves the outputs to the channels, no patterns
     haptics.cues.clear()
     control.set_params({"haptics": "effort"})
@@ -613,8 +614,8 @@ def test_rules_report_the_fired_rules_haptic():
     assert [o["haptic"] for o in outs if o["event"] == "start"] == ["LL"]
     for name, steps in (("rest", 4), ("two_point", 3), ("rest", 4), ("two_point", 3)):
         outs = [c.step(sign(name), 0.0) for _ in range(steps)]
-    # Rules saved without a haptic play the event's own pattern
-    assert [o["haptic"] for o in outs if o["event"] == "release"] == ["auto"]
+    # A rule saved without a haptic plays what its action played before, the fade for release
+    assert [o["haptic"] for o in outs if o["event"] == "release"] == ["fade"]
 
 
 def test_check_rules_refuses_an_unknown_haptic():
@@ -624,3 +625,18 @@ def test_check_rules_refuses_an_unknown_haptic():
     with pytest.raises(ValueError):
         check_rules({"relaxed": [dict(rule, haptic="buzz")], "holding": []}, POSES)
 
+
+
+def test_rules_without_a_haptic_get_their_old_pattern():
+    from control import rules_for, split_rules
+    rules = split_rules({"relaxed": [{"trigger": "clench", "how": "held", "value": 0.7, "action": "fist"},
+                                     {"trigger": "point", "how": "held", "value": 0.4, "action": "cylinder"}],
+                         "holding": [{"trigger": "point", "how": "repeated", "value": 2, "action": "release"},
+                                     {"trigger": "open", "how": "held", "value": 0, "action": "open"},
+                                     {"trigger": "clench", "how": "repeated", "value": 3, "action": "lock"},
+                                     {"trigger": "clench", "how": "repeated", "value": 2, "action": "release",
+                                      "haptic": "SS"}]})
+    assert [r["haptic"] for r in rules["relaxed"]] == ["L", "LS"]
+    assert [r["haptic"] for r in rules["holding"]] == ["fade", "none", "auto", "SS"]
+    assert all(r["haptic"] != "auto" or r["action"] in ("lock", "unlock")
+               for s in ("relaxed", "holding") for r in rules_for(GESTURE_SET)[s])

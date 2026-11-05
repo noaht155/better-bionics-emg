@@ -2157,6 +2157,10 @@ Ctrl+C, still printing the cancel tracebacks. Not tested with the real armband.
 - Each rule has a Haptic: default (the event's pattern as before), none, 1 to 3 short, 1 or 2 long, long short,
   fading buzz or sweep (`haptics.HAPTIC_CHOICES`). Plays with the Selections haptics. The rules table scrolls inside
   the page on narrow windows. Checked headless on a test copy with scratch files, not yet on the arm.
+- Noah checked profiles, mappings and rule haptics on the setup. Then: rules saved without a haptic get what their
+  action played before (grip code, fade for release, none for open and close; lock stays default since one rule
+  sweeps both ways), so the page shows it (`haptics.rule_haptic` in `split_rules`). New rules start with it and it
+  follows a changed pose. The tick per counted clench or flick is gone: only confirmed rules play (Noah).
 
 ## Open
 

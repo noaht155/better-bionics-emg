@@ -188,7 +188,7 @@ These decide when the recorder marks a cue bad and redoes it.
 | `test_rules_clench_with_a_rule_class_on_is_that_class` | Effort that comes with a rule's class (opening) is not counted as a clench |
 | `test_rules_still_gate` | With the still gate on, nothing is picked while the arm moves |
 | `test_rules_are_checked` | Mappings with an unknown action or how, a value out of range, a fractional count, two rules on the same pattern, two held rules on one trigger in one list or no trigger are refused, either list takes poses and actions; grip models get the clench default, sign models the sign default without clench, and classes the model doesn't have are left out |
-| `test_rules_report_the_fired_rules_haptic` | The rule that fired passes its haptic on with the event; rules saved without one give auto |
+| `test_rules_report_the_fired_rules_haptic` | The rule that fired passes its haptic on with the event; a rule saved without one gives its action's old pattern |
 | `test_check_rules_refuses_an_unknown_haptic` | A mapping with a haptic that isn't a pattern is refused |
 | `test_rules_saved_as_one_list_split_by_action` | Mappings saved as one list before the split load with poses in the relaxed list and open, close, release in the holding list |
 | `test_rules_one_trigger_held_in_both_lists` | Open held 0 s while holding doesn't stop open held 0.7 s from picking a pose while relaxed, and still opens the hand once a grip is held |
@@ -197,7 +197,8 @@ These decide when the recorder marks a cue bad and redoes it.
 | `test_rules_lock_freezes_the_hand_until_unlocked` | A lock rule while holding freezes the hand: squeezing, open, a pose and the release pattern change nothing until the lock trigger fires again or an unlock rule does; squeezing closes again after |
 | `test_simulated_model_drives_the_control_layer` | Simulate on the Control tab: the page's class, certainty and effort reach the control layer at the model step without a band or model, an unknown class is refused, Stop ends it |
 | `test_counted_clenches_for_haptic_ticks` | Trigger and rules mode flag each short clench counted towards a pattern once, for the selection haptics' tick |
-| `test_selection_haptics_follow_control_events` | In selections mode the Control tab cues a tick per counted clench and the pick pattern with its grip; effort mode cues nothing |
+| `test_selection_haptics_follow_control_events` | In selections mode the Control tab only cues the confirmed pick with its grip, nothing for each counted clench; effort mode cues nothing |
+| `test_rules_without_a_haptic_get_their_old_pattern` | Rules saved without a haptic get the pattern their action played before (grip code, fade for release, none for open and close, lock stays auto), set ones are kept, and the default mappings come with them |
 | `test_trigger_double_point_goes_back_and_open_only_opens` | Trigger mode, release with point (default): opening twice only opens, a point flick neither opens nor closes, two point flicks go back, and the point still held after that can't pick point until it drops out |
 
 ### Protocols (`tests/test_protocols.py`)
