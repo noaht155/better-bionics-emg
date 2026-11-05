@@ -2163,7 +2163,7 @@ Ctrl+C, still printing the cancel tracebacks. Not tested with the real armband.
   channel lost and lose a few under heavy hum. One seed, synthetic hum. Next: check on real hummy cues (the ones
   marked bad), then put it in `ml/` with live masking (`quality.hum_recent` over a limit, lost contact).
 
-## 2026-11-06: haptic settings per rule
+## 2026-11-05: haptic settings per rule
 
 - A rule's haptic is now settings instead of a name (`haptics.haptic_settings`): buzz (pulses of on and off ms),
   fade (ms, end % of the start), sweep (round or back, ms per motor, rounds), none, or default (lock: the sweep

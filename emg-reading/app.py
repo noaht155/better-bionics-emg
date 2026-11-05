@@ -263,7 +263,7 @@ class Rule(BaseModel):
     how: Literal["held", "repeated"]
     value: float = Field(ge=0, le=10)
     action: str = Field(max_length=60)
-    # Settings (haptics.haptic_settings, checked with the rules); rules saved before 2026-11-06 have a name or none
+    # Settings (haptics.haptic_settings, checked with the rules); rules saved before 2026-11-05 have a name or none
     haptic: dict | str = "auto"
 
 

@@ -86,7 +86,7 @@ def _within(h, key, lo, hi, what):
 
 
 def haptic_settings(haptic, action=None):
-    """A rule's haptic as checked settings. Rules saved before 2026-11-06 have none ("auto": what the action played
+    """A rule's haptic as checked settings. Rules saved before 2026-11-05 have none ("auto": what the action played
     before, rule_haptic) or a name: a grip code like "SS", "fade", "sweep" or "none". Raises ValueError."""
     if haptic in (None, "auto"):
         return rule_haptic(action) if action else {"pattern": "default"}
