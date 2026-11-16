@@ -70,6 +70,8 @@ Every reported accuracy comes from these functions, so they are checked on examp
 | `test_few_impossible_angles` | Per recorded session: under 5 % of the angle windows have a trained joint bent backwards past -60 degrees (see below) |
 | `test_moving_windows_count_as_much_as_the_rest` | The angle loss weighting: moving-finger windows add up to the same total weight as all other angle windows |
 | `test_batch_features_match_one_window` | The LDA features of one window (live) equal the same window's features in a batch (training) |
+| `test_bump_windows_are_dropped` | A window with any sample over `BUMP_UV` (a band bump) is left out of training, the windows around it stay |
+| `test_benchmark_sessions_are_left_out` | `without_benchmark` drops the benchmark sessions from a training list and says which; the Train tab's sign LDA and sign network train through it |
 
 ### Camera timing (`tests/test_camera.py`)
 
