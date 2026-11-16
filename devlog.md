@@ -2272,6 +2272,13 @@ levels: r 0.995 to 0.999 per session, mean difference 0.005 to 0.013, a clench l
   the rest of the session. Hum after that logs a `hum` event (once per cue) and sets `hum_passed` in
   `session.json`. Those sessions still calibrate but stay out of training (`dataset.trainable`: good sessions,
   evaluate, the Train tab's sign list and default ticks).
+- Quick calibration in the socket (`2026-11-16_104008`, F, 310 s, continued with hum): ch 1 and 3 hummed the whole
+  session (raw 148 and 253 uV at rest), ch 2 51. After the filter 1.4 to 1.7 % got through: at rest ch 3 left
+  4.4 uV against 8.9 uV filtered, ch 1 2.1 against 9.5, the rest nothing. During signs (22 to 37 uV filtered) it is
+  under 2 % of the power, which fits control feeling good on it (Noah). A steady line right on the notch goes
+  to 0; what gets through is hum whose level wobbles or that sits off the notch (band clock 499.1 to 499.6).
+- The hum banner now says per channel whether the hum gets through the filter (over 2 uV left,
+  `quality.HUM_LEFT_UV`, about 130 uV raw) or is filtered out. The redo check still uses raw hum.
 
 ## Open
 

@@ -14,6 +14,10 @@ HUM_MEDIAN_OF = 5
 # The redo check during a session needs to react within a cue, so it takes the last 2 one-second estimates and
 # needs both over the limit: one noisy second doesn't stop a session, a pad that keeps humming does
 HUM_FAST_OF = 2
+# Hum left after the shared filter that counts as getting through. Quick calibration in the socket on 2026-11-16:
+# 1.4 to 1.7 % of the raw hum got through, ch 3 (253 uV raw) left 4.4 uV against 8.9 uV filtered at rest, ch 1
+# (148 uV) 2.1 uV, ch 2 (51 uV) none. So about 130 uV raw before it shows at rest
+HUM_LEFT_UV = 2.0
 NO_DATA_S = 1.0
 DROP_WINDOW_S = 10.0
 BATTERY_LOW = 15
@@ -44,6 +48,8 @@ class SignalQuality:
         self.rate = rate
         self.raw = np.zeros((len(channels), 0))
         self.hum = deque(maxlen=HUM_MEDIAN_OF)
+        self.filtered = np.zeros((len(channels), 0))
+        self.hum_left = deque(maxlen=HUM_MEDIAN_OF)
         self.since_hum = 0
         self.last_package = None
         self.drops = deque()
@@ -53,8 +59,9 @@ class SignalQuality:
         self.battery = None
         self.battery_log = deque()
 
-    def update(self, emg, package, battery=None):
-        """emg: live channels x new raw samples, package: their package numbers."""
+    def update(self, emg, package, battery=None, filtered=None):
+        """emg: live channels x new raw samples, package: their package numbers, filtered: the same samples through
+        the shared filter, for how much hum gets past it."""
         now = time.time()
         if emg.shape[1] == 0:
             return
@@ -75,14 +82,22 @@ class SignalQuality:
         self.last_package = package[-1]
 
         self.raw = np.hstack([self.raw, emg])[:, -self.rate:]
+        if filtered is not None:
+            self.filtered = np.hstack([self.filtered, filtered])[:, -self.rate:]
         self.lost = contact_lost(self.raw[:, -int(ENVELOPE_MS / 1000 * self.rate):])
         self.since_hum += emg.shape[1]
         if self.since_hum >= self.rate and self.raw.shape[1] == self.rate:
             self.since_hum = 0
             self.hum.append(line_rms(self.raw, self.rate))
+            if self.filtered.shape[1] == self.rate:
+                self.hum_left.append(line_rms(self.filtered, self.rate))
 
     def hum_uv(self):
         return np.median(np.array(self.hum), axis=0) if self.hum else np.zeros(len(self.channels))
+
+    def hum_left_uv(self):
+        """Median hum per channel after the filter, None without filtered data."""
+        return np.median(np.array(self.hum_left), axis=0) if self.hum_left else None
 
     def hum_recent(self):
         """Lowest of the last HUM_FAST_OF one-second hum estimates per channel, None until there are that many."""
@@ -92,6 +107,7 @@ class SignalQuality:
 
     def reset_hum(self):
         self.hum.clear()
+        self.hum_left.clear()
         self.since_hum = 0
 
     def battery_status(self):
@@ -126,8 +142,22 @@ class SignalQuality:
             out.append(("contact", f"Pad losing contact on ch {', '.join(map(str, chs))}"))
         hum = self.hum_uv()
         if (hum > HUM_WARN_UV).any():
-            bad = ", ".join(f"{ch} ({h:.0f} uV)" for ch, h in zip(self.channels, hum) if h > HUM_WARN_UV)
-            out.append(("hum", f"Mains hum on ch {bad}, check the pad contact"))
+            left = self.hum_left_uv()
+            humming = hum > HUM_WARN_UV
+            if left is None:
+                bad = ", ".join(f"{ch} ({h:.0f} uV)" for ch, h in zip(self.channels, hum) if h > HUM_WARN_UV)
+                out.append(("hum", f"Mains hum on ch {bad}, check the pad contact"))
+            else:
+                through = humming & (left > HUM_LEFT_UV)
+                parts = []
+                if through.any():
+                    chs = ", ".join(f"{ch} ({l:.1f} uV)" for ch, l, t in zip(self.channels, left, through) if t)
+                    parts.append(f"hum gets through the filter on ch {chs}, check the pad contact")
+                if (humming & ~through).any():
+                    chs = ", ".join(str(ch) for ch, h in zip(self.channels, humming & ~through) if h)
+                    parts.append(f"hum on ch {chs} is filtered out")
+                text = "; ".join(parts)
+                out.append(("hum", text[0].upper() + text[1:]))
         if self.battery is not None and self.battery < BATTERY_LOW:
             out.append(("battery", f"Armband battery at {self.battery:.0f} %"))
         return out

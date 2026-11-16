@@ -120,10 +120,11 @@ class Recorder:
                     self.session.add_board(data)
                 emg = data[self.band.emg_rows]
                 battery = data[rows["battery"], -1] if self.band.source == "armband" else None
-                self.quality.update(emg, data[rows["package"]], battery)
+                filtered = self.stream.process(emg)
+                self.quality.update(emg, data[rows["package"]], battery, filtered)
                 self._check_hum()
                 self.raw = np.hstack([self.raw, emg])[:, -self.history:]
-                self.filtered = np.hstack([self.filtered, self.stream.process(emg)])[:, -self.history:]
+                self.filtered = np.hstack([self.filtered, filtered])[:, -self.history:]
                 self.accel_history = np.hstack([self.accel_history, data[rows["accel"]]])[:, -self.history:]
                 self.received += emg.shape[1]
                 self.env = [envelope(y) for y in self.filtered[:, -self.env_len:]]

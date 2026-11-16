@@ -47,6 +47,20 @@ def test_hum_on_one_channel_is_flagged_after_two_seconds():
     assert list(np.flatnonzero(flagged)) == [5]
 
 
+def test_hum_banner_says_whether_the_filter_removes_it():
+    """Moderate hum the notches take out reads as filtered out, strong hum as getting through. A steady line right on
+    the notch would vanish completely, so the band clock here is 499.1 Hz, the slow end measured, slightly off it."""
+    from processing import StreamFilter
+    hum = np.zeros(8)
+    hum[2], hum[5] = 100, 3000
+    t = np.arange(4 * RATE) / RATE
+    x = raw(4) + hum[:, None] * np.sqrt(2) * np.sin(2 * np.pi * 60 * 500 / 499.1 * t)
+    q = SignalQuality(CHANNELS, RATE)
+    q.update(x, np.arange(x.shape[1]), filtered=StreamFilter(len(CHANNELS), RATE).process(x))
+    (code, text), = [w for w in q.warnings() if w[0] == "hum"]
+    assert "through the filter on ch 5" in text and "ch 2 is filtered out" in text
+
+
 def test_clean_signal_flags_nothing():
     q = SignalQuality(CHANNELS, RATE)
     feed(q, raw(3))
