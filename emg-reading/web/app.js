@@ -537,9 +537,7 @@ function drawSession() {
   $("progress-text").textContent = `cue ${s.index + 1} of ${s.count}   ${fmtTime(s.elapsed)}`;
   const hum = s.hum_pause;
   const pausedText = hum
-    ? `HUM ON CH ${hum.channels.join(", ")}<small>${hum.uv.map((v) => `${v} uV`).join(", ")}, that part is marked bad.
-      Press ${hum.channels.length > 1 ? "those pads" : "that pad"} down firmly, then Continue (␣) to redo it. Allow hum
-      redoes it too, then keeps going through hum: the session then only calibrates, it is left out of training</small>`
+    ? `HUM ON CH ${hum.channels.join(", ")}<small>Press ${hum.channels.length > 1 ? "those pads" : "that pad"} down and Continue (␣), or Allow hum to keep going</small>`
     : "PAUSED<small>press Continue (␣) to redo this cue</small>";
   $("cue-text").innerHTML = s.paused ? pausedText : cueTitle(cue.text);
   $("cue-text").classList.toggle("paused", s.paused);
@@ -551,7 +549,11 @@ function drawSession() {
   $("btn-bad").classList.toggle("armed", !!s.marked_bad);
   // Shown on a hum pause, and while hum is allowed so it can be turned back off
   $("btn-hum").hidden = !s.hum_pause && !s.allow_hum;
-  $("btn-hum").textContent = s.allow_hum ? (s.hum_passed ? "Redo on hum (had hum, calibration only)" : "Redo on hum") : "Allow hum";
+  $("btn-hum").textContent = s.allow_hum ? "Redo on hum" : "Allow hum";
+  // Rings on each new hum: a hum pause, or the first hum of a cue while allowed
+  const humKey = s.hum_pause ? `p${s.index}` : s.allow_hum && s.hum_cue >= 0 ? `c${s.hum_cue}` : null;
+  if (humKey) flashOnChange($("btn-hum"), humKey);
+  else if (s.hum_cue < 0) $("btn-hum").dataset.key = "";
   $("cue-time").textContent = cue.seconds && !s.paused ? `${Math.max(0, cue.seconds - s.cue_elapsed).toFixed(1)} s` : "";
   // Name and description of the next gesture or activity, without the reminder line every gesture shares. Before a
   // wrist bend or an activity the hand below stays relaxed, knowing what comes next matters more (Noah)
