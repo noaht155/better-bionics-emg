@@ -2239,6 +2239,16 @@ levels: r 0.995 to 0.999 per session, mean difference 0.005 to 0.013, a clench l
   sweeps both ways), so the page shows it (`haptics.rule_haptic` in `split_rules`). New rules start with it and it
   follows a changed pose. The tick per counted clench or flick is gone: only confirmed rules play (Noah).
 
+## 2026-11-16: hum in the plastic socket
+
+- In the socket hum shows on all channels for about a minute after putting it on, then settles (Noah: the shell
+  ventilates better than the band, the skin takes a minute to get moist). Some channels stay high after that.
+  Touching or kinking a lead sometimes clears it, not reliably. Not the motors (Noah).
+- Live on the app, settled, hum (raw 60 Hz, uV, ch 0 to 7): 3, 50, 1, 93, 21, 72, 28, 26. Pure 60 Hz, nothing at
+  120 or 180. After the filter (filter version 3) the 60 Hz peak is at the noise floor on all channels but ch 3
+  (3 times the floor) and ch 5 (1.6 times). So ch 3 trips the 80 uV redo limit while what the models see is
+  nearly clean: the limit is on raw hum and was set before the wider notch.
+
 ## Open
 
 Now: control on the signs
