@@ -592,7 +592,7 @@ def make_app(recorder, band, camera, tools, lan=True, serving=False):
             refuse(e)
 
     @app.post("/api/session/{action}")
-    def command(action: Literal["continue", "pause", "bad", "stop", "allow_hum", "redo_hum"]):
+    def command(action: Literal["continue", "pause", "bad", "stop", "allow_hum"]):
         try:
             recorder.command(action)
         except ValueError as e:

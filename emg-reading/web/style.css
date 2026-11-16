@@ -189,12 +189,6 @@ fieldset label { display: inline-flex; align-items: center; gap: 8px; }
 
 #cue-text small, #preview-text small { display: block; font-size: 18px; font-weight: 400; color: var(--muted); margin-top: 6px; }
 #cue-text.paused { color: var(--warn); }
-/* Three rings when hum pauses the session or comes through while allowed, so the button is easy to find */
-#btn-hum.changed { animation: hum-ring 600ms ease-out 3; }
-@keyframes hum-ring {
-  from { box-shadow: 0 0 0 0 color-mix(in srgb, var(--warn) 70%, transparent); }
-  to { box-shadow: 0 0 0 8px transparent; }
-}
 #bad-mark {
   display: inline-block;
   margin-top: 12px;

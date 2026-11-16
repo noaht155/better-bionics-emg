@@ -437,7 +437,7 @@ function mainAction() {
 
 $("btn-main").addEventListener("click", mainAction);
 $("btn-bad").addEventListener("click", () => command("bad"));
-$("btn-hum").addEventListener("click", () => command(state?.session?.allow_hum ? "redo_hum" : "allow_hum"));
+$("btn-hum").addEventListener("click", () => command("allow_hum"));
 
 // Stop needs a second click within 3 s, so a stray click doesn't end the session
 let stopArmed = null;
@@ -537,7 +537,7 @@ function drawSession() {
   $("progress-text").textContent = `cue ${s.index + 1} of ${s.count}   ${fmtTime(s.elapsed)}`;
   const hum = s.hum_pause;
   const pausedText = hum
-    ? `HUM ON CH ${hum.channels.join(", ")}<small>Press ${hum.channels.length > 1 ? "those pads" : "that pad"} down and Continue (␣), or Allow hum to keep going</small>`
+    ? `HUM ON CH ${hum.channels.join(", ")}<small>Hum drowns out the muscle signal on ${hum.channels.length > 1 ? "those pads" : "that pad"}, so the cue is redone</small>`
     : "PAUSED<small>press Continue (␣) to redo this cue</small>";
   $("cue-text").innerHTML = s.paused ? pausedText : cueTitle(cue.text);
   $("cue-text").classList.toggle("paused", s.paused);
@@ -547,20 +547,17 @@ function drawSession() {
   $("bad-mark").hidden = !mark;
   $("bad-mark").textContent = mark;
   $("btn-bad").classList.toggle("armed", !!s.marked_bad);
-  // Shown on a hum pause, and while hum is allowed so it can be turned back off
-  $("btn-hum").hidden = !s.hum_pause && !s.allow_hum;
-  $("btn-hum").textContent = s.allow_hum ? "Redo on hum" : "Allow hum";
-  // Rings on each new hum: a hum pause, or the first hum of a cue while allowed
-  const humKey = s.hum_pause ? `p${s.index}` : s.allow_hum && s.hum_cue >= 0 ? `c${s.hum_cue}` : null;
-  if (humKey) flashOnChange($("btn-hum"), humKey);
-  else if (s.hum_cue < 0) $("btn-hum").dataset.key = "";
+  // A hum pause offers two ways on: redo and keep pausing on hum, or redo and stop pausing for it
+  $("btn-hum").hidden = !s.hum_pause;
+  $("btn-bad").hidden = !!s.hum_pause;
+  $("btn-main").classList.toggle("primary", !!s.hum_pause);
   $("cue-time").textContent = cue.seconds && !s.paused ? `${Math.max(0, cue.seconds - s.cue_elapsed).toFixed(1)} s` : "";
   // Name and description of the next gesture or activity, without the reminder line every gesture shares. Before a
   // wrist bend or an activity the hand below stays relaxed, knowing what comes next matters more (Noah)
   const target = targetPose();
   $("next").innerHTML = target?.upcoming ? `<span>Next</span>${cueTitle(target.text)}` : "";
   flashOnChange($("next"), target?.upcoming ? target.text : "");
-  $("btn-main").textContent = s.paused || cue.kind === "break" ? "Continue (␣)" : "Pause (␣)";
+  $("btn-main").textContent = s.hum_pause ? "Redo on hum (␣)" : s.paused || cue.kind === "break" ? "Continue (␣)" : "Pause (␣)";
   $("session-info").textContent = `${s.folder}   ${s.samples} EMG samples, ${s.frames} camera frames`;
 
   const caption = $("target-label");

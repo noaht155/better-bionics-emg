@@ -297,8 +297,7 @@ def test_cue_cut_short_by_a_pause_is_bad():
 
 
 def test_hum_pauses_until_allowed_then_only_flags_the_session():
-    """Hum pauses and marks the cue bad. Allow hum redoes it and carries on through hum, flagging the session;
-    Redo on hum turns pausing back on."""
+    """Hum pauses and marks the cue bad. Allow hum redoes it and carries on through hum, flagging the session."""
     import threading
     import time
 
@@ -337,9 +336,6 @@ def test_hum_pauses_until_allowed_then_only_flags_the_session():
     r._check_hum()
     assert not r.paused and r.hum_passed
     assert [e["kind"] for e in r.session.events].count("hum") == 1
-    r.command("redo_hum")
-    r._check_hum()
-    assert r.paused and r.hum_passed
 
 
 def test_hum_passed_sessions_stay_out_of_training(tmp_path):

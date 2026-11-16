@@ -226,12 +226,6 @@ class Recorder:
                 self.allow_hum = True
                 self.session.add_event("allow_hum")
                 action = "continue"
-            elif action == "redo_hum":
-                if not self.allow_hum:
-                    raise ValueError("hum already pauses")
-                self.allow_hum = False
-                self.session.add_event("redo_hum")
-                return
             if action == "continue" and (cue["kind"] == "break" or self.paused):
                 if self.paused:
                     self.paused = False
@@ -424,7 +418,6 @@ class Recorder:
                     "index": self.index, "count": len(self.plan), "cue": cue,
                     "elapsed": time.time() - self.session.meta["started"], "paused": self.paused,
                     "hum_pause": self.hum_pause, "allow_hum": self.allow_hum, "hum_passed": self.hum_passed,
-                    "hum_cue": self.hum_logged,
                     # A mark only covers the run of the cue it was made in, a redo after a pause starts clean
                     "marked_bad": (self.bad_mark is not None and self.bad_mark["index"] == self.index
                                    and self.bad_mark["at"] >= self.cue_start),

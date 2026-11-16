@@ -2267,11 +2267,11 @@ levels: r 0.995 to 0.999 per session, mean difference 0.005 to 0.013, a clench l
   120 or 180. After the filter (filter version 3) the 60 Hz peak is at the noise floor on all channels but ch 3
   (3 times the floor) and ch 5 (1.6 times). So ch 3 trips the 80 uV redo limit while what the models see is
   nearly clean: the limit is on raw hum and was set before the wider notch.
-- Hum blocked quick calibration for control, so it can be let through. Hum still pauses and
-  redoes the cue; the pause has an Allow hum button that redoes it too and then carries on through hum, and Redo on
-  hum turns pausing back on, so the choice can change mid session. Hum while allowed logs a `hum` event (once per
-  cue) and sets `hum_passed` in `session.json`. Those sessions still calibrate but stay out of training
-  (`dataset.trainable`: good sessions, evaluate, the Train tab's sign list and default ticks).
+- Hum blocked quick calibration for control, so it can be let through. A hum pause gives one line on why and two
+  choices: Redo on hum (Space, as before) or Continue with hum, which redoes the cue and stops pausing for hum for
+  the rest of the session. Hum after that logs a `hum` event (once per cue) and sets `hum_passed` in
+  `session.json`. Those sessions still calibrate but stay out of training (`dataset.trainable`: good sessions,
+  evaluate, the Train tab's sign list and default ticks).
 
 ## Open
 
