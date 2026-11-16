@@ -2297,6 +2297,17 @@ levels: r 0.995 to 0.999 per session, mean difference 0.005 to 0.013, a clench l
   recording decides whether it matters (Noah). Read with the arm relaxed. The warning can be muted
   for 15 min, 1 h or 4 h per browser. The redo check still uses raw hum.
 
+## 2026-11-16: ESP32 power for the perfboard
+- WiFi works when the breadboard 5 V goes in through the ESP32's USB-C port (a cut cable), not through the 5V pin.
+  The firmware doesn't depend on USB (clean boot, `READY,0.2,0.2.1`), so it's the board's power path.
+- Test setup without the armband: a Windows hotspot with the armband's SSID and password on 2.4 GHz, plus
+  192.168.4.1 added to the hotspot adapter (admin) so 192.168.4.10 can be pinged. The hotspot list doesn't show
+  the ESP32 (fixed IP, no DHCP), and Windows turns the hotspot off after 5 min with no device, which spoiled the
+  later tests.
+- On pin power: 4.97 V at the 5V pin, 3.3 V at 3V3, but EN at 2.4 V (needs about 2.5 V). With 4.7 kOhm from EN to
+  3V3 it read 3.0 V. Fits a path of about 27 kOhm to ground, likely the unpowered USB chip's auto-reset circuit,
+  which also drives IO0. Whether the pull-up fixes WiFi is untested (hotspot was off), IO0 not measured yet.
+
 ## Open
 
 Now: control on the signs
@@ -2351,6 +2362,9 @@ Now: haptics
   inside the 40 to 200 Hz EMG band, so check for motor pickup in the EMG either way.
 
 Now: ESP32
+- Perfboard power (2026-11-16): find why the 5V pin path stops WiFi. Next: measure IO0 on pin power, retest the EN
+  pull-up with the hotspot checked first (USB-C power must answer ping), read serial over USB while testing.
+  Fallback: power through the USB-C port, the one setup proven to work.
 - Port the filter, envelope and features to C++ as streaming code and check them against `StreamFilter` and the
   Python features on recorded sessions. Then the sign model: size, speed and memory on the board, weights in flash.
 
