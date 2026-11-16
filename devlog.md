@@ -2307,6 +2307,11 @@ levels: r 0.995 to 0.999 per session, mean difference 0.005 to 0.013, a clench l
 - On pin power: 4.97 V at the 5V pin, 3.3 V at 3V3, but EN at 2.4 V (needs about 2.5 V). With 4.7 kOhm from EN to
   3V3 it read 3.0 V. Fits a path of about 27 kOhm to ground, likely the unpowered USB chip's auto-reset circuit,
   which also drives IO0. Whether the pull-up fixes WiFi is untested (hotspot was off), IO0 not measured yet.
+- Retest with the hotspot kept on (auto off disabled, 192.168.4.1 on the adapter, USB-C answers ping first): on the
+  5V pin it never joined in 30 min, with 2 kOhm from EN to 3V3 and with a pull-up on G0 as well. EN and G0 readings
+  were inconsistent (EN 2.4 V, later 0.91 V; G0 2.6 V, later 3.17 V), not trusted. Back on USB-C it answered within
+  a minute. Decision (Noah): power the perfboard through the USB-C port. Untested idea if the pin is ever needed:
+  bridge the diode between USB VBUS and the 5V pin so the USB side is powered too.
 
 ## Open
 
@@ -2362,9 +2367,6 @@ Now: haptics
   inside the 40 to 200 Hz EMG band, so check for motor pickup in the EMG either way.
 
 Now: ESP32
-- Perfboard power (2026-11-16): find why the 5V pin path stops WiFi. Next: measure IO0 on pin power, retest the EN
-  pull-up with the hotspot checked first (USB-C power must answer ping), read serial over USB while testing.
-  Fallback: power through the USB-C port, the one setup proven to work.
 - Port the filter, envelope and features to C++ as streaming code and check them against `StreamFilter` and the
   Python features on recorded sessions. Then the sign model: size, speed and memory on the board, weights in flash.
 
