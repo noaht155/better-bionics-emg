@@ -446,10 +446,10 @@ async function loadTrainLists() {
     const tr = document.createElement("tr");
     // Keep the choice for sessions already listed. A grip session recorded since then starts ticked if it finished
     // and no sign sessions are ticked
-    const on = listed.has(s.name) ? checked.has(s.name) : s.completed && !signSession(s) && !signsTicked;
+    const on = listed.has(s.name) ? checked.has(s.name) : s.completed && !s.hum_passed && !signSession(s) && !signsTicked;
     tr.innerHTML = `<td><input type="checkbox" value="${s.name}" ${on ? "checked" : ""}></td><td>${s.name}</td>
       <td>${s.band_arm ?? ""}${s.port_facing ? `, port to ${s.port_facing}` : ""}</td><td>${(s.postures || []).join(", ")}</td><td>${s.placement || ""}</td>
-      <td>${s.seconds ? fmtTime(s.seconds) : ""}${s.completed ? "" : " (stopped early)"}</td>
+      <td>${s.seconds ? fmtTime(s.seconds) : ""}${s.completed ? "" : " (stopped early)"}${s.hum_passed ? " (hum, calibration only)" : ""}</td>
       <td>${s.protocol}</td>`;
     table.append(tr);
   }
@@ -477,13 +477,13 @@ function tickedSessions() {
   return trainSessions.filter((s) => names.has(s.name));
 }
 
-// Completed sessions of the picked protocols. Picking the other kind unticks the ticked ones first
+// Trainable sessions of the picked protocols. Picking the other kind unticks the ticked ones first
 $("train-pick").addEventListener("click", (e) => {
   const protocols = e.target.dataset?.protocols;
   if (protocols == null) return;
   for (const c of $("train-sessions").querySelectorAll("input")) {
     const s = trainSessions.find((x) => x.name === c.value);
-    c.checked = Boolean(protocols) && s.completed && protocols.includes(s.protocol);
+    c.checked = Boolean(protocols) && s.completed && !s.hum_passed && protocols.includes(s.protocol);
   }
   $("train-pick-note").textContent = "";
   updateTrainForm();
@@ -1156,6 +1156,7 @@ const DEV_SUMMARY = { completed: true, practice: false, folder: "dev/2026-10-20_
 const DEV_OUTROS = {
   done: {},
   bad: { marked_bad: 3, hum_pauses: 1 },
+  hum: { hum_pauses: 1, hum_passed: true },
   stopped: { completed: false, seconds: 402, cues_done: 31 },
   practice: { practice: true, folder: "practice run, nothing saved", seconds: 240, cues: 30, cues_done: 30 },
 };

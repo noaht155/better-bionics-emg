@@ -76,6 +76,10 @@ class Recorder:
         self.paused = False
         # Set when hum paused the session: which channels, and the first cue to redo
         self.hum_pause = None
+        # Hum allowed: it no longer pauses, and a session that had any is kept out of training (it still calibrates)
+        self.allow_hum = False
+        self.hum_passed = False
+        self.hum_logged = -1
         # Last Mark bad press: which cue and when, so the page can show it
         self.bad_mark = None
         self.last_summary = None
@@ -203,6 +207,9 @@ class Recorder:
             self.last_summary = None
             self.marked_bad = set()
             self.hum_pauses = 0
+            self.allow_hum = False
+            self.hum_passed = False
+            self.hum_logged = -1
             # The quality check counts drops since the app started, the session only wants its own
             self.dropped_at_start = self.quality.dropped_total
             self._go_to(0)
@@ -213,6 +220,18 @@ class Recorder:
             if self.session is None:
                 raise ValueError("no session running")
             cue = self.plan[self.index]
+            if action == "allow_hum":
+                if self.hum_pause is None:
+                    raise ValueError("not paused for hum")
+                self.allow_hum = True
+                self.session.add_event("allow_hum")
+                action = "continue"
+            elif action == "redo_hum":
+                if not self.allow_hum:
+                    raise ValueError("hum already pauses")
+                self.allow_hum = False
+                self.session.add_event("redo_hum")
+                return
             if action == "continue" and (cue["kind"] == "break" or self.paused):
                 if self.paused:
                     self.paused = False
@@ -248,6 +267,13 @@ class Recorder:
         if hum is None or not (hum > HUM_WARN_UV).any():
             return
         channels = [ch for ch, h in zip(self.quality.channels, hum) if h > HUM_WARN_UV]
+        if self.allow_hum:
+            self.hum_passed = True
+            if self.hum_logged != self.index:
+                self.hum_logged = self.index
+                self.session.add_event("hum", index=self.index, channels=channels,
+                                       uv=[round(float(h)) for h in hum[hum > HUM_WARN_UV]])
+            return
         bad = [self.index]
         # The check looks back HUM_FAST_OF seconds, so hum found early in a cue may have started in the one before
         if (self.advanced and time.time() - self.cue_start < HUM_FAST_OF
@@ -282,7 +308,8 @@ class Recorder:
         session = self.session
         self.session = None
         session.add_event("stop", completed=completed)
-        summary = {"completed": completed, "dropped_samples": self.quality.dropped_total - self.dropped_at_start}
+        summary = {"completed": completed, "dropped_samples": self.quality.dropped_total - self.dropped_at_start,
+                   "hum_passed": self.hum_passed}
         session.close(**summary)
         seconds = session.meta["ended"] - session.meta["started"]
         detected = session.detected / session.frames if session.frames else None
@@ -396,7 +423,7 @@ class Recorder:
                     "folder": _folder_text(self.session), "practice": self.session.folder is None,
                     "index": self.index, "count": len(self.plan), "cue": cue,
                     "elapsed": time.time() - self.session.meta["started"], "paused": self.paused,
-                    "hum_pause": self.hum_pause,
+                    "hum_pause": self.hum_pause, "allow_hum": self.allow_hum, "hum_passed": self.hum_passed,
                     # A mark only covers the run of the cue it was made in, a redo after a pause starts clean
                     "marked_bad": (self.bad_mark is not None and self.bad_mark["index"] == self.index
                                    and self.bad_mark["at"] >= self.cue_start),

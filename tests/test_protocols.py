@@ -296,6 +296,62 @@ def test_cue_cut_short_by_a_pause_is_bad():
     assert not redo["bad"] and (redo["sample0"], redo["sample1"]) == (750, 2750)
 
 
+def test_hum_pauses_until_allowed_then_only_flags_the_session():
+    """Hum pauses and marks the cue bad. Allow hum redoes it and carries on through hum, flagging the session;
+    Redo on hum turns pausing back on."""
+    import threading
+    import time
+
+    class Session:
+        def __init__(self):
+            self.events = []
+
+        def add_event(self, kind, **fields):
+            self.events.append(dict(fields, kind=kind))
+
+    class Quality:
+        channels = list(range(8))
+        level = np.full(8, 10.0)
+
+        def hum_recent(self):
+            return self.level
+
+        def reset_hum(self):
+            pass
+
+    cue = {"kind": "hold", "label": "fist", "text": "", "seconds": 4, "posture": "table"}
+    r = Recorder.__new__(Recorder)
+    r._lock = threading.Lock()
+    r.session, r.quality, r.plan = Session(), Quality(), [cue, cue, cue]
+    r.index, r.paused, r.advanced, r.cue_start = 1, False, False, time.time()
+    r.hum_pause, r.hum_pauses, r.allow_hum, r.hum_passed, r.hum_logged = None, 0, False, False, -1
+    r.marked_bad, r.bad_mark = set(), None
+    with pytest.raises(ValueError):
+        r.command("allow_hum")
+    r.quality.level = np.array([0, 0, 0, 93.0, 0, 0, 0, 0])
+    r._check_hum()
+    assert r.paused and r.hum_pause["channels"] == [3] and not r.hum_passed
+    r.command("allow_hum")
+    assert not r.paused and r.allow_hum and r.index == 1
+    r._check_hum()
+    r._check_hum()
+    assert not r.paused and r.hum_passed
+    assert [e["kind"] for e in r.session.events].count("hum") == 1
+    r.command("redo_hum")
+    r._check_hum()
+    assert r.paused and r.hum_passed
+
+
+def test_hum_passed_sessions_stay_out_of_training(tmp_path):
+    assert dataset.trainable({"completed": True})
+    assert not dataset.trainable({"completed": True, "hum_passed": True})
+    plan = [{"kind": "hold", "label": "fist"}]
+    for name, hum in (("clean", False), ("hummy", True)):
+        (tmp_path / name).mkdir()
+        (tmp_path / name / "session.json").write_text(json.dumps({"completed": True, "hum_passed": hum, "plan": plan}))
+    assert [f.name for f in dataset.good_sessions(tmp_path)] == ["clean"]
+
+
 def test_sign_sessions_train_their_signs_and_refuse_a_mix(tmp_path):
     """Train tab: E and F sessions train an LDA on the signs they share, rest and the wrist bends (notsign); grip
     sessions train as before; a mix is refused."""
