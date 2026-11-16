@@ -2260,6 +2260,7 @@ levels: r 0.995 to 0.999 per session, mean difference 0.005 to 0.013, a clench l
 
 ## 2026-11-16: hum in the plastic socket
 
+- `wide-notch` merged into `main` after Noah tried it on the socket (control felt good with hum).
 - In the socket hum shows on all channels for about a minute after putting it on, then settles (Noah: the shell
   ventilates better than the band, the skin takes a minute to get moist). Some channels stay high after that.
   Touching or kinking a lead sometimes clears it, not reliably. Not the motors (Noah).
@@ -2292,7 +2293,9 @@ Now: control on the signs
   connecting. `diagnostics/motor_pickup.py` already runs the motors in timed blocks against the band. Still to do: hum with the motors running, and a
   small battery supply for the motors to see if ch 0 and 1 drop to their unplugged 40 and 22 uV.
 - Hum on ch 3: the hub can't be opened (Noah). Check how the ch 3 and 5 pads sit in the socket, then recheck hum.
-- `wide-notch` (with Allow hum folded in): try Allow hum and a quick calibration on the socket, then merge.
+- Hum sessions in training: only one so far (`104008`, quick, 311 s, against about 5000 s of clean F data), too
+  little to show an effect over seed noise (about 0.6 points). Once there are 3 or more full F sessions with hum,
+  train with and without them and score the clean benchmark and the hummy sessions.
 - Mapping page: a held pose rule at 0 s silently cancels repeated rules on the same trigger, `check_rules` lets it
   through (open and close no longer do since `FLICK_MAX_S`).
 - Sign network (in `ml/` with calibration since 2026-10-19; calibrated score flat from 1 training session on, see the
