@@ -437,6 +437,7 @@ function mainAction() {
 
 $("btn-main").addEventListener("click", mainAction);
 $("btn-bad").addEventListener("click", () => command("bad"));
+$("btn-hum").addEventListener("click", () => command(state?.session?.allow_hum ? "redo_hum" : "allow_hum"));
 
 // Stop needs a second click within 3 s, so a stray click doesn't end the session
 let stopArmed = null;
@@ -537,7 +538,8 @@ function drawSession() {
   const hum = s.hum_pause;
   const pausedText = hum
     ? `HUM ON CH ${hum.channels.join(", ")}<small>${hum.uv.map((v) => `${v} uV`).join(", ")}, that part is marked bad.
-      Press ${hum.channels.length > 1 ? "those pads" : "that pad"} down firmly, then Continue (␣) to redo it</small>`
+      Press ${hum.channels.length > 1 ? "those pads" : "that pad"} down firmly, then Continue (␣) to redo it. Allow hum
+      redoes it too, then keeps going through hum: the session then only calibrates, it is left out of training</small>`
     : "PAUSED<small>press Continue (␣) to redo this cue</small>";
   $("cue-text").innerHTML = s.paused ? pausedText : cueTitle(cue.text);
   $("cue-text").classList.toggle("paused", s.paused);
@@ -547,6 +549,9 @@ function drawSession() {
   $("bad-mark").hidden = !mark;
   $("bad-mark").textContent = mark;
   $("btn-bad").classList.toggle("armed", !!s.marked_bad);
+  // Shown on a hum pause, and while hum is allowed so it can be turned back off
+  $("btn-hum").hidden = !s.hum_pause && !s.allow_hum;
+  $("btn-hum").textContent = s.allow_hum ? (s.hum_passed ? "Redo on hum (had hum, calibration only)" : "Redo on hum") : "Allow hum";
   $("cue-time").textContent = cue.seconds && !s.paused ? `${Math.max(0, cue.seconds - s.cue_elapsed).toFixed(1)} s` : "";
   // Name and description of the next gesture or activity, without the reminder line every gesture shares. Before a
   // wrist bend or an activity the hand below stays relaxed, knowing what comes next matters more (Noah)
@@ -669,7 +674,8 @@ function showOutro(r) {
   $("outro-title").textContent = { done: "Session complete", stopped: "Stopped early", practice: "Practice run done" }[kind];
   const marked = r.marked_bad ? ` <b>${plural(r.marked_bad, "cue")} marked bad, left out of training.</b>` : "";
   $("outro-note").innerHTML = {
-    done: `Saved to ${r.folder}, ready for training.${marked}`,
+    done: r.hum_passed ? `Saved to ${r.folder}. It had hum, so it only calibrates and is left out of training.${marked}`
+      : `Saved to ${r.folder}, ready for training.${marked}`,
     stopped: r.practice ? "Nothing was saved." : `Saved to ${r.folder}, not used for training because it didn't finish.`,
     practice: `Nothing was saved.${marked}`,
   }[kind];

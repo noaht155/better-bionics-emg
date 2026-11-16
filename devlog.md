@@ -2267,6 +2267,11 @@ levels: r 0.995 to 0.999 per session, mean difference 0.005 to 0.013, a clench l
   120 or 180. After the filter (filter version 3) the 60 Hz peak is at the noise floor on all channels but ch 3
   (3 times the floor) and ch 5 (1.6 times). So ch 3 trips the 80 uV redo limit while what the models see is
   nearly clean: the limit is on raw hum and was set before the wider notch.
+- Hum blocked quick calibration for control, so it can be let through. Hum still pauses and
+  redoes the cue; the pause has an Allow hum button that redoes it too and then carries on through hum, and Redo on
+  hum turns pausing back on, so the choice can change mid session. Hum while allowed logs a `hum` event (once per
+  cue) and sets `hum_passed` in `session.json`. Those sessions still calibrate but stay out of training
+  (`dataset.trainable`: good sessions, evaluate, the Train tab's sign list and default ticks).
 
 ## Open
 
@@ -2277,7 +2282,8 @@ Now: control on the signs
 - Hum from the motors (parked 2026-11-05): floating supplies cut most of it, it still rises about a minute after
   connecting. `diagnostics/motor_pickup.py` already runs the motors in timed blocks against the band. Still to do: hum with the motors running, and a
   small battery supply for the motors to see if ch 0 and 1 drop to their unplugged 40 and 22 uV.
-- Hum on ch 3: open the hub and check the wire on its side, then recheck hum on all channels.
+- Hum on ch 3: the hub can't be opened (Noah). Check how the ch 3 and 5 pads sit in the socket, then recheck hum.
+- `wide-notch` (with Allow hum folded in): try Allow hum and a quick calibration on the socket, then merge.
 - Mapping page: a held pose rule at 0 s silently cancels repeated rules on the same trigger, `check_rules` lets it
   through (open and close no longer do since `FLICK_MAX_S`).
 - Sign network (in `ml/` with calibration since 2026-10-19; calibrated score flat from 1 training session on, see the

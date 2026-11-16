@@ -193,7 +193,7 @@ def main():
     wanted = set(args.protocol or (["F"] if args.signs else ["A", "B", "C", "D"]))
     if args.signs:
         folders = [p.parent for p in sorted(dataset.DATA_DIR.glob("*/session.json"))
-                   if json.loads(p.read_text()).get("completed")]
+                   if dataset.trainable(json.loads(p.read_text()))]
     else:
         folders = dataset.good_sessions()
     # Quick sessions are too short to hold out, see dataset.quick

@@ -1,6 +1,6 @@
 """Training windows from every good session, for the networks.
 
-Good means completed (not stopped early) with gesture cues, from any user. Each window is the raw output of the
+Good means completed (not stopped early), no hum let through, with gesture cues, from any user. Each window is the raw output of the
 shared filter, 8 channels x WINDOW samples, ending every STEP samples, with what is known about it:
 - grip: the cued grip if the window lies in the trimmed part of a hold cue (same rule as the LDA), else None
 - rep: which repetition of that grip in that posture (1 to 3), 0 outside held grips
@@ -46,14 +46,19 @@ CACHE = Path(__file__).with_name("cache")
 VERSION = f"7-f{FILTER_VERSION}-w{WINDOW}-s{STEP}-{'.'.join(GESTURE_SET)}"
 
 
+def trainable(meta):
+    """Completed, and no hum let through (hum allowed sessions only calibrate)."""
+    return bool(meta.get("completed")) and not meta.get("hum_passed")
+
+
 def good_sessions(data_dir=DATA_DIR):
-    """Completed sessions with gesture cues, oldest first."""
+    """Trainable sessions with gesture cues, oldest first."""
     out = []
     for path in sorted(Path(data_dir).glob("*/session.json")):
         meta = json.loads(path.read_text())
         has_grips = any(c["kind"] == "hold" and c["label"] in GESTURE_SET and c["label"] != "rest"
                         for c in meta.get("plan", []))
-        if meta.get("completed") and has_grips:
+        if trainable(meta) and has_grips:
             out.append(path.parent)
     return out
 

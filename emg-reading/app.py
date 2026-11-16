@@ -412,7 +412,7 @@ def session_list():
                     "band_arm": settings.get("band_arm"), "port_facing": settings.get("port_facing"),
                     "placement": placement_text(settings),
                     "gestures": gestures, "signs": signs, "positions": sorted(positions),
-                    "completed": meta.get("completed"),
+                    "completed": meta.get("completed"), "hum_passed": meta.get("hum_passed", False),
                     "seconds": round(meta["ended"] - meta["started"]) if meta.get("ended") else None,
                     "protocol": settings.get("protocol", "A")})
     return out
@@ -592,7 +592,7 @@ def make_app(recorder, band, camera, tools, lan=True, serving=False):
             refuse(e)
 
     @app.post("/api/session/{action}")
-    def command(action: Literal["continue", "pause", "bad", "stop"]):
+    def command(action: Literal["continue", "pause", "bad", "stop", "allow_hum", "redo_hum"]):
         try:
             recorder.command(action)
         except ValueError as e:
@@ -751,7 +751,7 @@ def make_app(recorder, band, camera, tools, lan=True, serving=False):
             if Path(name).name != name or not (NETWORK_DIR / name).is_file():
                 refuse("unknown network")
             if settings.job == "signs":
-                signs = [s["name"] for s in session_list() if s["completed"] and s["signs"]]
+                signs = [s["name"] for s in session_list() if s["completed"] and not s["hum_passed"] and s["signs"]]
                 if not settings.sessions or any(n not in signs for n in settings.sessions):
                     refuse("pick at least one completed sign session")
                 args = ["ml.networks", "signs", name, "--epochs", str(settings.epochs), "--sessions", *settings.sessions]
