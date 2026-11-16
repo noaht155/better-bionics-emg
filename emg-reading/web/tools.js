@@ -8,7 +8,7 @@ const SPECTRUM_MS = 250;
 // Tabs
 
 // The setup and troubleshooting pages sit under System. Cursor is archived: only listed with Show archived on
-const SYSTEM_TABS = ["signals", "connection", "haptics", "calibrate", "cursor", "sync", "dev"];
+const SYSTEM_TABS = ["signals", "hum", "connection", "haptics", "calibrate", "cursor", "sync", "dev"];
 const SYSTEM_KEY = "system-tab";
 const ARCHIVED_KEY = "show-archived";
 
@@ -21,6 +21,61 @@ function store(key, value) {
 }
 
 const showArchived = () => $("show-archived").checked;
+
+// Hum tab: the warning can be muted for a while, per browser
+const HUM_MUTE_KEY = "hum-muted-until";
+const HUM_SHARE_FINE = 0.1;
+const HUM_SHARE_MOSTLY = 0.5;
+
+function humMutedUntil() {
+  const until = Number(stored(HUM_MUTE_KEY));
+  return until > Date.now() ? until : 0;
+}
+
+function drawHumMute() {
+  const until = humMutedUntil();
+  $("hum-mute").hidden = !!until;
+  $("hum-unmute").hidden = !until;
+  $("hum-muted").textContent = until
+    ? `The hum warning is muted until ${new Date(until).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}.`
+    : "";
+}
+
+$("hum-mute").addEventListener("click", () => {
+  store(HUM_MUTE_KEY, String(Date.now() + Number($("hum-mute-for").value) * 60_000));
+  drawHumMute();
+  warningKey = null;
+});
+$("hum-unmute").addEventListener("click", () => {
+  store(HUM_MUTE_KEY, "0");
+  drawHumMute();
+  warningKey = null;
+});
+
+function humVerdict(share) {
+  if (share < HUM_SHARE_FINE) return ["Fine", "muted"];
+  if (share < HUM_SHARE_MOSTLY) return ["Noisy at rest", "warn-text"];
+  return ["Mostly hum, press the pad in", "error"];
+}
+
+function drawHumTab() {
+  if (currentTab !== "hum") return;
+  const table = $("hum-live");
+  const head = "<tr><th>Ch</th><th>Mains hum uV</th><th>Left after filter uV</th><th>Filtered signal uV</th><th>Share</th><th></th></tr>";
+  if (!state.hum_left || !state.level) {
+    table.innerHTML = `${head}<tr><td colspan="6" class="muted">Waiting for a second of data</td></tr>`;
+    return;
+  }
+  const rows = config.channels.map((ch, i) => {
+    const left = state.hum_left[i];
+    const level = state.level[i];
+    const share = level > 0 ? Math.min(1, (left / level) ** 2) : 0;
+    const [verdict, cls] = humVerdict(share);
+    return `<tr><td>${ch}</td><td>${state.hum[i].toFixed(0)}</td><td>${left.toFixed(1)}</td><td>${level.toFixed(1)}</td>
+      <td>${Math.round(100 * share)} %</td><td class="${cls}">${verdict}</td></tr>`;
+  });
+  table.innerHTML = head + rows.join("");
+}
 
 function showTab(name) {
   if (name === "system") {
@@ -39,6 +94,7 @@ function showTab(name) {
   // The camera preview and the signal stream only run while their tab is open
   if (name === "record") showView();
   else $("video").src = "";
+  if (name === "hum") { drawHumMute(); drawHumTab(); }
   if (name === "signals") openSignals();
   else closeSignals();
   if (name === "train") loadTrainLists();

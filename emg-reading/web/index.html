@@ -49,6 +49,7 @@
 
 <nav id="subtabs" hidden>
   <button data-tab="signals">Signals</button>
+  <button data-tab="hum">Hum</button>
   <button data-tab="connection">Connection</button>
   <button data-tab="haptics">Haptics</button>
   <button data-tab="calibrate">Calibrate</button>
@@ -242,6 +243,28 @@
       <span class="muted">Same filter as the recordings and the haptics. Raw has each channel's mean removed.</span>
     </div>
     <canvas id="signals" width="1200" height="760"></canvas>
+  </section>
+</main>
+
+<main id="tab-hum" class="tab single" hidden>
+  <section>
+    <h1>Hum</h1>
+    <p class="muted">The warning bar shows the mains hum each pad picks up before the filter. Whether that matters
+      depends on how much of it gets past the filter compared with the signal the models and haptics see. Read it
+      with the arm relaxed: that is when the signal is smallest and hum counts most.</p>
+    <h2>Per channel</h2>
+    <div class="table-scroll"><table id="hum-live"></table></div>
+    <p class="muted">Share: the hum left after the filter as a share of the filtered signal. Under 10 % it doesn't
+      matter, 10 to 50 % rest is noisy but control is fine, over 50 % the channel is mostly hum: press that pad in.</p>
+    <h2>Warning</h2>
+    <div class="controls">
+      <select id="hum-mute-for" aria-label="Mute for">
+        <option value="15">15 min</option><option value="60">1 h</option><option value="240">4 h</option>
+      </select>
+      <button id="hum-mute">Mute the hum warning</button>
+      <button id="hum-unmute" hidden>Unmute</button>
+    </div>
+    <p id="hum-muted" class="muted"></p>
   </section>
 </main>
 

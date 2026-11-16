@@ -54,6 +54,7 @@ body {
 }
 
 #warnings div.serious { background: var(--bad); color: #fff; }
+#warnings a { color: inherit; margin-left: 8px; }
 #warnings div.new { animation: drop 160ms ease-out; }
 @keyframes drop { from { opacity: 0; transform: translateY(-100%); } }
 
@@ -138,6 +139,7 @@ section > p.muted, section > form > p.muted { max-width: 90ch; }
 main.single label > input[type=number] { max-width: 14em; }
 fieldset label { display: inline-flex; align-items: center; gap: 8px; }
 .error { color: var(--bad); font-weight: 600; }
+.warn-text { color: var(--warn); }
 
 #summary { margin-top: 12px; padding: 12px; border: 1px solid var(--line); border-radius: 2px; }
 #summary .stopped { color: var(--muted); }

@@ -41,6 +41,10 @@ ERROR_SHOWN_S = 10
 EDGE_MARGIN = 0.12
 
 
+def _rounded(values, digits):
+    return None if values is None else [round(float(v), digits) for v in values]
+
+
 def _folder_text(session):
     return str(session.folder) if session.folder is not None else "practice run, nothing saved"
 
@@ -400,6 +404,7 @@ class Recorder:
         with self._lock:
             state = {"env": [round(e, 1) for e in self.env], "accel": self.accel,
                      "hum": [round(float(h), 1) for h in self.quality.hum_uv()],
+                     "hum_left": _rounded(self.quality.hum_left_uv(), 2), "level": _rounded(self.quality.level_uv(), 1),
                      "lost": self.quality.lost.tolist(), "warnings": self.warnings(),
                      "battery": self.quality.battery_status(),
                      "hand": None, "camera_fps": round(self.camera.fps, 1) if self.camera else None,

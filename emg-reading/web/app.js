@@ -492,19 +492,28 @@ let warningCodes = new Set();
 
 // Rebuilt only when a warning changes, and only a new warning slides in (hum text changes with every update)
 function drawWarnings() {
-  const key = state.warnings.map((w) => `${w.code}:${w.text}`).join("|");
+  const muted = humMutedUntil();
+  const shown = state.warnings.filter((w) => !(w.code === "hum" && muted));
+  const key = shown.map((w) => `${w.code}:${w.text}`).join("|");
   if (key === warningKey) return;
   warningKey = key;
   const box = $("warnings");
   box.innerHTML = "";
-  for (const w of state.warnings) {
+  for (const w of shown) {
     const div = document.createElement("div");
     div.textContent = w.text;
+    if (w.code === "hum") {
+      const link = document.createElement("a");
+      link.href = "#";
+      link.textContent = "How much gets through";
+      link.addEventListener("click", (e) => { e.preventDefault(); showTab("hum"); });
+      div.append(" ", link);
+    }
     if (SERIOUS.has(w.code)) div.classList.add("serious");
     if (!warningCodes.has(w.code)) div.classList.add("new");
     box.append(div);
   }
-  warningCodes = new Set(state.warnings.map((w) => w.code));
+  warningCodes = new Set(shown.map((w) => w.code));
 }
 
 function drawLive(now) {
@@ -1032,7 +1041,7 @@ function connect() {
     state = JSON.parse(e.data);
     stateAt = performance.now();
     // Each part on its own, so an error in one can't freeze the others (it did freeze the camera overlay once)
-    for (const draw of [drawWarnings, drawSession, drawView, drawTools]) {
+    for (const draw of [drawWarnings, drawSession, drawView, drawTools, drawHumTab]) {
       try {
         draw();
       } catch (err) {

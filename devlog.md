@@ -2277,8 +2277,10 @@ levels: r 0.995 to 0.999 per session, mean difference 0.005 to 0.013, a clench l
   4.4 uV against 8.9 uV filtered, ch 1 2.1 against 9.5, the rest nothing. During signs (22 to 37 uV filtered) it is
   under 2 % of the power, which fits control feeling good on it (Noah). A steady line right on the notch goes
   to 0; what gets through is hum whose level wobbles or that sits off the notch (band clock 499.1 to 499.6).
-- The hum banner now says per channel whether the hum gets through the filter (over 2 uV left,
-  `quality.HUM_LEFT_UV`, about 130 uV raw) or is filtered out. The redo check still uses raw hum.
+- The hum banner stays on raw mains hum (an unbiased reading, Noah) and links to a new System > Hum tab: per channel
+  raw hum, hum left after the filter, the filtered signal and the hum's share of it (power), with a verdict: under
+  10 % fine, 10 to 50 % noisy at rest, over 50 % mostly hum. Read with the arm relaxed. The warning can be muted
+  for 15 min, 1 h or 4 h per browser. The redo check still uses raw hum.
 
 ## Open
 
