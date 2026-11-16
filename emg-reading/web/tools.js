@@ -24,8 +24,6 @@ const showArchived = () => $("show-archived").checked;
 
 // Hum tab: the warning can be muted for a while, per browser
 const HUM_MUTE_KEY = "hum-muted-until";
-const HUM_SHARE_FINE = 0.1;
-const HUM_SHARE_MOSTLY = 0.5;
 
 function humMutedUntil() {
   const until = Number(stored(HUM_MUTE_KEY));
@@ -52,27 +50,20 @@ $("hum-unmute").addEventListener("click", () => {
   warningKey = null;
 });
 
-function humVerdict(share) {
-  if (share < HUM_SHARE_FINE) return ["Fine", "muted"];
-  if (share < HUM_SHARE_MOSTLY) return ["Noisy at rest", "warn-text"];
-  return ["Mostly hum, press the pad in", "error"];
-}
-
 function drawHumTab() {
   if (currentTab !== "hum") return;
   const table = $("hum-live");
-  const head = "<tr><th>Ch</th><th>Mains hum uV</th><th>Left after filter uV</th><th>Filtered signal uV</th><th>Share</th><th></th></tr>";
+  const head = "<tr><th>Ch</th><th>Mains hum uV</th><th>Left after filter uV</th><th>Filtered signal uV</th><th>Share</th></tr>";
   if (!state.hum_left || !state.level) {
-    table.innerHTML = `${head}<tr><td colspan="6" class="muted">Waiting for a second of data</td></tr>`;
+    table.innerHTML = `${head}<tr><td colspan="5" class="muted">Waiting for a second of data</td></tr>`;
     return;
   }
   const rows = config.channels.map((ch, i) => {
     const left = state.hum_left[i];
     const level = state.level[i];
     const share = level > 0 ? Math.min(1, (left / level) ** 2) : 0;
-    const [verdict, cls] = humVerdict(share);
     return `<tr><td>${ch}</td><td>${state.hum[i].toFixed(0)}</td><td>${left.toFixed(1)}</td><td>${level.toFixed(1)}</td>
-      <td>${Math.round(100 * share)} %</td><td class="${cls}">${verdict}</td></tr>`;
+      <td>${Math.round(100 * share)} %</td></tr>`;
   });
   table.innerHTML = head + rows.join("");
 }
