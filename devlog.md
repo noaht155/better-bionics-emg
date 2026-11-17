@@ -2313,6 +2313,11 @@ levels: r 0.995 to 0.999 per session, mean difference 0.005 to 0.013, a clench l
   a minute. Decision (Noah): power the perfboard through the USB-C port. Untested idea if the pin is ever needed:
   bridge the diode between USB VBUS and the 5V pin so the USB side is powered too.
 
+## 2026-11-17: perfboard pin map
+- Outputs moved for the perfboard, 4 pins per side of the 38-pin board: channels 0 to 6 on GPIO 19, 18, 17, 16
+  (right side, 5 skipped as a boot pin) and 33, 25, 26 (left side), 27 wired as a spare. 23 and 32 are free.
+  Table in `pinmap.md`. Flashed, `PONG,0.2,0.2.1`; no protocol change.
+
 ## Open
 
 Now: control on the signs
