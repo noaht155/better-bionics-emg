@@ -2318,9 +2318,15 @@ levels: r 0.995 to 0.999 per session, mean difference 0.005 to 0.013, a clench l
   (right side, 5 skipped as a boot pin) and 27, 26, 25 (left side, counted from the USB end), 33 wired as a spare. 23 and 32 are free.
   Table in `pinmap.md`. Flashed, `PONG,0.2,0.2.1`; no protocol change.
 
+## 2026-11-18: perfboard check
+- Flashed the new pin map. The ESP32 on the perfboard joins the armband WiFi and runs commands over it (ping 8 to
+  14 ms). Buzz test over WiFi, 5 s per channel: positions 1, 2, 5, 6, 7 buzz in the right order.
+- Positions 3 and 4 (GPIO 17, 16, both on module 2) stayed still. GPIO, module inputs and about 3 V across the
+  motor terminals were all fine, and a fresh motor pressed on ran, so the two motors or their leads are bad.
+
 ## Open
 
-Perfboard: flash the pin map from 2026-11-17 (not on the board yet) and check each channel lands on its position.
+Perfboard: replace the motors on positions 3 and 4 and buzz-test them (the rest checked 2026-11-18).
 
 Now: control on the signs
 - Robustness (2026-11-05): hum augmentation and channel drop with a missing-channel input work on synthetic hum.
