@@ -2320,6 +2320,8 @@ levels: r 0.995 to 0.999 per session, mean difference 0.005 to 0.013, a clench l
 
 ## Open
 
+Perfboard: flash the pin map from 2026-11-17 (not on the board yet) and check each channel lands on its position.
+
 Now: control on the signs
 - Robustness (2026-11-05): hum augmentation and channel drop with a missing-channel input work on synthetic hum.
   Real hummy cues: only one cue was ever paused for hum, too few. Into `ml/` with live masking next. A wider notch
