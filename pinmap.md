@@ -10,9 +10,9 @@ ESP32 HW-395B (ESP32-WROOM-32). Outputs are 3.3 V, about 20 mA max per pin.
 | 1 | 18 | 1 | 1 | module 1 B1A → motor 1 | IN2 → motor 1 |
 | 2 | 17 | 2 | 2 | module 2 A1A → motor 2 | IN3 → motor 2 |
 | 3 | 16 | 3 | 3 | module 2 B1A → motor 3 | IN4 → motor 3 |
-| 4 | 33 | 4 | 4 | module 3 A1A → motor 4 | IN5 → motor 4 |
-| 5 | 25 | 5 | 5 | module 3 B1A → motor 5 | IN6 → motor 5 |
-| 6 | 26 | 6 | 6 and 7 averaged (base module) | module 4 A1A → motor 6 | IN7 → motor 6 |
+| 4 | 27 | 4 | 4 | module 3 A1A → motor 4 | IN5 → motor 4 |
+| 5 | 26 | 5 | 5 | module 3 B1A → motor 5 | IN6 → motor 5 |
+| 6 | 25 | 6 | 6 and 7 averaged (base module) | module 4 A1A → motor 6 | IN7 → motor 6 |
 
 PWM is 5 kHz, 8 bit. Coin motors will need about 20 kHz so they don't whine.
 
@@ -41,6 +41,6 @@ Stopgap, a ULN2003 was ordered for but these arrived. Each module drives 2 motor
 ## Reserved
 
 - GPIO 21, 22: kept free for I2C.
-- GPIO 27: spare, wired on the perfboard (left side: 33, 25, 26, 27 in a row; right side: 19, 18, 17, 16 with 5 skipped).
+- GPIO 33: spare, wired on the perfboard (left side: 27, 26, 25, 33 from the USB end up; right side: 19, 18, 17, 16 with 5 skipped).
 - GPIO 32, 23: free.
 - Never use for outputs: 0, 2, 12, 15 (boot strapping), 1, 3 (USB serial), 6 to 11 (flash), 14, 34 to 39 (input only).

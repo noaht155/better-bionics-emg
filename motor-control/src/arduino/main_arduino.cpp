@@ -6,7 +6,7 @@
 const char *PROTO_VERSION = "0.2";
 const char *FW_VERSION = "0.2.1";
 
-const uint8_t PINS[] = {19, 18, 17, 16, 33, 25, 26};
+const uint8_t PINS[] = {19, 18, 17, 16, 27, 26, 25};
 const uint8_t NUM_CH = sizeof(PINS) / sizeof(PINS[0]);
 
 const uint32_t PWM_FREQ = 5000;

@@ -2315,7 +2315,7 @@ levels: r 0.995 to 0.999 per session, mean difference 0.005 to 0.013, a clench l
 
 ## 2026-11-17: perfboard pin map
 - Outputs moved for the perfboard, 4 pins per side of the 38-pin board: channels 0 to 6 on GPIO 19, 18, 17, 16
-  (right side, 5 skipped as a boot pin) and 33, 25, 26 (left side), 27 wired as a spare. 23 and 32 are free.
+  (right side, 5 skipped as a boot pin) and 27, 26, 25 (left side, counted from the USB end), 33 wired as a spare. 23 and 32 are free.
   Table in `pinmap.md`. Flashed, `PONG,0.2,0.2.1`; no protocol change.
 
 ## Open
