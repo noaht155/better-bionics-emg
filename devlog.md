@@ -2337,6 +2337,8 @@ levels: r 0.995 to 0.999 per session, mean difference 0.005 to 0.013, a clench l
   palm, in every pose and position tried. The assist (weld to the palm while thumb and a finger press and grip force
   x friction carries the weight) lifts it at effort 0.3 (12 N) and 1.0 (36 N) and drops it at 0.1, or at 0.3 with 4x
   the mass, so the weight is still felt.
+- Steps at 1 ms: at 2 ms the 4x can squeezed against the table blew up (MuJoCo resets the whole scene when that
+  happens; the world now puts the hand back and the object on the table if it ever does).
 
 ## Open
 

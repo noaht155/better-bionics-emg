@@ -33,7 +33,8 @@ PALM_OUTLINE = [(-26, 0), (16, 0), (27, 20), (29, 50), (25, 84), (2, 92), (-17, 
 FINGER_RADIUS = 9.0
 TAPER = 0.8
 
-TIMESTEP = 0.002
+# At 2 ms a can 4 times as heavy squeezed against the table blew up, 1 ms held
+TIMESTEP = 0.001
 # Joint stiffness towards the target angle, N m per rad
 KP = 0.6
 # name: geom attributes, mass (kg), friction, how it starts on the table (half height, m)
@@ -182,6 +183,7 @@ class World:
         self.finger_force = np.zeros(5)
         self.palm_force = 0.0
         self.time = 0.0
+        self.blowups = 0
         self._lock_effort = None
 
     def set_params(self, params):
@@ -242,7 +244,14 @@ class World:
             pressing = touching & self._bends & (torque > 0)
             torque = np.where(pressing, cap_effort, np.clip(torque, -cap_full, cap_full))
             d.ctrl[:] = torque
+            hand = self.hand_pose()
             mujoco.mj_step(self.model, d)
+            if d.warning[mujoco.mjtWarning.mjWARN_BADQACC].number > self.blowups:
+                # MuJoCo resets everything when it goes unstable: put the hand back and the object on the table
+                self.blowups = d.warning[mujoco.mjtWarning.mjWARN_BADQACC].number
+                self.set_hand(*hand)
+                self.data.qpos[0:7] = [*hand[0], *hand[1]]
+                self.reset_object()
             self._read_forces()
             self._update_assist()
         self.time += dt

@@ -74,6 +74,7 @@ def lift(effort, assist, mass_scale=1.0):
         closure = min(max((t - 0.2) / 1.0, 0), 1)
         w.set_hand(base + [0, 0, 0.1 * min(max((t - 1.6) / 1.0, 0), 1)], q)
         w.step(0.02, rest + closure * (grip - rest), effort)
+    assert w.blowups == 0
     return w.readout()["object_height"] - sim.OBJECTS["can"][3], w.grip_force()
 
 
