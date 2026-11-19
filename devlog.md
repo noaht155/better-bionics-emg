@@ -2420,10 +2420,12 @@ Now: 3D contact
   refactor (Noah).
 - Quest 3 app (Noah, 2026-11-19): native (Unity, Meta XR SDK), not WebXR, which is clunky and needs HTTPS on the
   offline armband WiFi. Seated, VR by default with an AR (passthrough) option. Pairs with the PC on launch through
-  the hub's device tokens. Thin client: recording, models and the MuJoCo sim stay on the laptop, the app draws
-  them and sends the controller pose. The sim on the Quest was considered in case the 2017 MacBook couldn't keep
-  up, but it runs the can grasp at 11.6x real time (3 runs, app not running, MuJoCo 3.3.7; desktop 17.4x), so one
-  Python sim is enough. Still to check: the rate with the app and a live model running.
+  the hub's device tokens. Recording and the models stay on the laptop; the MuJoCo sim runs on the Quest so the
+  hand to physics loop has no WiFi round trip (Noah). Only gesture and effort cross the network (already slow from
+  the EMG window, so 20 to 40 ms more doesn't matter) and grip force comes back for the motors. Same model XML from
+  `sim.py`, the per-finger force rule ported to C# and checked against the Python one on scripted grasps; the
+  desktop page keeps the Python sim. First check: MuJoCo built for Android arm64 and the can grasp timed on the
+  headset. Not CPU: the MacBook runs the sim at 11.6x real time (3 runs, app not running; desktop 17.4x).
   Uses: training cues as a 3D hand in first person, later the live predicted hand (a new protocol beside F, never a
   change to F), and the contact sim with a Touch controller strapped to the socket placing the hand, the other
   controller for everything else. The laptop sees the view by casting first, its own spectator view later.
