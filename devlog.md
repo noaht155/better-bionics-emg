@@ -2416,8 +2416,14 @@ Now: 3D contact
 - Try it on the arm with the motors on Grip force: does the force feel follow the squeeze, set the full force.
 - Pure physics grasps hold for every object when placed well (2026-11-19). Check on the page that placing by hand
   is easy enough; if small objects are fiddly, a snap that tilts the hand for a pinch from above.
-- Own objects from STL (convex parts), several objects at once, VR on the Quest 3 (WebXR, hand placed by the
-  controller), and a list of what's dated in `control.py` for a refactor (Noah).
+- Own objects from STL (convex parts), several objects at once, and a list of what's dated in `control.py` for a
+  refactor (Noah).
+- Quest 3 app (Noah, 2026-11-19): native (Unity, Meta XR SDK), not WebXR, which is clunky and needs HTTPS on the
+  offline armband WiFi. Seated, VR by default with an AR (passthrough) option. Pairs with the PC on launch through
+  the hub's device tokens. Thin client: recording, models and the MuJoCo sim stay on the PC, the app draws them.
+  Uses: training cues as a 3D hand in first person, later the live predicted hand (a new protocol beside F, never a
+  change to F), and the contact sim with a Touch controller strapped to the socket placing the hand, the other
+  controller for everything else. The laptop sees the view by casting first, its own spectator view later.
 
 Now: haptics
 - Motors: firmware 0.2.1 is flashed and channels 0 and 1 follow the duty. When the ULN2003, MOSFETs or LEDs go
