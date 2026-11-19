@@ -11,7 +11,7 @@ From the repo root, with the emg-reading venv:
 emg-reading/.venv/Scripts/python -m pytest tests
 ```
 
-149 tests, about 16 s. Run them before committing changes to `ml/`, the filter or the quality checks. Tests that need
+193 tests, about 16 s. Run them before committing changes to `ml/`, the filter or the quality checks. Tests that need
 recorded sessions (`emg-reading/data/`) or torch skip themselves where those are missing, so on the Mac or a fresh
 clone only the synthetic tests run.
 
@@ -203,6 +203,19 @@ These decide when the recorder marks a cue bad and redoes it.
 | `test_selection_haptics_follow_control_events` | In selections mode the Control tab only cues the confirmed pick with its grip, nothing for each counted clench; effort mode cues nothing |
 | `test_rules_without_a_haptic_get_their_old_pattern` | Rules saved without a haptic get the pattern their action played before (grip code, fade for release, none for open and close, lock stays auto), set ones are kept, and the default mappings come with them |
 | `test_trigger_double_point_goes_back_and_open_only_opens` | Trigger mode, release with point (default): opening twice only opens, a point flick neither opens nor closes, two point flicks go back, and the point still held after that can't pick point until it drops out |
+
+### Contact simulation (`tests/test_sim.py`)
+
+Skips without mujoco.
+
+| Test | Checks |
+|---|---|
+| `test_geometry_matches_hand_js` | The simulated hand's knuckles, splay and segment lengths are the ones `web/hand.js` draws |
+| `test_motors_in_joint_order` | The 20 motors are in `JOINTS` order, so the control layer's angles reach the right joints |
+| `test_hand_reaches_the_pose_in_free_air` | With nothing to touch the hand reaches the fist within 5 degrees (the thumb doesn't block the fingers) and grip force is 0 |
+| `test_scene_and_poses_line_up` | The page's scene and pose lists have one entry per geom, with table, hand and object, and the palm mesh has its hull |
+| `test_assist_lifts_and_grip_force_follows_effort` | With the assist the hand wraps the can and lifts it 10 cm at effort 0.3 and 1.0, and grip force at full effort is over twice that at 0.3 |
+| `test_grip_too_light_for_the_weight_drops_it` | The same grip on a can 4 times as heavy doesn't lift it: grip force x friction under the weight lets go |
 
 ### Protocols (`tests/test_protocols.py`)
 

@@ -2324,6 +2324,20 @@ levels: r 0.995 to 0.999 per session, mean difference 0.005 to 0.013, a clench l
 - Positions 3 and 4 (GPIO 17, 16, both on module 2) stayed still. GPIO, module inputs and about 3 V across the
   motor terminals were all fine, and a fresh motor pressed on ran, so the two motors or their leads are bad.
 
+## 2026-11-19: 3D contact simulation
+- Plan (Noah): a 3D hand under the Control tab grasps objects under gravity, the hand and object placed with the
+  keyboard and mouse, the forearm still only gives the gesture and effort. Each finger follows the control layer's
+  angles until it touches, then presses with a force set by effort. The motors follow the total grip force. Pure
+  physics first, an optional grasp assist. VR on the Quest 3 later (WebXR).
+- `emg-reading/sim.py` (MuJoCo): the hand.js hand with 20 joints, a palm from the knuckle and wrist outline, thumb
+  and little finger pads; can, ball, block, small cube and pen. Runs about 50x real time on the desktop. MuJoCo
+  4.0.1 on Windows, 3.3.7 on the Intel Mac (no newer build for it).
+- The hand doesn't collide with itself: the fist's thumb otherwise stopped the index at 61 of 85 degrees.
+- Pure physics doesn't hold the can yet: thumb and fingers press on its near half and squeeze it out away from the
+  palm, in every pose and position tried. The assist (weld to the palm while thumb and a finger press and grip force
+  x friction carries the weight) lifts it at effort 0.3 (12 N) and 1.0 (36 N) and drops it at 0.1, or at 0.3 with 4x
+  the mass, so the weight is still felt.
+
 ## Open
 
 Perfboard: replace the motors on positions 3 and 4 and buzz-test them (the rest checked 2026-11-18).
