@@ -2333,8 +2333,7 @@ levels: r 0.995 to 0.999 per session, mean difference 0.005 to 0.013, a clench l
   and little finger pads; can, ball, block, small cube and pen. Runs about 50x real time on the desktop. MuJoCo
   4.0.1 on Windows, 3.3.7 on the Intel Mac (no newer build for it).
 - The hand doesn't collide with itself: the fist's thumb otherwise stopped the index at 61 of 85 degrees.
-- Pure physics doesn't hold the can yet: thumb and fingers press on its near half and squeeze it out away from the
-  palm, in every pose and position tried. The assist (weld to the palm while thumb and a finger press and grip force
+- Pure physics first didn't hold the can (corrected below the same day). The assist (weld to the palm while thumb and a finger press and grip force
   x friction carries the weight) lifts it at effort 0.3 (12 N) and 1.0 (36 N) and drops it at 0.1, or at 0.3 with 4x
   the mass, so the weight is still felt.
 - Steps at 1 ms: at 2 ms the 4x can squeezed against the table blew up (MuJoCo resets the whole scene when that
@@ -2345,6 +2344,15 @@ levels: r 0.995 to 0.999 per session, mean difference 0.005 to 0.013, a clench l
   turn magenta with the force they press with. Haptics mode Grip force: every motor at total grip force over
   `haptic_full_force` (30 N default), with the lowest duty setting. Checked headless with the simulated model, not on
   the arm yet.
+- Pure physics holds now. The can crept out of grips pressing many times its weight because MuJoCo's contacts are
+  soft and allow slow sliding; its no-slip pass (10 iterations) stops that. Of 108 poses, placements, frictions and
+  stiffnesses without it, none lifted the can. With it and hand friction 2 (about a silicone glove; at 1 the can
+  popped out from effort 0.6), side grasp with the wrap pose: can drops at effort 0.05 and 0.1, lifts from 0.2 to 1.0
+  (13 to 46 N); 3x the mass needs 0.6. Ball and block only hold at effort 0.1 to 0.2, harder squeezes pop them out.
+  About 10x real time on the desktop with the no-slip pass (50x without).
+- Mass capped at 3x: a can 4 to 6 times as heavy blew up against the light finger segments whatever the damping,
+  armature or finger mass. The blow-up check now watches MuJoCo's clock going back, since its reset also clears
+  the warning count the first check used.
 
 ## Open
 
@@ -2394,8 +2402,8 @@ Now: `ml/` foundations
 
 Now: 3D contact
 - Try it on the arm with the motors on Grip force: does the force feel follow the squeeze, set the full force.
-- Pure physics grasps: the can squeezes out (2026-11-19). Try softer finger stiffness, more friction on the finger
-  pads, poses that wrap past the object's middle; then the other objects.
+- Pure physics grasps: the can holds (no-slip pass), ball and block pop out when squeezed above effort 0.2. Try
+  softer pressing (a lower force cap on the distal joints) or pad geoms on the fingertips.
 - Own objects from STL (convex parts), several objects at once, VR on the Quest 3 (WebXR, hand placed by the
   controller), and a list of what's dated in `control.py` for a refactor (Noah).
 

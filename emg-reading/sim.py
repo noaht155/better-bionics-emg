@@ -4,7 +4,11 @@ objects under gravity, and the grip force on the object drives the motors (hapti
 Each finger follows the control layer's angles until it touches the object. While it touches and the control layer
 still closes it, it presses with a force set by effort instead (Noah, 2026-11-19), up to max_force at the fingertip
 at full effort, so a light grip lets a heavy object slide out. Opening always follows the angles, so a release lets
-go. Lock holds the effort of the moment it locked. The assist (off by default) welds the object to the palm while
+go. Lock holds the effort of the moment it locked.
+
+Pure physics holds objects since MuJoCo's no-slip pass is on (NOSLIP_ITERATIONS): without it contacts are soft and
+the can crept out of a grip pressing several times its weight. Hand friction is HAND_FRICTION, about a silicone
+glove: at 1 the can popped out when squeezed harder. The assist (off by default) welds the object to the palm while
 the thumb and another finger press on it from both sides hard enough for friction to carry its weight (grip force x
 friction at least the weight), for when pure physics can't hold a grasp; a grip too light for the weight still
 drops it.
@@ -37,6 +41,13 @@ TAPER = 0.8
 TIMESTEP = 0.001
 # Joint stiffness towards the target angle, N m per rad
 KP = 0.6
+# Without the no-slip pass the can slid out of a 20 N grip with friction 2 (2026-11-19); with 10 it lifts from
+# effort 0.2. At 1 the can popped out of the hand at effort 0.6 and up, at 2 it holds from 0.2 to 1.0
+NOSLIP_ITERATIONS = 10
+HAND_FRICTION = 2.0
+# Heavier objects blow up against the light finger segments (6x the can, about 150 times a finger segment's mass)
+# whatever the damping, armature or finger mass; 3x was clean at every effort
+MAX_MASS_SCALE = 3.0
 # name: geom attributes, mass (kg), friction, how it starts on the table (half height, m)
 OBJECTS = {
     "can": ('type="cylinder" size="0.033 0.061"', 0.35, 0.5, 0.061),
@@ -111,10 +122,11 @@ def model_xml(obj):
     shape, mass, friction, half = OBJECTS[obj]
     motors = "".join(f'<motor name="{j}" joint="{j}"/>' for j in JOINTS)
     return f"""<mujoco model="contact">
-<option timestep="{TIMESTEP}" integrator="implicitfast" gravity="0 0 -{GRAVITY}" cone="elliptic"/>
+<option timestep="{TIMESTEP}" integrator="implicitfast" gravity="0 0 -{GRAVITY}" cone="elliptic"
+noslip_iterations="{NOSLIP_ITERATIONS}"/>
 <asset><mesh name="palm" vertex="{_palm_vertices()}"/></asset>
 <default><joint damping="0.02" armature="0.0002"/><default class="hand">
-<geom friction="1 0.01 0.001" condim="4" density="1100" contype="1" conaffinity="2"/></default></default>
+<geom friction="{HAND_FRICTION} 0.01 0.001" condim="4" density="1100" contype="1" conaffinity="2"/></default></default>
 <worldbody>
 <light pos="0 -0.3 0.8" dir="0 0.3 -1" directional="true"/>
 <geom name="table" type="plane" size="0.5 0.5 0.01" friction="0.6 0.01 0.001" contype="2" conaffinity="3"/>
@@ -199,7 +211,7 @@ class World:
             self.data.eq_active[self._assist] = 0
 
     def set_mass(self, scale):
-        scale = max(float(scale), 0.05)
+        scale = min(max(float(scale), 0.05), MAX_MASS_SCALE)
         self.model.body_mass[self._object_body] = self._base_mass * scale
         self.model.body_inertia[self._object_body] = self._base_inertia * scale
 
@@ -244,11 +256,12 @@ class World:
             pressing = touching & self._bends & (torque > 0)
             torque = np.where(pressing, cap_effort, np.clip(torque, -cap_full, cap_full))
             d.ctrl[:] = torque
-            hand = self.hand_pose()
+            hand, before = self.hand_pose(), d.time
             mujoco.mj_step(self.model, d)
-            if d.warning[mujoco.mjtWarning.mjWARN_BADQACC].number > self.blowups:
-                # MuJoCo resets everything when it goes unstable: put the hand back and the object on the table
-                self.blowups = d.warning[mujoco.mjtWarning.mjWARN_BADQACC].number
+            if d.time < before:
+                # MuJoCo resets everything, its clock and warning counts too, when it goes unstable: put the hand
+                # back and the object on the table
+                self.blowups += 1
                 self.set_hand(*hand)
                 self.data.qpos[0:7] = [*hand[0], *hand[1]]
                 self.reset_object()

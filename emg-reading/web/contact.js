@@ -14,7 +14,7 @@ const VIEW_DEG_PER_PX = 0.3;
 const SEND_MS = 33;
 const MOVE_KEYS = ["w", "a", "s", "d", "q", "e", "z", "x"];
 const CONTACT_PARAMS = [
-  { key: "mass_scale", label: "Mass x", min: 0.25, max: 6, step: 0.25, help: "the object's mass as a multiple of its own: can 350 g, ball 58 g, block 120 g, small cube 10 g, pen 12 g" },
+  { key: "mass_scale", label: "Mass x", min: 0.25, max: 3, step: 0.25, help: "the object's mass as a multiple of its own: can 350 g, ball 58 g, block 120 g, small cube 10 g, pen 12 g" },
   { key: "max_force", label: "Hand strength N", min: 2, max: 40, step: 1, help: "force each finger presses with at full effort" },
   { key: "assist", label: "Grasp assist", help: "holds the object to the palm while the thumb and a finger press on it hard enough for friction to carry its weight, for grasps physics alone can't hold. A grip too light for the weight still drops it" },
 ];

@@ -234,7 +234,7 @@ class ControlParams(BaseModel):
 class ContactParams(BaseModel):
     """The contact simulation's settings, see sim.py."""
     object: str | None = None
-    mass_scale: float | None = Field(None, ge=0.05, le=10)
+    mass_scale: float | None = Field(None, ge=0.05, le=3)
     max_force: float | None = Field(None, ge=1, le=60)
     assist: bool | None = None
 
