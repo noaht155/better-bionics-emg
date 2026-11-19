@@ -1,10 +1,12 @@
 """3D contact simulation for the Control tab: the control layer's 20 joint angles drive a hand in MuJoCo that grasps
 objects under gravity, and the grip force on the object drives the motors (haptics mode "force").
 
-Each finger follows the control layer's angles until it touches the object. While it touches and the control layer
-still closes it, it presses with a force set by effort instead (Noah, 2026-11-19), up to max_force at the fingertip
-at full effort, so a light grip lets a heavy object slide out. Opening always follows the angles, so a release lets
-go. Lock holds the effort of the moment it locked.
+Each finger follows the control layer's angles until it touches the object (Noah, 2026-11-19). While it touches, its
+bending joints track the angles stiffer (KP_PRESS) with their torque capped by effort, up to max_force at the
+fingertip at full effort, like a position controlled hand with current limited motors: a light grip lets a heavy
+object slide out, and the grip presses no harder than the pose asks, so the fingertip joints don't curl on past the
+pose and roll small objects out. Opening always follows the angles, so a release lets go. Lock holds the effort of
+the moment it locked.
 
 Pure physics holds objects since MuJoCo's no-slip pass is on (NOSLIP_ITERATIONS): without it contacts are soft and
 the can crept out of a grip pressing several times its weight. Hand friction is HAND_FRICTION, about a silicone
@@ -41,10 +43,16 @@ TAPER = 0.8
 TIMESTEP = 0.001
 # Joint stiffness towards the target angle, N m per rad
 KP = 0.6
+# Stiffness of a finger touching the object. Pressing with the full effort torque on every bending joint, however
+# far past the pose, rolled the small cube and the block out of a pinch and the can out at full effort; 2 held the
+# ball, block and pen in every grasp tried from effort 0.6 on (5 and 15 lost more, 2026-11-19)
+KP_PRESS = 2.0
 # Without the no-slip pass the can slid out of a 20 N grip with friction 2 (2026-11-19); with 10 it lifts from
 # effort 0.2. At 1 the can popped out of the hand at effort 0.6 and up, at 2 it holds from 0.2 to 1.0
 NOSLIP_ITERATIONS = 10
 HAND_FRICTION = 2.0
+# The table's friction wins over the hand's (priority), so fingertips slide over it as real ones do: at the hand's 2
+# they stuck to it and the index couldn't curl in to pinch the small cube
 # Heavier objects blow up against the light finger segments (6x the can, about 150 times a finger segment's mass)
 # whatever the damping, armature or finger mass; 3x was clean at every effort
 MAX_MASS_SCALE = 3.0
@@ -129,7 +137,8 @@ noslip_iterations="{NOSLIP_ITERATIONS}"/>
 <geom friction="{HAND_FRICTION} 0.01 0.001" condim="4" density="1100" contype="1" conaffinity="2"/></default></default>
 <worldbody>
 <light pos="0 -0.3 0.8" dir="0 0.3 -1" directional="true"/>
-<geom name="table" type="plane" size="0.5 0.5 0.01" friction="0.6 0.01 0.001" contype="2" conaffinity="3"/>
+<geom name="table" type="plane" size="0.5 0.5 0.01" friction="0.6 0.01 0.001" contype="2" conaffinity="3"
+priority="1"/>
 <body name="target" mocap="true" pos="0 -0.05 0.25" xyaxes="1 0 0 0 -1 0"/>
 <body name="palm" pos="0 -0.05 0.25" xyaxes="1 0 0 0 -1 0"><freejoint/>
 <geom name="palm" class="hand" type="mesh" mesh="palm"/>
@@ -250,11 +259,10 @@ class World:
         d = self.data
         for _ in range(max(1, round(dt / TIMESTEP))):
             q = d.qpos[self._qadr]
-            torque = KP * (target - q)
             touching = self.finger_force[self._finger_of_joint] > 0
-            # Pressing on the object: effort sets the force, however far past the surface the target is
-            pressing = touching & self._bends & (torque > 0)
-            torque = np.where(pressing, cap_effort, np.clip(torque, -cap_full, cap_full))
+            pressing = touching & self._bends
+            torque = np.where(pressing, np.clip(KP_PRESS * (target - q), -cap_full, cap_effort),
+                              np.clip(KP * (target - q), -cap_full, cap_full))
             d.ctrl[:] = torque
             hand, before = self.hand_pose(), d.time
             mujoco.mj_step(self.model, d)

@@ -11,7 +11,7 @@ From the repo root, with the emg-reading venv:
 emg-reading/.venv/Scripts/python -m pytest tests
 ```
 
-197 tests, about 16 s. Run them before committing changes to `ml/`, the filter or the quality checks. Tests that need
+202 tests, about 16 s. Run them before committing changes to `ml/`, the filter or the quality checks. Tests that need
 recorded sessions (`emg-reading/data/`) or torch skip themselves where those are missing, so on the Mac or a fresh
 clone only the synthetic tests run.
 
@@ -217,7 +217,9 @@ Skips without mujoco.
 | `test_assist_lifts_and_grip_force_follows_effort` | With the assist the hand wraps the can and lifts it 10 cm at effort 0.3 and 1.0, and grip force at full effort is over 1.5 times that at 0.3 |
 | `test_grip_too_light_for_the_weight_drops_it` | The same grip on a can 3 times as heavy doesn't lift it: grip force x friction under the weight lets go |
 | `test_pure_physics_holds_from_light_effort_on` | Without the assist the hand lifts the can at effort 0.2, 0.6 and 1.0 (the no-slip pass and hand friction) and drops it at 0.05 |
-| `test_heavier_object_needs_more_effort` | A can 3 times as heavy slips out at effort 0.2 and lifts at 0.6 |
+| `test_heavier_object_needs_more_effort` | The can lifts at effort 0.2, one 3 times as heavy slips out at 0.2 and lifts at full effort |
+| `test_grip_force_follows_effort_without_the_assist` | Without the assist grip force on the can rises from effort 0.2 to 0.6 to 1.0 |
+| `test_other_objects_hold_from_medium_effort` | Placed as a person would (contact centre of the grip on the object, small objects from above with the hand tilted), the ball (wrap), block (tripod), pen (pinch) and small cube (tripod) lift at effort 0.6 and 1.0 without the assist |
 | `test_mass_is_capped` | The mass setting stops at `MAX_MASS_SCALE`, above which the simulation blew up |
 | `test_contact_runs_on_the_control_layer_and_gives_the_force_to_the_haptics` | The app's simulation thread follows the control layer's angles, sends frames that match the scene, rebuilds for another object, and gives the haptics no force once stopped |
 

@@ -100,8 +100,72 @@ def test_pure_physics_holds_from_light_effort_on():
 
 
 def test_heavier_object_needs_more_effort():
+    assert lift(0.2, False)[0] > 0.05
     assert lift(0.2, False, mass_scale=3.0)[0] < 0.02
-    assert lift(0.6, False, mass_scale=3.0)[0] > 0.05
+    assert lift(1.0, False, mass_scale=3.0)[0] > 0.05
+
+
+def test_grip_force_follows_effort_without_the_assist():
+    forces = [lift(e, False)[1] for e in (0.2, 0.6, 1.0)]
+    assert forces[0] < forces[1] < forces[2]
+
+
+# Hand frames, columns the hand's x (thumb), y (fingers), z (palm) in the world: from above, fingers away from the
+# viewer, and from above tilted back 40 degrees, for a small object on the table
+TOP = np.array([[1, 0, 0], [0, -1, 0], [0, 0, -1]], float)
+TILT = np.radians(-40)
+TOP_TILTED = TOP @ np.array([[1, 0, 0], [0, np.cos(TILT), -np.sin(TILT)], [0, np.sin(TILT), np.cos(TILT)]])
+SIDE = np.array([[0, 1, 0], [0, 0, 1], [1, 0, 0]], float)
+
+
+def grasp_centre(pose, fingers, palm):
+    """Mean of the fingertips (and the palm) in the hand frame with the pose closed in free air."""
+    w = sim.World()
+    w.data.qpos[0:7] = [0, 0, 0, 1, 0, 0, 0]
+    w.data.qpos[w._qadr] = np.radians(pose)
+    mujoco.mj_forward(w.model, w.data)
+    points = [np.array([-0.005, 0.06, 0.012])] if palm else []
+    for f in fingers:
+        g = mujoco.mj_name2id(w.model, mujoco.mjtObj.mjOBJ_GEOM, f"{f}_dist")
+        axis = w.data.geom_xmat[g].reshape(3, 3)[:, 2] * w.model.geom_size[g][1]
+        joint = w.data.xpos[w.model.geom_bodyid[g]]
+        points.append(max((w.data.geom_xpos[g] + axis, w.data.geom_xpos[g] - axis),
+                          key=lambda end: np.linalg.norm(end - joint)))
+    return np.mean(points, 0)
+
+
+def grasp(obj, pose, rot, fingers, palm, effort, offset):
+    """The hand comes down on the object with the grip's contact centre on it, closes and lifts 10 cm. Returns how
+    high the object ended up (m)."""
+    w = sim.World({"object": obj})
+    half = sim.OBJECTS[obj][3]
+    q = np.zeros(4)
+    mujoco.mju_mat2Quat(q, rot.flatten())
+    base = np.array([0, -0.12, half]) - rot @ grasp_centre(pose, fingers, palm) + rot @ np.array(offset)
+    back = -rot[:, 2] * 0.02
+    w.set_hand(base + back, q)
+    w.data.qpos[0:7] = [*(base + back), *q]
+    mujoco.mj_forward(w.model, w.data)
+    rest, grip = np.array(GESTURES["open"][1]), np.array(pose)
+    for k in range(200):
+        t = k * 0.02
+        approach = min(t / 0.3, 1)
+        closure = min(max((t - 0.4) / 1.0, 0), 1)
+        w.set_hand(base + back * (1 - approach) + [0, 0, 0.1 * min(max((t - 1.8) / 1.0, 0), 1)], q)
+        w.step(0.02, rest + closure * (grip - rest), effort)
+    assert w.blowups == 0
+    return w.readout()["object_height"] - half
+
+
+@pytest.mark.parametrize("obj, grip, rot, fingers, palm, offset", [
+    ("ball", WRAP, SIDE, sim.FINGERS, True, (0, 0.01, 0)),
+    ("block", GESTURES["tripod"][1], TOP, ["thumb", "index", "middle"], False, (0, 0, 0.01)),
+    ("pen", GESTURES["pinch"][1], TOP, ["thumb", "index"], False, (0, -0.01, 0)),
+    ("small cube", GESTURES["tripod"][1], TOP_TILTED, ["thumb", "index", "middle"], False, (0, 0, 0)),
+])
+def test_other_objects_hold_from_medium_effort(obj, grip, rot, fingers, palm, offset):
+    for effort in (0.6, 1.0):
+        assert grasp(obj, grip, rot, fingers, palm, effort, offset) > 0.05, (obj, effort)
 
 
 def test_mass_is_capped():

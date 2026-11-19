@@ -2348,11 +2348,23 @@ levels: r 0.995 to 0.999 per session, mean difference 0.005 to 0.013, a clench l
   soft and allow slow sliding; its no-slip pass (10 iterations) stops that. Of 108 poses, placements, frictions and
   stiffnesses without it, none lifted the can. With it and hand friction 2 (about a silicone glove; at 1 the can
   popped out from effort 0.6), side grasp with the wrap pose: can drops at effort 0.05 and 0.1, lifts from 0.2 to 1.0
-  (13 to 46 N); 3x the mass needs 0.6. Ball and block only hold at effort 0.1 to 0.2, harder squeezes pop them out.
-  About 10x real time on the desktop with the no-slip pass (50x without).
+  (13 to 46 N). About 10x real time on the desktop with the no-slip pass (50x without).
 - Mass capped at 3x: a can 4 to 6 times as heavy blew up against the light finger segments whatever the damping,
   armature or finger mass. The blow-up check now watches MuJoCo's clock going back, since its reset also clears
   the warning count the first check used.
+- Other objects (same day). A harness places the hand so the grip's closed contact centre lands on the object and
+  searches tilt and offsets. Three fixes:
+  - Most "failures" were placement: the can's spot was used for every object. Small things need the hand tilted
+    back 20 to 40 degrees from straight down, like a person does.
+  - The table's friction now wins over the hand's (priority): fingertips stuck to it at 2 and the index couldn't
+    curl in to pinch.
+  - Force model: pressing with the full effort torque on every bending joint, however far past the pose, curled the
+    fingertip joints on and rolled small objects out. Now a touching finger tracks the pose stiffer (gain 2) with
+    its torque capped by effort, like current limited motors. Rolling friction and softer contacts didn't help.
+  - Result: ball (wrap, tripod, fist), block (wrap, tripod, pinch from 0.6), pen (pinch, tripod from 0.6) and the
+    small cube (tripod, tilted) lift from effort 0.6 to 1.0; the can drops at 0.1 and lifts from 0.2 with 8, 19, 23
+    and 29 N at 0.2, 0.4, 0.6 and 1.0; 3x the can needs full effort. Grip force only grows with effort as far as
+    the pose asks, so a pinch on something small stays at a few N.
 
 ## Open
 
@@ -2402,8 +2414,8 @@ Now: `ml/` foundations
 
 Now: 3D contact
 - Try it on the arm with the motors on Grip force: does the force feel follow the squeeze, set the full force.
-- Pure physics grasps: the can holds (no-slip pass), ball and block pop out when squeezed above effort 0.2. Try
-  softer pressing (a lower force cap on the distal joints) or pad geoms on the fingertips.
+- Pure physics grasps hold for every object when placed well (2026-11-19). Check on the page that placing by hand
+  is easy enough; if small objects are fiddly, a snap that tilts the hand for a pinch from above.
 - Own objects from STL (convex parts), several objects at once, VR on the Quest 3 (WebXR, hand placed by the
   controller), and a list of what's dated in `control.py` for a refactor (Noah).
 
