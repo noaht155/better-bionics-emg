@@ -414,7 +414,7 @@
         <canvas id="ctl-hand" width="480" height="400"></canvas>
         <div id="ctl-label" class="big-label"></div>
         <div id="ctl-readout" class="battery-detail"></div>
-        <div class="controls"><button id="ctl-reset">Reset counts</button></div>
+        <div class="controls"><button id="ctl-reset">Reset counts</button><button id="ctl-contact-open">3D contact</button></div>
         <div id="ctl-sim" hidden>
           <h2>Simulated model</h2>
           <p class="muted">No band or model: these play the model's output with the picked model's classes. Click a
@@ -466,6 +466,7 @@
         <div class="row filters">
           <label class="check"><input type="radio" name="ctl-haptics-mode" value="effort" checked> Effort per channel</label>
           <label class="check"><input type="radio" name="ctl-haptics-mode" value="selections"> Selections</label>
+          <label class="check"><input type="radio" name="ctl-haptics-mode" value="force"> Grip force</label>
         </div>
         <p id="ctl-haptics-help" class="muted"></p>
         <div id="ctl-haptic-params"></div>
@@ -473,6 +474,33 @@
           <summary>Advanced</summary>
           <div id="ctl-params"></div>
         </details>
+      </div>
+    </div>
+  </section>
+  <section id="ctl-contact-page" hidden>
+    <button id="ctl-contact-back" class="back">&larr; Grip control</button>
+    <h1>Contact</h1>
+    <p class="muted">The Control tab's hand in 3D, grasping an object under gravity. It follows the control layer while a model
+      or the simulated model runs; each finger closes until it touches the object, then presses with a force set by
+      effort, so a light grip lets a heavy object slide out. You place the hand and the object, the forearm only gives
+      the gesture and effort. With the haptics on Grip force the motors follow the total force on the object.</p>
+    <p id="ctl-contact-error" class="error"></p>
+    <div class="contact-layout">
+      <div class="contact-view">
+        <canvas id="ctl-contact-canvas" tabindex="0"></canvas>
+        <div id="ctl-contact-status" class="battery-detail"></div>
+      </div>
+      <div class="contact-side">
+        <h2>Object</h2>
+        <div class="row narrow"><label>Object <select id="ctl-contact-object"></select></label></div>
+        <div id="ctl-contact-params"></div>
+        <div class="controls"><button id="ctl-contact-reset">Back on the table</button></div>
+        <h2>Grip</h2>
+        <div id="ctl-contact-readout" class="contact-readout"></div>
+        <h2>Keys</h2>
+        <p class="muted">W S, A D: move the hand away and back, left and right. Q E: down and up. Drag: turn the
+          hand. Z X: roll it. Shift: slower. Drag the object to slide it over the table. Right drag: turn the view,
+          wheel: zoom. With the simulated model, number keys pick a class and space is full effort.</p>
       </div>
     </div>
   </section>
@@ -769,5 +797,6 @@
 <script src="/web/tools.js"></script>
 <script src="/web/control.js"></script>
 <script src="/web/cursor.js"></script>
+<script type="module" src="/web/contact.js"></script>
 </body>
 </html>

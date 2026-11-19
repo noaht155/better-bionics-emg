@@ -56,6 +56,9 @@ PRESET_FILE = gesture_model.MODEL_DIR.parent / "control_presets.json"
 # Saved mappings (rule lists) of the Control tab, apart from the profiles (presets) that also carry one
 MAPPING_FILE = gesture_model.MODEL_DIR.parent / "control_mappings.json"
 SEND_HZ = 20
+# The 3D contact page: frames sent per second, and how far from the table's centre the hand and object can go
+CONTACT_HZ = 30
+CONTACT_REACH_M = 0.45
 PREVIEW_HZ = 15
 LOOPBACK = ("127.0.0.1", "::1")
 # What the Train tab may ask the hub for through this app, as paths under /api/
@@ -222,9 +225,22 @@ class ControlParams(BaseModel):
     pinch_clenches: int = Field(CONTROL_DEFAULTS["pinch_clenches"], ge=1, le=2)
     spring_w: float = Field(ge=0, le=50)
     # The haptics that run with it, see haptics.py
-    haptics: Literal["effort", "selections"] = HAPTIC_DEFAULTS["haptics"]
+    haptics: Literal["effort", "selections", "force"] = HAPTIC_DEFAULTS["haptics"]
     haptic_floor: int = Field(HAPTIC_DEFAULTS["haptic_floor"], ge=0, le=90)
     haptic_strength: int = Field(HAPTIC_DEFAULTS["haptic_strength"], ge=10, le=100)
+    haptic_full_force: float = Field(HAPTIC_DEFAULTS["haptic_full_force"], ge=1, le=200)
+
+
+class ContactParams(BaseModel):
+    """The contact simulation's settings, see sim.py."""
+    object: str | None = None
+    mass_scale: float | None = Field(None, ge=0.05, le=10)
+    max_force: float | None = Field(None, ge=1, le=60)
+    assist: bool | None = None
+
+
+class ObjectPlace(BaseModel):
+    pos: list[float] = Field(min_length=3, max_length=3)
 
 
 class SimStart(BaseModel):
@@ -462,6 +478,12 @@ def saved_mappings():
     """{name: {"rules", "model", "protocol"}}, rules as the two lists also for mappings saved as one."""
     mappings = json.loads(MAPPING_FILE.read_text()) if MAPPING_FILE.exists() else {}
     return {k: dict(v, rules=split_rules(v["rules"])) for k, v in mappings.items()}
+
+
+def clip_workspace(pos):
+    """Keeps the hand and object over the table and near it (m)."""
+    return [float(np.clip(pos[0], -CONTACT_REACH_M, CONTACT_REACH_M)),
+            float(np.clip(pos[1], -CONTACT_REACH_M, CONTACT_REACH_M)), float(np.clip(pos[2], 0.0, CONTACT_REACH_M))]
 
 
 def refuse(e):
@@ -873,6 +895,48 @@ def make_app(recorder, band, camera, tools, lan=True, serving=False):
             refuse(e)
         return {"ok": True}
 
+    @app.post("/api/contact/start")
+    def contact_start():
+        """The 3D contact page: the hand follows the control layer while it runs, at rest otherwise."""
+        if tools.contact.state["running"]:
+            return tools.contact.scene()
+        try:
+            tools.contact.start()
+        except ImportError:
+            refuse("mujoco isn't installed, pip install -r requirements.txt")
+        return tools.contact.scene()
+
+    @app.post("/api/contact/stop")
+    def contact_stop():
+        tools.contact.stop()
+        return {"ok": True}
+
+    @app.get("/api/contact/scene")
+    def contact_scene():
+        scene = tools.contact.scene()
+        if scene is None:
+            refuse("the contact simulation hasn't started")
+        return scene
+
+    @app.post("/api/contact/params")
+    def contact_params(params: ContactParams):
+        import sim
+        changes = params.model_dump(exclude_none=True)
+        if "object" in changes and changes["object"] not in sim.OBJECTS:
+            refuse(f"no object {changes['object']}")
+        tools.contact.set_params(changes)
+        return {"ok": True, "version": tools.contact.version}
+
+    @app.post("/api/contact/place")
+    def contact_place(place: ObjectPlace):
+        tools.contact.place(clip_workspace(place.pos))
+        return {"ok": True}
+
+    @app.post("/api/contact/reset")
+    def contact_reset():
+        tools.contact.reset_object()
+        return {"ok": True}
+
     @app.post("/api/control/params")
     def control_params(params: ControlParams):
         tools.control.set_params(params.model_dump())
@@ -1263,6 +1327,32 @@ def make_app(recorder, band, camera, tools, lan=True, serving=False):
                 await asyncio.sleep(1 / SEND_HZ)
         except WebSocketDisconnect:
             pass
+
+    @app.websocket("/ws/contact")
+    async def contact_frames(ws: WebSocket):
+        """The contact simulation's geom poses and readout out, the hand pose the page sets in."""
+        await ws.accept()
+
+        async def receive():
+            while True:
+                msg = await ws.receive_json()
+                hand = msg.get("hand") if isinstance(msg, dict) else None
+                try:
+                    pos, quat = [float(v) for v in hand["pos"]], [float(v) for v in hand["quat"]]
+                except (TypeError, KeyError, ValueError):
+                    continue
+                if len(pos) == 3 and len(quat) == 4 and all(np.isfinite(pos + quat)) and any(quat):
+                    tools.contact.set_hand(clip_workspace(pos), quat)
+
+        task = asyncio.create_task(receive())
+        try:
+            while not task.done():
+                await ws.send_json(tools.contact.frame())
+                await asyncio.sleep(1 / CONTACT_HZ)
+        except WebSocketDisconnect:
+            pass
+        finally:
+            task.cancel()
 
     @app.websocket("/ws/signals")
     async def signals(ws: WebSocket):

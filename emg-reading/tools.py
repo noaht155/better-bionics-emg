@@ -56,6 +56,9 @@ DELAY_GAP_S = (0.3, 0.6)
 # The page's clock and this computer's agree to a few ms when the page runs here
 DELAY_CLOCK_S = 0.05
 DELAY_FLASH_TIMEOUT_S = 120
+# The contact simulation's real time loop (sim.py)
+CONTACT_TICK_S = 1 / 60
+CONTACT_MAX_STEP_S = 0.05
 # The Control tab's simulated model steps as often as the models do (50 ms window step)
 SIM_STEP_S = 0.05
 # How often the header's sync line asks the hub, and how long it waits for an answer. The Mac has one WiFi, so the hub
@@ -421,8 +424,9 @@ class HumTest(Tool):
 
 class Haptics(Tool):
     """haptics.py's loop. It shares the ESP32 with the output test, only one of them can hold the port. Started from
-    the Control tab it follows the tab's haptics setting: effort (each output follows its channels) or selections
-    (only the patterns of the control layer's events, cue())."""
+    the Control tab it follows the tab's haptics setting: effort (each output follows its channels), selections
+    (only the patterns of the control layer's events, cue()) or force (every output follows the contact
+    simulation's grip force, full duty at haptic_full_force)."""
 
     def __init__(self, recorder, esp_lock):
         super().__init__()
@@ -431,6 +435,8 @@ class Haptics(Tool):
         self._stop = threading.Event()
         self._cue = None
         self._settings = HAPTIC_DEFAULTS
+        # The contact simulation's grip force in N (Contact.grip_force), for force mode
+        self.grip_force = lambda: 0.0
 
     def start(self, port, wifi, session=None, settings=None, sim_effort=None):
         """With session, the levels come from that recorded session (calibrate.from_session), else from
@@ -499,6 +505,9 @@ class Haptics(Tool):
                     if mode == "selections":
                         step = self._pattern_step(self._cue) if self._cue else None
                         duties, lost = step or [0] * len(OUTPUTS), np.zeros(len(band.channels), bool)
+                    elif mode == "force":
+                        level_ = min(self.grip_force() / settings["haptic_full_force"], 1.0)
+                        duties, lost = [scaled_duty(level_, floor)] * len(OUTPUTS), np.zeros(len(band.channels), bool)
                     elif sim_effort is not None:
                         duties = [scaled_duty(min(max(sim_effort(), 0.0), 1.0), floor)] * len(OUTPUTS)
                         lost = np.zeros(len(band.channels), bool)
@@ -746,6 +755,104 @@ class Control:
                  locked=out.get("locked", False), moving=moving)
         if out["event"]:
             s[out["event"] + "s"] += 1
+
+
+class Contact(Tool):
+    """sim.World in real time on the Control tab's output: the control layer's angles, effort and lock. While no model
+    or simulated model runs with the control layer, the hand rests with no effort. The page places the hand and the
+    object (set_hand, place) and reads frame(); the haptics' force mode reads grip_force()."""
+
+    def __init__(self, predictor, control):
+        super().__init__()
+        self.predictor = predictor
+        self.control = control
+        self._stop = threading.Event()
+        self._lock = threading.Lock()
+        self.world = None
+        self.params = None
+        # Goes up when the world is rebuilt (another object), so the page fetches the scene again
+        self.version = 0
+
+    def start(self):
+        # Imported here so the app still runs where mujoco isn't installed
+        import sim
+        with self._lock:
+            if self.world is None:
+                self.world = sim.World(self.params)
+                self.params = self.world.params
+                self.version += 1
+        self._stop.clear()
+        self._launch(self._run)
+        self.state["object"] = self.world.object
+
+    def stop(self):
+        self._stop.set()
+
+    def set_params(self, params):
+        with self._lock:
+            if self.world is None:
+                import sim
+                self.params = dict(sim.SIM_DEFAULTS, **(self.params or {}), **params)
+                return
+            rebuilt = params.get("object", self.world.object) != self.world.object
+            self.world.set_params(params)
+            if rebuilt:
+                self.version += 1
+            self.state["object"] = self.world.object
+
+    def set_hand(self, pos, quat):
+        with self._lock:
+            if self.world is not None:
+                self.world.set_hand(pos, quat)
+
+    def place(self, pos):
+        with self._lock:
+            if self.world is not None:
+                self.world.place_object(pos)
+
+    def reset_object(self):
+        with self._lock:
+            if self.world is not None:
+                self.world.reset_object()
+
+    def scene(self):
+        with self._lock:
+            return None if self.world is None else dict(self.world.scene(), version=self.version,
+                                                        params=self.world.params)
+
+    def frame(self):
+        with self._lock:
+            if self.world is None:
+                return {"running": False}
+            c = self.control.state
+            driven = bool(self.predictor.state.get("running") and self.predictor.state.get("control"))
+            control = {k: c.get(k) for k in ("state", "grip", "effort", "closure", "locked")} if driven else None
+            return dict(self.world.poses(), readout=self.world.readout(), version=self.version,
+                        running=self.state["running"], hand=[v.tolist() for v in self.world.hand_pose()],
+                        control=control)
+
+    def grip_force(self):
+        world = self.world
+        return world.grip_force() if world is not None and self.state["running"] else 0.0
+
+    def _inputs(self):
+        """The control layer's angles, effort and lock, or the resting hand while nothing drives it."""
+        c = self.control.state
+        if self.predictor.state.get("running") and self.predictor.state.get("control") and c.get("angles"):
+            return c["angles"], c["effort"], c.get("locked", False)
+        return POSES["rest"], 0.0, False
+
+    def _run(self):
+        last = time.perf_counter()
+        while not self._stop.is_set():
+            now = time.perf_counter()
+            # A stalled tick (a slow page request holding the lock) isn't caught up in one go
+            dt = min(now - last, CONTACT_MAX_STEP_S)
+            last = now
+            angles, effort_, locked = self._inputs()
+            with self._lock:
+                self.world.step(dt, angles, effort_, locked)
+            time.sleep(max(0.0, CONTACT_TICK_S - (time.perf_counter() - now)))
 
 
 class CursorTask(Tool):
@@ -1213,6 +1320,8 @@ class Tools:
         self.test = OutputTest(esp_lock)
         self.predictor = Predictor(recorder)
         self.control = Control(recorder, self.haptics)
+        self.contact = Contact(self.predictor, self.control)
+        self.haptics.grip_force = self.contact.grip_force
         self.cursor = CursorTask(recorder)
         self.trainer = Trainer(self.predictor)
         self.network = NetworkJob()
@@ -1243,7 +1352,7 @@ class Tools:
         out = {}
         for name in ("check", "wifi", "calibration", "haptics", "test", "predictor", "trainer", "network", "control",
                      "cursor", "sync", "backup", "sync_watch", "round_trip", "flash", "hum",
-                     "hub_calibration"):
+                     "hub_calibration", "contact"):
             state = dict(getattr(self, name).state)
             if state.get("until"):
                 state["left"] = max(0.0, state["until"] - now)

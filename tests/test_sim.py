@@ -88,3 +88,28 @@ def test_assist_lifts_and_grip_force_follows_effort():
 def test_grip_too_light_for_the_weight_drops_it():
     h, _ = lift(0.3, True, mass_scale=4.0)
     assert h < 0.02
+
+
+def test_contact_runs_on_the_control_layer_and_gives_the_force_to_the_haptics():
+    import time
+    from types import SimpleNamespace
+    import tools
+    predictor = SimpleNamespace(state={"running": True, "control": True})
+    control = SimpleNamespace(state={"angles": GESTURES["fist"][1], "effort": 0.5, "locked": False, "grip": "fist"})
+    contact = tools.Contact(predictor, control)
+    assert contact.grip_force() == 0.0
+    contact.start()
+    try:
+        time.sleep(0.5)
+        frame = contact.frame()
+        assert frame["running"] and frame["control"]["grip"] == "fist"
+        assert len(frame["pos"]) == len(contact.scene()["geoms"])
+        reached = np.degrees(contact.world.data.qpos[contact.world._qadr])
+        assert reached[JOINTS.index("index_pip")] > 50
+        version = contact.version
+        contact.set_params({"object": "ball"})
+        assert contact.version == version + 1 and contact.scene()["object"] == "ball"
+    finally:
+        contact.stop()
+        contact.join(2)
+    assert contact.grip_force() == 0.0

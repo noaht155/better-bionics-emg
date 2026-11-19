@@ -26,8 +26,9 @@ OUTPUTS = [(0,), (1,), (2,), (3,), (4,), (5,), (6, 7)]
 UPDATE_HZ = 20
 PRINT_EVERY_S = 0.5
 # The Control tab's haptics settings. floor: lowest duty above 0 in effort mode, 0 until the motors' start duty is
-# measured. strength: duty of the selection patterns
-HAPTIC_DEFAULTS = {"haptics": "effort", "haptic_floor": 0, "haptic_strength": 100}
+# measured. strength: duty of the selection patterns. full force: grip force (N) of the contact simulation at full
+# duty in force mode
+HAPTIC_DEFAULTS = {"haptics": "effort", "haptic_floor": 0, "haptic_strength": 100, "haptic_full_force": 30.0}
 
 # Selection patterns, built from steps of 1 / UPDATE_HZ. Contact and release bursts are what DESC feedback uses
 # (Cipriani group); coin motors take about 40 ms to spin up, so a short pulse is two steps and a long one six. The

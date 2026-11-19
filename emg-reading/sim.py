@@ -45,7 +45,7 @@ OBJECTS = {
     "small cube": ('type="box" size="0.01 0.01 0.01"', 0.01, 0.7, 0.01),
     "pen": ('type="capsule" size="0.0045 0.065" euler="0 90 0"', 0.012, 0.5, 0.0045),
 }
-SIM_DEFAULTS = {"object": "can", "mass_scale": 1.0, "max_force": 15.0, "full_force": 30.0, "assist": False}
+SIM_DEFAULTS = {"object": "can", "mass_scale": 1.0, "max_force": 15.0, "assist": False}
 # Assist: thumb and another finger each press at least this hard
 ASSIST_N = 1.0
 FINGERS = ["thumb", "index", "middle", "ring", "pinky"]
@@ -118,8 +118,8 @@ def model_xml(obj):
 <worldbody>
 <light pos="0 -0.3 0.8" dir="0 0.3 -1" directional="true"/>
 <geom name="table" type="plane" size="0.5 0.5 0.01" friction="0.6 0.01 0.001" contype="2" conaffinity="3"/>
-<body name="target" mocap="true" pos="0 -0.05 0.15" xyaxes="1 0 0 0 -1 0"/>
-<body name="palm" pos="0 -0.05 0.15" xyaxes="1 0 0 0 -1 0"><freejoint/>
+<body name="target" mocap="true" pos="0 -0.05 0.25" xyaxes="1 0 0 0 -1 0"/>
+<body name="palm" pos="0 -0.05 0.25" xyaxes="1 0 0 0 -1 0"><freejoint/>
 <geom name="palm" class="hand" type="mesh" mesh="palm"/>
 <geom name="palm_pad" class="hand" type="ellipsoid" pos="-0.024 0.035 0.008" size="0.013 0.03 0.008"/>
 {''.join(_finger(n, *g) for n, g in FINGER_GEOMETRY.items())}{_thumb()}</body>
@@ -332,7 +332,7 @@ class World:
                 entry["vertices"] = m.mesh_vert[v0:v0 + nv].round(5).tolist()
                 entry["faces"] = m.mesh_face[f0:f0 + nf].tolist()
             geoms.append(entry)
-        return {"object": self.object, "geoms": geoms}
+        return {"object": self.object, "objects": list(OBJECTS), "geoms": geoms}
 
     def poses(self):
         """Position and orientation (3 x 3, row major) of every geom, in the order of scene()."""

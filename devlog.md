@@ -2339,6 +2339,12 @@ levels: r 0.995 to 0.999 per session, mean difference 0.005 to 0.013, a clench l
   the mass, so the weight is still felt.
 - Steps at 1 ms: at 2 ms the 4x can squeezed against the table blew up (MuJoCo resets the whole scene when that
   happens; the world now puts the hand back and the object on the table if it ever does).
+- 3D contact page: Control tab > 3D contact (`web/contact.js`, three.js 0.170 kept in `web/vendor/` since the PC has
+  no internet on the armband WiFi). The server steps the world at 60 Hz on the control layer's output
+  (`tools.Contact`) and sends geom poses at 30 Hz over `/ws/contact`; the page sends the hand pose back. Fingers
+  turn magenta with the force they press with. Haptics mode Grip force: every motor at total grip force over
+  `haptic_full_force` (30 N default), with the lowest duty setting. Checked headless with the simulated model, not on
+  the arm yet.
 
 ## Open
 
@@ -2385,6 +2391,13 @@ Now: `ml/` foundations
   whole-electrode rotations by construction.
 - Record one mirrored session to check the channel flip on real data. (Channel order round the band confirmed from
   the MindRove manual, 2026-10-16.)
+
+Now: 3D contact
+- Try it on the arm with the motors on Grip force: does the force feel follow the squeeze, set the full force.
+- Pure physics grasps: the can squeezes out (2026-11-19). Try softer finger stiffness, more friction on the finger
+  pads, poses that wrap past the object's middle; then the other objects.
+- Own objects from STL (convex parts), several objects at once, VR on the Quest 3 (WebXR, hand placed by the
+  controller), and a list of what's dated in `control.py` for a refactor (Noah).
 
 Now: haptics
 - Motors: firmware 0.2.1 is flashed and channels 0 and 1 follow the duty. When the ULN2003, MOSFETs or LEDs go

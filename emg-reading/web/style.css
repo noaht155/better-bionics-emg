@@ -21,6 +21,7 @@
   --hand-solid: #d4d4d8;
   --predicted: #ff7a3d;
   --effort: #c93ee6;
+  --sim-object: #71717a;
   --mains: #4a1f26;
   --font-sans: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, Consolas, "SF Mono", monospace;
@@ -451,6 +452,16 @@ th { color: var(--muted); font: 400 11px var(--font-mono); letter-spacing: 0.12e
 }
 #ctl-hand { display: block; width: min(100%, calc(45vh * 1.2)); margin: 0 auto; background: var(--bg); border: 1px solid var(--line); border-radius: 2px; cursor: grab; touch-action: none; }
 #ctl-trace, #ctl-probs { width: 100%; }
+/* 3D contact page: the view takes most of the width, settings and readout beside it on a landscape screen */
+.contact-layout { display: grid; gap: 24px; grid-template-columns: 1fr; align-items: start; }
+@media (orientation: landscape) and (min-width: 900px) { .contact-layout { grid-template-columns: 2.4fr 1fr; } }
+#ctl-contact-canvas { display: block; width: 100%; height: 68vh; background: var(--bg); border: 1px solid var(--line); border-radius: 2px; touch-action: none; outline: none; }
+#ctl-contact-canvas:focus-visible { border-color: var(--line-strong); }
+.contact-side h2:first-child { margin-top: 0; }
+.contact-readout { display: flex; flex-wrap: wrap; gap: 8px 32px; }
+.contact-readout p { flex-basis: 100%; margin: 0; }
+.contact-force b { display: block; font-size: 28px; font-weight: 600; letter-spacing: -0.02em; }
+.contact-force span { font: 11px var(--font-mono); letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); }
 /* The dropdown's label sits above it, so the row lines up on the bottom edge and the button takes the dropdown's height */
 .ctl-mapping { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 8px 12px; margin: 10px 0; color: var(--text); }
 .ctl-mapping > label { margin: 0; }

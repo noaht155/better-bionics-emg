@@ -11,7 +11,7 @@ From the repo root, with the emg-reading venv:
 emg-reading/.venv/Scripts/python -m pytest tests
 ```
 
-193 tests, about 16 s. Run them before committing changes to `ml/`, the filter or the quality checks. Tests that need
+194 tests, about 16 s. Run them before committing changes to `ml/`, the filter or the quality checks. Tests that need
 recorded sessions (`emg-reading/data/`) or torch skip themselves where those are missing, so on the Mac or a fresh
 clone only the synthetic tests run.
 
@@ -216,6 +216,7 @@ Skips without mujoco.
 | `test_scene_and_poses_line_up` | The page's scene and pose lists have one entry per geom, with table, hand and object, and the palm mesh has its hull |
 | `test_assist_lifts_and_grip_force_follows_effort` | With the assist the hand wraps the can and lifts it 10 cm at effort 0.3 and 1.0, and grip force at full effort is over twice that at 0.3 |
 | `test_grip_too_light_for_the_weight_drops_it` | The same grip on a can 4 times as heavy doesn't lift it: grip force x friction under the weight lets go |
+| `test_contact_runs_on_the_control_layer_and_gives_the_force_to_the_haptics` | The app's simulation thread follows the control layer's angles, sends frames that match the scene, rebuilds for another object, and gives the haptics no force once stopped |
 
 ### Protocols (`tests/test_protocols.py`)
 
