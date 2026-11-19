@@ -2420,7 +2420,10 @@ Now: 3D contact
   refactor (Noah).
 - Quest 3 app (Noah, 2026-11-19): native (Unity, Meta XR SDK), not WebXR, which is clunky and needs HTTPS on the
   offline armband WiFi. Seated, VR by default with an AR (passthrough) option. Pairs with the PC on launch through
-  the hub's device tokens. Thin client: recording, models and the MuJoCo sim stay on the PC, the app draws them.
+  the hub's device tokens. Recording and the models stay on the PC; the MuJoCo sim runs on the Quest (Noah: the
+  2017 MacBook may not keep up), fed gesture and effort from the PC, grip force sent back for the motors. First check
+  that MuJoCo builds for Android arm64 and how fast the can grasp steps on the headset; same model XML from
+  `sim.py`, the per-finger force law ported to C# and checked against the Python one on scripted grasps.
   Uses: training cues as a 3D hand in first person, later the live predicted hand (a new protocol beside F, never a
   change to F), and the contact sim with a Touch controller strapped to the socket placing the hand, the other
   controller for everything else. The laptop sees the view by casting first, its own spectator view later.
