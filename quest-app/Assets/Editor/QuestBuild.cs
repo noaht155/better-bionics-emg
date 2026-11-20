@@ -19,6 +19,7 @@ public static class QuestBuild
 {
     const string ScenePath = "Assets/Scenes/Main.unity";
     const string MaterialPath = "Assets/Materials/Sim.mat";
+    const string UiMaterialPath = "Assets/Materials/Ui.mat";
     const string Apk = "Build/bb-contact.apk";
     public const string Package = "com.betterbionics.contact";
 
@@ -54,6 +55,7 @@ public static class QuestBuild
         PlayerSettings.colorSpace = ColorSpace.Linear;
         ConfigureXR();
         ConfigurePlugins();
+        ConfigureQuality();
         MakeScene();
         AssetDatabase.SaveAssets();
     }
@@ -106,6 +108,22 @@ public static class QuestBuild
         }
     }
 
+    // Soft shadows for the hands on the desk and 4x MSAA, on every quality level since Android may pick any of them
+    static void ConfigureQuality()
+    {
+        int level = QualitySettings.GetQualityLevel();
+        for (int i = 0; i < QualitySettings.names.Length; i++)
+        {
+            QualitySettings.SetQualityLevel(i, false);
+            QualitySettings.antiAliasing = 4;
+            QualitySettings.shadows = ShadowQuality.All;
+            QualitySettings.shadowResolution = ShadowResolution.High;
+            QualitySettings.shadowDistance = 3;
+            QualitySettings.shadowCascades = 1;
+        }
+        QualitySettings.SetQualityLevel(level, false);
+    }
+
     static void MakeScene()
     {
         Directory.CreateDirectory("Assets/Materials");
@@ -117,14 +135,27 @@ public static class QuestBuild
             material.SetFloat("_Glossiness", 0.35f);
             AssetDatabase.CreateAsset(material, MaterialPath);
         }
+        var uiMaterial = AssetDatabase.LoadAssetAtPath<Material>(UiMaterialPath);
+        if (uiMaterial == null)
+        {
+            uiMaterial = new Material(Shader.Find("Unlit/Color"));
+            AssetDatabase.CreateAsset(uiMaterial, UiMaterialPath);
+        }
 
         var scene = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene);
         RenderSettings.ambientMode = AmbientMode.Flat;
         RenderSettings.ambientLight = new Color(0.35f, 0.35f, 0.38f);
         var sun = new GameObject("sun").AddComponent<Light>();
         sun.type = LightType.Directional;
-        sun.intensity = 1.1f;
-        sun.transform.rotation = Quaternion.Euler(55, -30, 0);
+        sun.intensity = 1.0f;
+        sun.shadows = LightShadows.Soft;
+        sun.shadowStrength = 0.55f;
+        sun.transform.rotation = Quaternion.Euler(60, -25, 0);
+        var fill = new GameObject("fill").AddComponent<Light>();
+        fill.type = LightType.Directional;
+        fill.intensity = 0.35f;
+        fill.color = new Color(0.75f, 0.8f, 1f);
+        fill.transform.rotation = Quaternion.Euler(20, 150, 0);
 
         var rig = new GameObject("rig");
         var head = new GameObject("head") { tag = "MainCamera" };
@@ -133,10 +164,11 @@ public static class QuestBuild
         camera.nearClipPlane = 0.01f;
         camera.farClipPlane = 50;
         camera.clearFlags = CameraClearFlags.SolidColor;
-        camera.backgroundColor = Color.black;
+        camera.backgroundColor = new Color(0.039f, 0.039f, 0.043f);
 
         var app = new GameObject("app").AddComponent<App>();
         app.material = material;
+        app.uiMaterial = uiMaterial;
         app.head = head.transform;
 
         EditorSceneManager.SaveScene(scene, ScenePath);

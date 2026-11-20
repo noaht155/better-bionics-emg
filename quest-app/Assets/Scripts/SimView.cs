@@ -1,23 +1,33 @@
 using System.Collections.Generic;
 using UnityEngine;
 
-// Draws the sim's geoms under the table root, like web/contact.js does on the laptop. The sim is z up and right
-// handed, Unity y up and left handed: the user sits on the sim's +y side looking towards -y (where the fingers point),
-// so Unity (x, y, z) = (-x, z, -y) of the sim.
+// Draws the sim's hands and objects under the desk root, like web/contact.js does on the laptop; the desk and room
+// are Room.cs. The sim is z up and right handed, Unity y up and left handed: the user sits on the sim's +y side
+// looking towards -y, so Unity (x, y, z) = (-x, z, -y) of the sim.
 public class SimView
 {
     // A finger pressing this hard shows fully in the effort colour (contact.js TINT_FULL_N)
     const float TintFullN = 10;
-    public static readonly Color HandColor = Hex(0xd4d4d8), PressColor = Hex(0xc93ee6), ObjectColor = Hex(0x71717a),
-        TableColor = Hex(0x151517);
+    public static readonly Color ProstheticColor = Hex(0xd4d4d8), FreeColor = Hex(0x8e8e96),
+        PressColor = Hex(0xc93ee6), ObjectColor = Hex(0x71717a), HeldColor = Hex(0xff7a3d);
 
     readonly Transform root;
     readonly Material material;
     readonly List<Transform> parts = new List<Transform>();
-    readonly List<Renderer> fingers = new List<Renderer>();
-    readonly List<int> fingerOf = new List<int>();
+    readonly List<(Renderer r, int finger)> pressing = new List<(Renderer, int)>();
+    readonly Dictionary<int, Renderer> objectRenderers = new Dictionary<int, Renderer>();
     int version = -1;
     float[] pos = new float[0], mat = new float[0];
+    double[] objects = new double[0];
+
+    public double[] Objects => objects;
+
+    // The newest geom poses in sim coordinates, as the sim gave them
+    public void Poses(out float[] p, out float[] m)
+    {
+        p = pos;
+        m = mat;
+    }
 
     public SimView(Transform root, Material material)
     {
@@ -92,36 +102,27 @@ public class SimView
         out4[0] = w; out4[1] = x; out4[2] = y; out4[3] = z;
     }
 
-    Material Paint(Color c)
+    public static Material Paint(Material baseMaterial, Color c, float smooth = 0.45f)
     {
-        var m = new Material(material) { color = c };
+        var m = new Material(baseMaterial) { color = c };
+        m.SetFloat("_Glossiness", smooth);
         return m;
     }
 
-    GameObject Primitive(PrimitiveType type)
+    static GameObject Primitive(PrimitiveType type)
     {
         var go = GameObject.CreatePrimitive(type);
         Object.Destroy(go.GetComponent<Collider>());
         return go;
     }
 
-    // MuJoCo geom types: 0 plane, 2 sphere, 3 capsule, 4 ellipsoid, 5 cylinder, 6 box, 7 mesh
+    // MuJoCo geom types: 2 sphere, 3 capsule, 4 ellipsoid, 5 cylinder, 6 box, 7 mesh
     Transform Make(Sim.Geom g)
     {
         var s = g.size;
         GameObject go;
         switch (g.type)
         {
-            case 0:
-                // Drawn as a slab that starts just in front of the user rather than the sim's 1 m square round the
-                // origin; the plane collides everywhere anyway
-                go = new GameObject("table");
-                var slab = Primitive(PrimitiveType.Cube);
-                slab.transform.SetParent(go.transform, false);
-                slab.transform.localScale = new Vector3(1.0f, 0.02f, 0.7f);
-                slab.transform.localPosition = new Vector3(0, -0.01f, 0.15f);
-                slab.GetComponent<Renderer>().sharedMaterial = Paint(TableColor);
-                return go.transform;
             case 2:
                 go = Primitive(PrimitiveType.Sphere);
                 go.transform.localScale = Vector3.one * (float)(2 * s[0]);
@@ -143,20 +144,21 @@ public class SimView
                 go.transform.localScale = new Vector3((float)(2 * s[0]), (float)(2 * s[2]), (float)(2 * s[1]));
                 break;
             case 7:
-                go = new GameObject("mesh", typeof(MeshFilter), typeof(MeshRenderer));
-                go.GetComponent<MeshFilter>().sharedMesh = FlatMesh(g.vert, g.face);
+                go = new GameObject("palm", typeof(MeshFilter), typeof(MeshRenderer));
+                go.GetComponent<MeshFilter>().sharedMesh = HullMesh(g.vert, g.face);
                 break;
             default:
                 return null;
         }
-        go.GetComponent<Renderer>().sharedMaterial = Paint(g.role == 1 ? ObjectColor : HandColor);
+        var color = g.role == 1 ? ObjectColor : g.hand == Sim.Prosthetic ? ProstheticColor : FreeColor;
+        go.GetComponent<Renderer>().sharedMaterial = Paint(material, color, g.role == 1 ? 0.3f : 0.55f);
         return go.transform;
     }
 
     // Capsule of radius r and half length h along local y, MuJoCo's capsule after the axis swap
     static Mesh Capsule(float r, float h)
     {
-        const int seg = 16, ring = 6;
+        const int seg = 24, ring = 8;
         var v = new List<Vector3>();
         var n = new List<Vector3>();
         var t = new List<int>();
@@ -186,22 +188,20 @@ public class SimView
         return mesh;
     }
 
-    // MuJoCo mesh in the geom's frame, one vertex per face corner for flat shading; the axis swap flips handedness,
-    // so the winding is reversed
-    static Mesh FlatMesh(float[] vert, int[] face)
+    // MuJoCo's convex hull of the palm in the geom's frame, shared vertices so it shades smooth like the fingers; the
+    // axis swap flips handedness, so the winding is reversed
+    static Mesh HullMesh(float[] vert, int[] face)
     {
-        var v = new List<Vector3>();
-        var t = new List<int>();
+        var v = new Vector3[vert.Length / 3];
+        for (int i = 0; i < v.Length; i++) v[i] = ToUnity(vert[3 * i], vert[3 * i + 1], vert[3 * i + 2]);
+        var t = new int[face.Length];
         for (int f = 0; f < face.Length; f += 3)
-            for (int k = 2; k >= 0; k--)
-            {
-                int i = 3 * face[f + k];
-                t.Add(v.Count);
-                v.Add(ToUnity(vert[i], vert[i + 1], vert[i + 2]));
-            }
-        var mesh = new Mesh();
-        mesh.SetVertices(v);
-        mesh.SetTriangles(t, 0);
+        {
+            t[f] = face[f + 2];
+            t[f + 1] = face[f + 1];
+            t[f + 2] = face[f];
+        }
+        var mesh = new Mesh { vertices = v, triangles = t };
         mesh.RecalculateNormals();
         return mesh;
     }
@@ -210,28 +210,27 @@ public class SimView
     {
         foreach (var p in parts) if (p != null) Object.Destroy(p.gameObject);
         parts.Clear();
-        fingers.Clear();
-        fingerOf.Clear();
+        pressing.Clear();
+        objectRenderers.Clear();
         foreach (var g in geoms)
         {
-            var part = Make(g);
+            var part = g.role == 0 ? null : Make(g);
             if (part != null)
             {
                 part.SetParent(root, false);
-                if (g.role == 2)
-                {
-                    fingers.Add(part.GetComponent<Renderer>());
-                    fingerOf.Add(g.finger);
-                }
+                var r = part.GetComponent<Renderer>();
+                if (g.hand == Sim.Prosthetic) pressing.Add((r, g.finger));
+                if (g.role == 1) objectRenderers[g.obj] = r;
             }
             parts.Add(part);
         }
     }
 
-    // Moves every geom to the sim's newest poses and tints pressing fingers; readout and hand come back for the app
-    public bool Update(Sim sim, double[] readout, double[] hand)
+    // Moves every part to the sim's newest poses, hides parked objects, tints the prosthetic hand's pressing fingers
+    // and held objects; the readout comes back for the app
+    public bool Update(Sim sim, double[] readout, bool[] parked)
     {
-        if (!sim.Read(ref pos, ref mat, readout, hand)) return false;
+        if (!sim.Read(ref pos, ref mat, readout, ref objects)) return false;
         if (sim.Version != version)
         {
             version = sim.Version;
@@ -241,14 +240,20 @@ public class SimView
         for (int g = 0; g < parts.Count; g++)
         {
             var part = parts[g];
-            if (part == null || part.name == "table") continue;
+            if (part == null) continue;
             part.localPosition = ToUnity(pos[3 * g], pos[3 * g + 1], pos[3 * g + 2]);
             part.localRotation = ToUnity(mat, 9 * g);
         }
-        for (int i = 0; i < fingers.Count; i++)
+        foreach (var (r, finger) in pressing)
         {
-            float force = fingerOf[i] >= 0 ? (float)readout[1 + fingerOf[i]] : 0;
-            fingers[i].sharedMaterial.color = Color.Lerp(HandColor, PressColor, Mathf.Clamp01(force / TintFullN));
+            float force = (float)(finger >= 0 ? readout[1 + finger] : readout[6]);
+            r.sharedMaterial.color = Color.Lerp(ProstheticColor, PressColor, Mathf.Clamp01(force / TintFullN));
+        }
+        foreach (var kv in objectRenderers)
+        {
+            kv.Value.enabled = kv.Key >= parked.Length || !parked[kv.Key];
+            bool held = (int)readout[8] == kv.Key || (int)readout[9] == kv.Key;
+            kv.Value.sharedMaterial.color = held ? Color.Lerp(ObjectColor, HeldColor, 0.35f) : ObjectColor;
         }
         return true;
     }

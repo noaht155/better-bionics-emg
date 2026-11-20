@@ -13,7 +13,8 @@ using UnityEngine;
 public class Link
 {
     const string Url = "ws://127.0.0.1:8000/ws/quest";
-    const int SendMs = 50;
+    // The view for the laptop's VR tab goes out at about the rate the tab draws it
+    const int SendMs = 33;
 
     [Serializable]
     public class Params
@@ -25,6 +26,13 @@ public class Link
     }
 
     [Serializable]
+    public class Command
+    {
+        public int id;
+        public string kind, arg;
+    }
+
+    [Serializable]
     public class Frame
     {
         public float[] angles;
@@ -33,6 +41,7 @@ public class Link
         public bool driven;
         public Params @params;
         public int params_seq;
+        public Command[] commands;
     }
 
     readonly CancellationTokenSource stop = new CancellationTokenSource();
@@ -41,7 +50,9 @@ public class Link
     volatile bool connected;
     string lastProblem;
     // JSON sent every SendMs while connected, set by the app
-    public volatile string Readout;
+    public volatile string Readout, View;
+    // Sent once, the next time the loop sends (the scene for the VR tab)
+    public volatile string Scene;
 
     public Frame Latest => latest;
     public bool Connected => connected;
@@ -103,8 +114,16 @@ public class Link
         while (ws.State == WebSocketState.Open)
         {
             while (outbox.TryDequeue(out var json)) await SendText(ws, json);
+            var scene = Scene;
+            if (scene != null)
+            {
+                await SendText(ws, scene);
+                if (Scene == scene) Scene = null;
+            }
             var readout = Readout;
             if (readout != null) await SendText(ws, readout);
+            var view = View;
+            if (view != null) await SendText(ws, view);
             await Task.Delay(SendMs, stop.Token);
         }
     }
