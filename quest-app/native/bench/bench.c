@@ -61,7 +61,7 @@ int main(int argc, char** argv) {
     bb_set_hand(w, 1, away, down, 1);
     bb_set_input(w, 1, rest, 0, 0, 0);
     bb_set_hand(w, 0, ticks + 2, ticks + 5, 1);
-    double t0 = now(), out[14], pos[3], quat[4];
+    double t0 = now(), out[16], pos[3], quat[4];
     for (int t = 0; t < nticks; t++) {
       double* row = ticks + t * cols;
       bb_set_hand(w, 0, row + 2, row + 5, 0);

@@ -40,13 +40,14 @@ const MODE_HELP = {
 };
 // The haptics that run with it (haptics.py), each setting only shown for the haptics mode that uses it
 const HAPTIC_PARAMS = [
-  { key: "haptic_floor", haptics: ["effort", "force"], label: "Lowest duty", min: 0, max: 90, step: 1, help: "duty the outputs start at above 0, so the start of a squeeze is felt. Coin motors don't turn under about 30 to 40 %, set it to the lowest duty you feel. 0 is plain proportional" },
+  { key: "haptic_floor", haptics: ["effort", "force", "surface"], label: "Lowest duty", min: 0, max: 90, step: 1, help: "duty the outputs start at above 0, so the start of a squeeze is felt. Coin motors don't turn under about 30 to 40 %, set it to the lowest duty you feel. 0 is plain proportional" },
   { key: "haptic_strength", haptics: "selections", label: "Strength", min: 10, max: 100, step: 5, help: "duty of the selection patterns" },
-  { key: "haptic_full_force", haptics: "force", label: "Full force N", min: 2, max: 100, step: 1, help: "grip force on the object in 3D contact that runs the motors at full duty" },
+  { key: "haptic_full_force", haptics: ["force", "surface"], label: "Full force N", min: 2, max: 100, step: 1, help: "force of the hand in 3D contact that runs the motors at full duty" },
 ];
 const HAPTICS_HELP = {
   effort: "each motor follows the effort of the channels under it, off at rest",
   force: "every motor follows the total force the hand presses on the object with in 3D contact, off when nothing is touched",
+  surface: "every motor pulses while the hand in 3D contact touches something (object or desk): fast pulses on a slippery surface, slow on a rough one, stronger the harder it presses",
   selections: "motors only buzz once a rule is confirmed, with the rule's haptic from the mapping (picks start as the grip's code: fist one long, pinch one short, tripod two, key three, point two long; release a fading buzz; lock and unlock a sweep round the band). Clenches and flicks on the way to a pattern play nothing",
 };
 // A rule's haptic as settings (haptics.haptic_settings). The smart settings (times, length, speed) set the ms, the

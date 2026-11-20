@@ -114,3 +114,55 @@ def test_haptic_settings_play_as_set():
     assert [d.index(100) for d in back] == [i for i in range(len(OUTPUTS) - 1, -1, -1) for _ in range(2)] * 2
     assert pattern("unlock", 100, None, {"pattern": "default"}) == pattern("unlock", 100)
     assert pattern("start", 100, "pinch", buzz("S")) == pattern("start", 100, "pinch")
+
+
+def test_surface_pulses_faster_on_slippery_surfaces(monkeypatch):
+    """Surface mode: nothing while the hand touches nothing; touching, every output pulses at the duty of the force
+    (half of full force: 50 %), starting on a pulse, and a slippery surface pulses faster than a rough one."""
+    import threading
+    import time
+    from types import SimpleNamespace
+    import tools
+    from haptics import HAPTIC_DEFAULTS, SURFACE_FRICTION, surface_hz
+
+    assert surface_hz(SURFACE_FRICTION[0]) > surface_hz(0.6) > surface_hz(SURFACE_FRICTION[1])
+    sent = []
+
+    class FakeEsp:
+        watchdog_fired = False
+        link = SimpleNamespace(name="fake")
+
+        def __init__(self, port, wifi):
+            pass
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *exc):
+            pass
+
+        def set_outputs(self, duties):
+            sent.append(duties)
+
+    monkeypatch.setattr(tools, "Esp32", FakeEsp)
+    recorder = SimpleNamespace(band=SimpleNamespace(channels=list(range(8))), session=None)
+
+    def run(touch):
+        sent.clear()
+        h = tools.Haptics(recorder, threading.Lock())
+        h.touch = lambda: touch
+        h.start(None, None, settings=dict(HAPTIC_DEFAULTS, haptics="surface"), sim_effort=lambda: 0.0)
+        time.sleep(1.2)
+        h.stop()
+        h.join(2)
+        firsts = [d[0] for d in sent]
+        assert all(len(set(d)) == 1 for d in sent)
+        return firsts, sum(a == 0 < b for a, b in zip(firsts, firsts[1:]))
+
+    firsts, _ = run((0.0, 0.0))
+    assert set(firsts) == {0}
+    full = HAPTIC_DEFAULTS["haptic_full_force"]
+    firsts, fast = run((full / 2, SURFACE_FRICTION[0]))
+    assert firsts[0] == 50 and set(firsts) == {0, 50}
+    _, slow = run((full / 2, SURFACE_FRICTION[1]))
+    assert fast > slow

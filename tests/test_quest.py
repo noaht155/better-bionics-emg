@@ -73,10 +73,10 @@ def test_quest_gets_the_control_output_and_shared_settings():
 def test_quest_grip_force_drives_the_haptics_while_fresh(monkeypatch):
     c = contact()
     assert c.grip_force() == 0.0
-    c.set_quest_readout({"grip_force": 12.5})
-    assert c.grip_force() == 12.5
+    c.set_quest_readout({"grip_force": 12.5, "touch_force": 14.0, "touch_friction": 0.6})
+    assert c.grip_force() == 12.5 and c.touch() == (14.0, 0.6)
     monkeypatch.setattr(tools, "QUEST_FRESH_S", 0.0)
-    assert c.grip_force() == 0.0
+    assert c.grip_force() == 0.0 and c.touch() == (0.0, 0.0)
     monkeypatch.undo()
     c.quest_gone()
     assert c.quest_readout() is None

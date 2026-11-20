@@ -231,7 +231,7 @@ class ControlParams(BaseModel):
     pinch_clenches: int = Field(CONTROL_DEFAULTS["pinch_clenches"], ge=1, le=2)
     spring_w: float = Field(ge=0, le=50)
     # The haptics that run with it, see haptics.py
-    haptics: Literal["effort", "selections", "force"] = HAPTIC_DEFAULTS["haptics"]
+    haptics: Literal["effort", "selections", "force", "surface"] = HAPTIC_DEFAULTS["haptics"]
     haptic_floor: int = Field(HAPTIC_DEFAULTS["haptic_floor"], ge=0, le=90)
     haptic_strength: int = Field(HAPTIC_DEFAULTS["haptic_strength"], ge=10, le=100)
     haptic_full_force: float = Field(HAPTIC_DEFAULTS["haptic_full_force"], ge=1, le=200)

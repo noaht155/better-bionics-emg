@@ -396,7 +396,7 @@ class World:
         self._lib.bb_step(self._w, float(dt))
 
     def _readout(self):
-        out = _doubles([0] * 14)
+        out = _doubles([0] * 16)
         self._lib.bb_readout(self._w, out)
         return np.array(out)
 
@@ -419,6 +419,12 @@ class World:
     def grip_force(self):
         """Total force the hand presses on the object with (N), what the motors follow."""
         return float(self._readout()[0])
+
+    def touch(self):
+        """Force the hand presses on everything it touches (N: object, desk) and those surfaces' own friction, weighted
+        by force, 0 while it touches nothing. What the haptics' surface mode plays."""
+        r = self._readout()
+        return float(r[14]), float(r[15])
 
     def weight(self):
         scale = min(max(float(self.params["mass_scale"]), 0.05), MAX_MASS_SCALE)
@@ -460,4 +466,5 @@ class World:
         self._lib.bb_object_pose(self._w, self._index, pos, quat)
         return {"grip_force": round(float(r[0]), 2), "finger_force": r[1:6].round(2).tolist(),
                 "palm_force": round(float(r[6]), 2), "weight": round(self.weight(), 3), "friction": self.friction(),
-                "assisted": bool(r[8] >= 0), "object_height": round(pos[2], 4), "time": round(float(r[12]), 3)}
+                "assisted": bool(r[8] >= 0), "object_height": round(pos[2], 4), "time": round(float(r[12]), 3),
+                "touch_force": round(float(r[14]), 2), "touch_friction": round(float(r[15]), 3)}

@@ -30,6 +30,12 @@ PRINT_EVERY_S = 0.5
 # duty in force mode
 HAPTIC_DEFAULTS = {"haptics": "effort", "haptic_floor": 0, "haptic_strength": 100, "haptic_full_force": 30.0}
 
+# Surface mode (Noah, 2026-11-20): every motor pulses while the hand touches something, fast on a slippery surface
+# and slow on a rough one, at a duty that follows how hard it presses. Pulse rate from the surface's friction, linear
+# between these ends; at UPDATE_HZ the fastest is 2 steps on, 2 off
+SURFACE_FRICTION = (0.4, 0.9)
+SURFACE_HZ = (5.0, 1.5)
+
 # Selection patterns, built from steps of 1 / UPDATE_HZ. Contact and release bursts are what DESC feedback uses
 # (Cipriani group); coin motors take about 40 ms to spin up, so a short pulse is two steps and a long one six. The
 # grip code is a count of pulses on every motor, since counts are told apart more reliably than sites round the
@@ -61,6 +67,13 @@ def scaled_duty(level_, floor):
     """Duty in % for a level 0 to 1. Above 0 it starts at floor, the lowest duty that still turns a motor (coin
     motors don't start under about 30 to 40 %), so the bottom of the effort range isn't lost; 0 stays off."""
     return int(round(floor + (100 - floor) * level_)) if level_ > 0 else 0
+
+
+def surface_hz(friction):
+    """Pulse rate (Hz) for a surface of this friction."""
+    lo, hi = SURFACE_FRICTION
+    t = min(max((friction - lo) / (hi - lo), 0.0), 1.0)
+    return SURFACE_HZ[0] + t * (SURFACE_HZ[1] - SURFACE_HZ[0])
 
 
 def buzz(code):

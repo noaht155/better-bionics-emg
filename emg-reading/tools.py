@@ -31,7 +31,8 @@ from cursor import DEFAULTS as CURSOR_DEFAULTS, LEVEL_SCALE as CURSOR_LEVEL_SCAL
 from esp32_link import Esp32, self_test
 from gestures import GESTURE_SET, GESTURES, LIBRARY
 from session import DATA_DIR, load_session, segments
-from haptics import HAPTIC_DEFAULTS, OUTPUTS, UPDATE_HZ, channel_levels, effort, output_duties, pattern, scaled_duty
+from haptics import (HAPTIC_DEFAULTS, OUTPUTS, UPDATE_HZ, channel_levels, effort, output_duties, pattern, scaled_duty,
+                     surface_hz)
 
 # The ml package sits next to emg-reading/ in the repo
 REPO = Path(__file__).resolve().parent.parent
@@ -429,8 +430,9 @@ class HumTest(Tool):
 class Haptics(Tool):
     """haptics.py's loop. It shares the ESP32 with the output test, only one of them can hold the port. Started from
     the Control tab it follows the tab's haptics setting: effort (each output follows its channels), selections
-    (only the patterns of the control layer's events, cue()) or force (every output follows the contact
-    simulation's grip force, full duty at haptic_full_force)."""
+    (only the patterns of the control layer's events, cue()), force (every output follows the contact
+    simulation's grip force, full duty at haptic_full_force) or surface (every output pulses while the simulated hand
+    touches something, the rate from the surface's friction, haptics.surface_hz, the duty from the force)."""
 
     def __init__(self, recorder, esp_lock):
         super().__init__()
@@ -441,6 +443,8 @@ class Haptics(Tool):
         self._settings = HAPTIC_DEFAULTS
         # The contact simulation's grip force in N (Contact.grip_force), for force mode
         self.grip_force = lambda: 0.0
+        # Force on everything the simulated hand touches (N) and those surfaces' friction (Contact.touch)
+        self.touch = lambda: (0.0, 0.0)
 
     def start(self, port, wifi, session=None, settings=None, sim_effort=None):
         """With session, the levels come from that recorded session (calibrate.from_session), else from
@@ -502,7 +506,11 @@ class Haptics(Tool):
                 self.state["link"] = esp.link.name
                 self._log_session(True, esp.link.name)
                 next_tick = time.perf_counter()
+                # Surface mode: where in its pulse the output is (0 to 1, on for the first half), from the last update
+                phase, last = 0.0, next_tick
                 while not self._stop.is_set():
+                    now = time.perf_counter()
+                    dt, last = now - last, now
                     mode, floor = settings["haptics"], settings["haptic_floor"]
                     self.state.update(mode=mode, floor=floor, strength=settings["haptic_strength"])
                     duties = None
@@ -511,6 +519,12 @@ class Haptics(Tool):
                         duties, lost = step or [0] * len(OUTPUTS), np.zeros(len(band.channels), bool)
                     elif mode == "force":
                         level_ = min(self.grip_force() / settings["haptic_full_force"], 1.0)
+                        duties, lost = [scaled_duty(level_, floor)] * len(OUTPUTS), np.zeros(len(band.channels), bool)
+                    elif mode == "surface":
+                        force, friction = self.touch()
+                        # A new touch starts on a pulse, so the contact is felt at once
+                        phase = (phase + surface_hz(friction) * dt) % 1.0 if force > 0 else 0.0
+                        level_ = min(force / settings["haptic_full_force"], 1.0) if phase < 0.5 else 0.0
                         duties, lost = [scaled_duty(level_, floor)] * len(OUTPUTS), np.zeros(len(band.channels), bool)
                     elif sim_effort is not None:
                         duties = [scaled_duty(min(max(sim_effort(), 0.0), 1.0), floor)] * len(OUTPUTS)
@@ -884,6 +898,14 @@ class Contact(Tool):
             return float(quest.get("grip_force", 0.0))
         world = self.world
         return world.grip_force() if world is not None and self.state["running"] else 0.0
+
+    def touch(self):
+        """Force on everything the hand touches (N) and those surfaces' friction, from the Quest app while it sends."""
+        quest = self.quest_readout()
+        if quest is not None:
+            return float(quest.get("touch_force", 0.0)), float(quest.get("touch_friction", 0.0))
+        world = self.world
+        return world.touch() if world is not None and self.state["running"] else (0.0, 0.0)
 
     def _inputs(self):
         """The control layer's angles, effort and lock, or the resting hand while nothing drives it."""
@@ -1372,6 +1394,7 @@ class Tools:
         self.control = Control(recorder, self.haptics)
         self.contact = Contact(self.predictor, self.control)
         self.haptics.grip_force = self.contact.grip_force
+        self.haptics.touch = self.contact.touch
         self.cursor = CursorTask(recorder)
         self.trainer = Trainer(self.predictor)
         self.network = NetworkJob()

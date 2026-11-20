@@ -59,6 +59,12 @@ def test_scene_and_poses_line_up():
 def lift(effort, assist, mass_scale=1.0):
     """Hand beside the can, thumb up, wraps it in 1 s and lifts 10 cm. Returns how high the can ended up (m) and
     the grip force."""
+    w = lift_world(effort, assist, mass_scale)
+    return w.readout()["object_height"] - sim.OBJECTS["can"][3], w.grip_force()
+
+
+def lift_world(effort, assist, mass_scale=1.0):
+    """lift()'s world once it's done."""
     w = sim.World({"object": "can", "assist": assist, "mass_scale": mass_scale})
     # Columns: the hand's x (thumb), y (fingers), z (palm) in the world
     rot = np.array([[0, 1, 0], [0, 0, 1], [1, 0, 0]], float)
@@ -73,7 +79,7 @@ def lift(effort, assist, mass_scale=1.0):
         w.set_hand(base + [0, 0, 0.1 * min(max((t - 1.6) / 1.0, 0), 1)], q)
         w.step(0.02, rest + closure * (grip - rest), effort)
     assert w.blowups == 0
-    return w.readout()["object_height"] - sim.OBJECTS["can"][3], w.grip_force()
+    return w
 
 
 def test_assist_lifts_and_grip_force_follows_effort():
@@ -81,6 +87,22 @@ def test_assist_lifts_and_grip_force_follows_effort():
     h_full, f_full = lift(1.0, True)
     assert h_light > 0.08 and h_full > 0.08
     assert f_full > 1.5 * f_light
+
+
+def test_touch_reads_the_surface_pressed_on():
+    """Pressing the open hand down on the desk gives force on the desk's friction; the lifted can, held clear of the
+    desk, gives the can's."""
+    w = sim.World()
+    w.set_hand([0.2, -0.3, 0.05], sim.HAND_QUAT, teleport=True)
+    assert w.touch() == (0.0, 0.0)
+    for _ in range(25):
+        w.set_hand([0.2, -0.3, -0.02], sim.HAND_QUAT)
+        w.step(0.02, GESTURES["open"][1], 0.5)
+    force, friction = w.touch()
+    assert force > 1 and friction == pytest.approx(0.6)
+    w = lift_world(1.0, False)
+    force, friction = w.touch()
+    assert force > 1 and friction == pytest.approx(sim.OBJECTS["can"][2])
 
 
 def test_grip_too_light_for_the_weight_drops_it():

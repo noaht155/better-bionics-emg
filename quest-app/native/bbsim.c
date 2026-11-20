@@ -29,6 +29,9 @@ typedef struct {
   double angles[NJ], effort, lock_effort;
   int locked, was_locked, grab;
   double finger_force[NF], palm_force, force_on[MAXOBJ];
+  // Force on everything the hand touches (objects, desk, floor) and that force times each surface's own friction,
+  // for the haptics' surface mode
+  double touch_force, touch_friction;
   int held;
   int hold_eq[MAXOBJ];
 } Hand;
@@ -297,10 +300,19 @@ static void read_forces(World* w) {
     Hand* hd = &w->hand[h];
     memset(hd->finger_force, 0, sizeof(hd->finger_force));
     memset(hd->force_on, 0, sizeof(double) * w->nobj);
-    hd->palm_force = 0;
+    hd->palm_force = hd->touch_force = hd->touch_friction = 0;
   }
   for (int i = 0; i < w->d->ncon; i++) {
     mjContact* c = w->d->contact + i;
+    int g0 = c->geom[0], g1 = c->geom[1];
+    if ((w->hand_of_geom[g0] >= 0) != (w->hand_of_geom[g1] >= 0)) {
+      int hand = w->hand_of_geom[g0] >= 0 ? g0 : g1, surface = hand == g0 ? g1 : g0;
+      mj_contactForce(w->m, w->d, i, f6);
+      Hand* hd = &w->hand[w->hand_of_geom[hand]];
+      hd->touch_force += f6[0];
+      // The surface's own friction, not the contact's: the hand's high friction would win against every object
+      hd->touch_friction += f6[0] * w->m->geom_friction[3 * surface];
+    }
     int o = w->obj_of_geom[c->geom[0]], other = c->geom[1];
     if (o < 0) {
       o = w->obj_of_geom[c->geom[1]];
@@ -454,7 +466,8 @@ EXPORT void bb_object_pose(World* w, int o, double* pos, double* quat) {
 }
 
 // Prosthetic grip force, its 5 finger forces and palm force, the free hand's grip force, the object each hand
-// holds (-1 none), the object the prosthetic hand presses on most, its weight and friction, time, blow-ups
+// holds (-1 none), the object the prosthetic hand presses on most, its weight, time, blow-ups, then the prosthetic
+// hand's force on everything it touches and those surfaces' friction weighted by force (0 while it touches nothing)
 EXPORT void bb_readout(World* w, double* out) {
   Hand *p = &w->hand[0], *f = &w->hand[1];
   out[0] = grip_force(p);
@@ -468,6 +481,8 @@ EXPORT void bb_readout(World* w, double* out) {
   out[11] = o >= 0 ? w->m->body_mass[w->obj_body[o]] * w->gravity : 0;
   out[12] = w->time;
   out[13] = w->blowups;
+  out[14] = p->touch_force;
+  out[15] = p->touch_force > 0 ? p->touch_friction / p->touch_force : 0;
 }
 
 // A hand on its own for showing poses (the recording cue's target): no physics, only where its parts are at given

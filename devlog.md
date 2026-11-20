@@ -2446,6 +2446,13 @@ levels: r 0.995 to 0.999 per session, mean difference 0.005 to 0.013, a clench l
   the model: geometry, constants, objects. bbsim is built on first use against the venv's MuJoCo and rebuilt when
   `bbsim.c` changes (MSVC Build Tools on the desktop, 4 s; Apple clang and MuJoCo 3.3.7 on the Mac), into ignored
   `quest-app/native/build/host/`. The contact page now shows the desk (box, grid on it) and clips placing to it.
+- Surface haptics (boss's request, scheme by Noah): new haptics mode Surface. While the simulated hand touches
+  anything (object, desk, floor) every motor pulses; pulse rate from the surface's own friction (0.4 and below 5 Hz,
+  0.9 and up 1.5 Hz, linear: can and pen 4.3 Hz, desk 3.6, block 2.9, ball 2.2), duty from the force on it (Full
+  force N, Lowest duty as in force mode). A new touch starts on a pulse. bbsim reads the force and force-weighted
+  friction for both PC and headset (readout 14 and 15, `ReadoutSize` 16 in the app), the headset sends them as
+  `touch_force` and `touch_friction`. The surface's own friction, not the contact's: the hand's 2.0 wins against
+  every object. Checked with a fake ESP32 and the sim, not yet on the motors or in the headset (needs a rebuild).
 
 ## Open
 
@@ -2528,6 +2535,9 @@ Now: haptics
 - Motors: firmware 0.2.1 is flashed and channels 0 and 1 follow the duty. When the ULN2003, MOSFETs or LEDs go
   back on, set `OUTPUTS_INVERTED` to false. Still to measure: lowest duty that starts a motor (the haptics floor),
   how many levels can be told apart (then set effort mode's lowest duty on the Control tab), and EMG spectra with the motors off and on to see if they show up.
+- Surface haptics on the motors: check the pulse rates are told apart (can 4.3 Hz vs ball 2.2 Hz) and the duty
+  steps under them; if objects feel alike, spread `SURFACE_FRICTION`/`SURFACE_HZ` or give objects a separate
+  roughness value instead of friction. Then on the headset (rebuild with `build.sh`).
 - Motor pickup: run `diagnostics/motor_pickup.py` with the motor band below the pads, relaxed and with a steady
   clench.
 - Haptics: decide on LRAs vs coin motors. LRAs need an AC drive at their resonance (about 170 to 235 Hz), which is
