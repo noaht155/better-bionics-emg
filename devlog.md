@@ -2366,6 +2366,19 @@ levels: r 0.995 to 0.999 per session, mean difference 0.005 to 0.013, a clench l
     and 29 N at 0.2, 0.4, 0.6 and 1.0; 3x the can needs full effort. Grip force only grows with effort as far as
     the pose asks, so a pinch on something small stays at a few N.
 
+## 2026-11-20: MuJoCo on the Quest 3
+
+- Unity 6.3 LTS (6000.3.29f1) with Android support installed on the desktop through the Unity CLI (winget's
+  platform-tools package failed its hash check; Unity's SDK brings its own `adb`). The Quest is seen over USB.
+- MuJoCo 4.0.1 builds for the Quest (`quest-app/native/build-mujoco.sh`). Two fixes: CMake 3.22 assumes an old NDK
+  and links with gold when LTO is on unless it's told the NDK version, and libmujoco needs the C++ runtime linked by
+  hand because the C driver links it.
+- Can wrap at full effort on the headset (`quest-app/native/bench/`): the force rule ported to C, fed the recorded
+  hand pose, angles and effort, ends with the can at the same height as Python (0.1324 m) at 6.8 to 7.9x real time
+  (two sets of 3 runs; desktop Python 8.5x on the same grasp). Replaying the recorded torques open loop instead dropped the can:
+  the Quest's rounding drifts a fraction of a mm after 2 s and fixed torques don't correct it, the force rule does.
+  No rendering running, so the app will have less; the sim can take its own core.
+
 ## Open
 
 Perfboard: replace the motors on positions 3 and 4 and buzz-test them (the rest checked 2026-11-18).
@@ -2426,8 +2439,9 @@ Now: 3D contact
   the motors. Link is USB-C to the laptop with `adb reverse` (Noah): the laptop stays on the armband's WiFi, the
   Quest never joins it, so changing armbands touches nothing on the Quest, and the cable charges it. Same model XML from
   `sim.py`, the per-finger force rule ported to C# and checked against the Python one on scripted grasps; the
-  desktop page keeps the Python sim. First check: MuJoCo built for Android arm64 and the can grasp timed on the
-  headset. Not CPU: the MacBook runs the sim at 11.6x real time (3 runs, app not running; desktop 17.4x).
+  desktop page keeps the Python sim. MuJoCo runs on the headset at 6.8 to 7.9x real time (2026-11-20). Not CPU:
+  the MacBook runs the sim at 11.6x real time (3 runs, app not running; desktop 17.4x). Next: the Unity project
+  with MuJoCo inside, a hand following the laptop's control output over USB.
   Uses: training cues as a 3D hand in first person, later the live predicted hand (a new protocol beside F, never a
   change to F), and the contact sim with a Touch controller strapped to the socket placing the hand, the other
   controller for everything else. The laptop sees the view by casting first, its own spectator view later.

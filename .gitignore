@@ -36,3 +36,6 @@ ml/cache/
 
 # Diagnostics: plots from personal recordings and the downloaded Ninapro DB8 data
 diagnostics/
+
+# Quest app native builds (MuJoCo source and library, benchmark files)
+quest-app/native/build/

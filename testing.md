@@ -335,6 +335,8 @@ Checks that need training runs, too slow for the test suite. Numbers in `devlog.
 - Practice against exam score (training sessions against held-out) in every evaluation, for under- and overfitting.
 - Epoch sweep (5 to 50): held-out scores stop improving at 10 to 15.
 - Mirrored band simulated by reversing the channel order: 70 % to 38 % without calibration.
+- MuJoCo on the Quest 3 (`quest-app/native/bench/`): the C force rule gives the same can grasp as `sim.py` (object
+  height to 0.1 mm) at 6.8 to 7.9x real time on the headset.
 - Run-to-run noise (2026-10-06, 5 seeds): a single run is good to about +-1.5 points on grip accuracy and +-0.03 in angle r. LDA has no randomness and repeats exactly.
 
 ## Not checked yet
