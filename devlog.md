@@ -2453,6 +2453,9 @@ levels: r 0.995 to 0.999 per session, mean difference 0.005 to 0.013, a clench l
   friction for both PC and headset (readout 14 and 15, `ReadoutSize` 16 in the app), the headset sends them as
   `touch_force` and `touch_friction`. The surface's own friction, not the contact's: the hand's 2.0 wins against
   every object. Checked with a fake ESP32 and the sim, not yet on the motors or in the headset (needs a rebuild).
+- Hum after moving the band into the new shell (details in `hardware-status.md`): 300 to 3400 uV on every channel
+  for over 10 minutes, filtered rest still 6 to 13 uV. Motors, pressing the ref pads and the ch 5 pad changed
+  nothing; moving the arm around brought it to 16 to 66 uV (ch 5 246). Let the band bed in before judging hum.
 
 ## Open
 
