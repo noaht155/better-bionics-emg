@@ -37,6 +37,7 @@ typedef struct {
   int parked[MAXOBJ];
   double park_qpos[MAXOBJ][7];
   double base_mass[MAXOBJ], base_inertia[MAXOBJ][3];
+  double mass_scale;
   // Per geom: the hand it belongs to (-1 none), its finger (-1 palm), the object it is (-1 none)
   int *hand_of_geom, *finger_of_geom, *obj_of_geom;
   int floor_geom;
@@ -179,9 +180,18 @@ EXPORT World* bb_create(const char* xml, int len, char* err, int errlen) {
 
 EXPORT void bb_set_params(World* w, double mass_scale, double max_force, int assist) {
   mass_scale = clip(mass_scale, 0.05, w->max_mass_scale);
-  for (int o = 0; o < w->nobj; o++) {
-    w->m->body_mass[w->obj_body[o]] = w->base_mass[o] * mass_scale;
-    for (int k = 0; k < 3; k++) w->m->body_inertia[3 * w->obj_body[o] + k] = w->base_inertia[o][k] * mass_scale;
+  if (mass_scale != w->mass_scale) {
+    w->mass_scale = mass_scale;
+    for (int o = 0; o < w->nobj; o++) {
+      w->m->body_mass[w->obj_body[o]] = w->base_mass[o] * mass_scale;
+      for (int k = 0; k < 3; k++) w->m->body_inertia[3 * w->obj_body[o] + k] = w->base_inertia[o][k] * mass_scale;
+    }
+    // The constants MuJoCo derives from the masses at load (constraint weights among them) have to follow, or a 3x
+    // can sank into the desk and blew up when a light grip dropped it (2026-11-20). mj_setConst overwrites the
+    // state it's given, so it gets a scratch one
+    mjData* scratch = mj_makeData(w->m);
+    mj_setConst(w->m, scratch);
+    mj_deleteData(scratch);
   }
   w->max_force = max_force;
   w->assist_on = assist;

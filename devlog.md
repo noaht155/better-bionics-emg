@@ -2436,6 +2436,10 @@ levels: r 0.995 to 0.999 per session, mean difference 0.005 to 0.013, a clench l
   sections, gradient accents, touch sliders and toggles. Not yet checked in the headset: thumb fit, menu gesture,
   recording end to end, text sizes. The PC's USB port doesn't keep up with the headset's draw while the app runs:
   stop the app when not testing.
+- Mass x changed at runtime left MuJoCo's load-time constants at the old mass: on the headset's scene a 3x can
+  dropped by a light grip sank 2 cm into the desk and blew the sim up (the PC's Python sim on its plane: fell over
+  cleanly). Built 3x heavy in the XML it fell cleanly. `bb_set_params` now reruns `mj_setConst` (on a scratch
+  `mjData`, it overwrites the state) when the mass changes; all lift cases clean again.
 
 ## Open
 
