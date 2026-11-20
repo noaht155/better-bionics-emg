@@ -116,24 +116,29 @@ def test_haptic_settings_play_as_set():
     assert pattern("start", 100, "pinch", buzz("S")) == pattern("start", 100, "pinch")
 
 
-def test_surface_pulses_faster_on_slippery_surfaces(monkeypatch):
-    """Surface mode: nothing while the hand touches nothing; touching, every output pulses at the duty of the force
-    (half of full force: 50 %), starting on a pulse, and a slippery surface pulses faster than a rough one."""
+def test_control_haptics_layer_patterns_over_the_contact(monkeypatch):
+    """The Control tab's combined mode with a fake ESP32: off while the hand touches nothing; touching, every output
+    vibrates at the force's duty (half of full force: 50 %) and drops to pulse_off % of it between pulses, starting on
+    a pulse; a slippery surface pulses faster than a rough one; a selection pattern plays over it; a lost link is
+    connected again."""
     import threading
     import time
     from types import SimpleNamespace
     import tools
+    from esp32_link import Esp32Error
     from haptics import HAPTIC_DEFAULTS, SURFACE_FRICTION, surface_hz
 
     assert surface_hz(SURFACE_FRICTION[0]) > surface_hz(0.6) > surface_hz(SURFACE_FRICTION[1])
-    sent = []
+    sent, fail = [], []
 
     class FakeEsp:
         watchdog_fired = False
         link = SimpleNamespace(name="fake")
 
         def __init__(self, port, wifi):
-            pass
+            if fail:
+                fail.pop()
+                raise Esp32Error("no reply")
 
         def __enter__(self):
             return self
@@ -147,22 +152,30 @@ def test_surface_pulses_faster_on_slippery_surfaces(monkeypatch):
     monkeypatch.setattr(tools, "Esp32", FakeEsp)
     recorder = SimpleNamespace(band=SimpleNamespace(channels=list(range(8))), session=None)
 
-    def run(touch):
+    def run(touch, seconds=1.2, cue=False):
         sent.clear()
         h = tools.Haptics(recorder, threading.Lock())
         h.touch = lambda: touch
-        h.start(None, None, settings=dict(HAPTIC_DEFAULTS, haptics="surface"), sim_effort=lambda: 0.0)
-        time.sleep(1.2)
+        h.start(None, None, settings=dict(HAPTIC_DEFAULTS))
+        if cue:
+            time.sleep(0.2)
+            h.cue("start", "fist")
+        time.sleep(seconds)
         h.stop()
-        h.join(2)
+        h.join(3)
         firsts = [d[0] for d in sent]
         assert all(len(set(d)) == 1 for d in sent)
-        return firsts, sum(a == 0 < b for a, b in zip(firsts, firsts[1:]))
+        return firsts, sum(a < b for a, b in zip(firsts, firsts[1:]))
 
     firsts, _ = run((0.0, 0.0))
     assert set(firsts) == {0}
     full = HAPTIC_DEFAULTS["haptic_full_force"]
     firsts, fast = run((full / 2, SURFACE_FRICTION[0]))
-    assert firsts[0] == 50 and set(firsts) == {0, 50}
+    assert firsts[0] == 50 and set(firsts) == {25, 50}
     _, slow = run((full / 2, SURFACE_FRICTION[1]))
     assert fast > slow
+    firsts, _ = run((full / 2, SURFACE_FRICTION[0]), cue=True)
+    assert 100 in firsts
+    fail.append(True)
+    firsts, _ = run((0.0, 0.0), seconds=1.6)
+    assert firsts and set(firsts) == {0}

@@ -107,7 +107,7 @@ These decide when the recorder marks a cue bad and redoes it.
 | `test_selection_patterns_tell_events_apart` | Every grip's pick pattern is different and on all motors, release fades, lock and unlock sweep opposite ways, a tick only uses one motor |
 | `test_tick_never_cuts_a_pick` | A tick doesn't cut a pick that is still playing, plays once it has finished, and any other event cuts a tick |
 | `test_haptic_settings_play_as_set` | Buzz pulses play their on and off ms in steps (last off dropped), strength is % of the profile's, a fade runs down to its end %, a sweep goes back and repeats as set, default keeps the event's pattern |
-| `test_surface_pulses_faster_on_slippery_surfaces` | Surface mode with a fake ESP32: off while nothing is touched; touching, every output pulses at the force's duty, starting on a pulse, and the most slippery surface gives more pulses than the roughest |
+| `test_control_haptics_layer_patterns_over_the_contact` | The Control tab's haptics with a fake ESP32: off while nothing is touched; touching, every output at the force's duty dropping to pulse off % between pulses, starting on a pulse; the most slippery surface gives more pulses than the roughest; a selection pattern plays over it; a lost link reconnects |
 | `test_rule_haptic_replaces_the_event_pattern` | A mapping rule's own haptic: a pulse code on every motor, fade and sweep borrow release and lock, none is silent, auto keeps the event's pattern |
 
 ### Shared evaluation (`tests/test_evaluate.py`)
@@ -223,7 +223,7 @@ Skips without mujoco. Runs bbsim.c (built on first use) on the Quest app's scene
 | `test_grip_force_follows_effort_without_the_assist` | Without the assist grip force on the can rises from effort 0.2 to 0.6 to 1.0 |
 | `test_other_objects_hold_from_medium_effort` | Placed as a person would (contact centre of the grip on the object, small objects from above with the hand tilted), the ball (wrap), block (tripod), pen (pinch) and small cube (tripod) lift at effort 0.6 and 1.0 without the assist |
 | `test_mass_is_capped` | The mass setting stops at `MAX_MASS_SCALE`, above which the simulation blew up |
-| `test_contact_runs_on_the_control_layer_and_gives_the_force_to_the_haptics` | The app's simulation thread follows the control layer's angles, sends frames that match the scene, rebuilds for another object, and gives the haptics no force once stopped |
+| `test_contact_runs_on_the_control_layer_and_gives_the_touch_to_the_haptics` | The app's simulation thread follows the control layer's angles, sends frames that match the scene, rebuilds for another object, and gives the haptics no force once stopped |
 
 ### Quest app, laptop side (`tests/test_quest.py`)
 
@@ -234,7 +234,7 @@ Skips without mujoco.
 | `test_scene_has_both_hands_the_pool_and_the_force_rule` | The headset's scene (either prosthetic side) loads with both hands' 40 motors in `JOINTS` order, the object pool at `sim.OBJECTS`' masses and the force rule's constants; the prosthetic hand is the left one when asked |
 | `test_left_hand_mirrors_the_right` | With the same angles every part of the left hand sits at the mirror image of the right hand's |
 | `test_quest_gets_the_control_output_and_shared_settings` | `/ws/quest`'s frame has the control layer's angles, effort, lock and whether a model drives it, plus the contact settings; a settings change raises `params_seq` |
-| `test_quest_grip_force_drives_the_haptics_while_fresh` | The headset's grip force and touch (force and surface friction) drive the haptics while its readouts keep coming, not once they stop |
+| `test_quest_touch_drives_the_haptics_while_fresh` | The headset's touch (force and surface friction) drives the haptics while its readouts keep coming, not once they stop |
 | `test_link_maps_the_quest_once_and_leaves_another_live_copy` | `adb reverse` is set once per plugged-in Quest, an unauthorized one is left alone, and a second app copy only takes the mapping once the first stops answering |
 
 ### Protocols (`tests/test_protocols.py`)

@@ -4,9 +4,10 @@ Each EMG channel's envelope is scaled between its rest and max level from
 calibrate.py: 0% at or below rest, 100% at or above max, linear in between.
 A channel whose pad loses contact is set to 0% until it recovers. Ctrl+C to stop.
 
-The Control tab has a second mode, selections: the outputs stay off and only the control layer's discrete
-events play a short pattern (pattern()), so the user feels which grip was picked, a release, a lock and each
-counted clench or flick without looking at the hand.
+The Control tab runs its own mode (tools.Haptics, combined): the control layer's discrete events play a short
+pattern (pattern()), so the user feels which grip was picked, a release or a lock without looking at the hand, and
+in between the outputs follow the 3D contact: the force the simulated hand presses with, pulsing at the surface's
+rate (surface_hz).
 
     python haptics.py [--synthetic] [--port COM3] [--wifi [IP]] [--rest 8 --max 80 [--no-car]]
 """
@@ -25,14 +26,14 @@ OUTPUTS = [(0,), (1,), (2,), (3,), (4,), (5,), (6, 7)]
 
 UPDATE_HZ = 20
 PRINT_EVERY_S = 0.5
-# The Control tab's haptics settings. floor: lowest duty above 0 in effort mode, 0 until the motors' start duty is
-# measured. strength: duty of the selection patterns. full force: grip force (N) of the contact simulation at full
-# duty in force mode
-HAPTIC_DEFAULTS = {"haptics": "effort", "haptic_floor": 0, "haptic_strength": 100, "haptic_full_force": 30.0}
+# The Control tab's haptics settings (combined mode, tools.Haptics). floor: lowest duty above 0, 0 until the motors'
+# start duty is measured. strength: duty of the selection patterns. full force: force (N) of the simulated hand on
+# what it touches at full duty. pulse off: duty between the surface's pulses as % of the force's duty
+HAPTIC_DEFAULTS = {"haptic_floor": 0, "haptic_strength": 100, "haptic_full_force": 30.0, "haptic_pulse_off": 50}
 
-# Surface mode (Noah, 2026-11-20): every motor pulses while the hand touches something, fast on a slippery surface
-# and slow on a rough one, at a duty that follows how hard it presses. Pulse rate from the surface's friction, linear
-# between these ends; at UPDATE_HZ the fastest is 2 steps on, 2 off
+# Surface pulses (Noah, 2026-11-20): while the simulated hand touches something every motor pulses, fast on a
+# slippery surface and slow on a rough one. Rate from the surface's friction, linear between these ends; at UPDATE_HZ
+# the fastest is 2 steps up, 2 down
 SURFACE_FRICTION = (0.4, 0.9)
 SURFACE_HZ = (5.0, 1.5)
 

@@ -578,7 +578,7 @@ def test_selection_haptics_follow_control_events():
     import tools
 
     class FakeHaptics:
-        state = {"running": True}
+        state = {"running": True, "mode": "combined"}
         cues = []
 
         def cue(self, kind, grip=None, haptic="auto"):
@@ -586,16 +586,16 @@ def test_selection_haptics_follow_control_events():
 
     haptics = FakeHaptics()
     control = tools.Control(None, haptics)
-    control.set_params({"mode": "rules", "haptics": "selections"})
+    control.set_params({"mode": "rules"})
     control.prepare_sim()
     for grip, e, n in [SHORT, PAUSE, SHORT, PAUSE, GAP]:
         for _ in range(n):
             control.advance(probs("rest"), e, 0.05)
     # Counted clenches play nothing, only the confirmed pick does
     assert haptics.cues == [("start", "tripod")]
-    # Effort mode leaves the outputs to the channels, no patterns
+    # The System tab's effort mode leaves the outputs to the channels, no patterns
     haptics.cues.clear()
-    control.set_params({"haptics": "effort"})
+    haptics.state = {"running": True, "mode": "effort"}
     control.prepare_sim()
     for grip, e, n in [SHORT, PAUSE, GAP]:
         for _ in range(n):

@@ -2460,6 +2460,13 @@ levels: r 0.995 to 0.999 per session, mean difference 0.005 to 0.013, a clench l
   the palm, its pad and the thumb's base (contact bits in `sim.hand_xml`), the thumb and finger against finger still
   pass. Fist overlap 12 mm before, under 1 mm now; the pinky stops 6 degrees and the index 9 short of the fist pose.
   Grasp tests unchanged. Same on the headset after a rebuild.
+- Control tab haptics are one mode now (Noah): the four choices (effort per channel, selections, grip force, surface)
+  are gone. Selection patterns play over everything while they run; otherwise, while the simulated hand touches
+  anything, every motor runs at the force's duty (Full force N) with the surface's pulses on top, dropping to
+  "Between pulses %" (default 50) of it between pulses. Effort per channel stays on System > Haptics. Older presets
+  load with their `haptics` choice ignored.
+- Haptics stopped on "no reply to S,0,..." when the ESP32 missed one reply at start (it answered fine a minute later,
+  nothing changed in the link or firmware). The loop now reconnects every second until stopped instead of ending.
 
 ## Open
 
@@ -2542,9 +2549,9 @@ Now: haptics
 - Motors: firmware 0.2.1 is flashed and channels 0 and 1 follow the duty. When the ULN2003, MOSFETs or LEDs go
   back on, set `OUTPUTS_INVERTED` to false. Still to measure: lowest duty that starts a motor (the haptics floor),
   how many levels can be told apart (then set effort mode's lowest duty on the Control tab), and EMG spectra with the motors off and on to see if they show up.
-- Surface haptics on the motors: check the pulse rates are told apart (can 4.3 Hz vs ball 2.2 Hz) and the duty
-  steps under them; if objects feel alike, spread `SURFACE_FRICTION`/`SURFACE_HZ` or give objects a separate
-  roughness value instead of friction. Then on the headset (rebuild with `build.sh`).
+- Control haptics on the motors: check the pulse rates are told apart (can 4.3 Hz vs ball 2.2 Hz) over the force
+  base and set "Between pulses %"; if objects feel alike, spread `SURFACE_FRICTION`/`SURFACE_HZ` or give objects a
+  separate roughness value instead of friction. Then on the headset (rebuild with `build.sh`).
 - Motor pickup: run `diagnostics/motor_pickup.py` with the motor band below the pads, relaxed and with a steady
   clench.
 - Haptics: decide on LRAs vs coin motors. LRAs need an AC drive at their resonance (about 170 to 235 Hz), which is

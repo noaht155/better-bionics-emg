@@ -191,14 +191,14 @@ def test_mass_is_capped():
     assert w.weight() == pytest.approx(sim.OBJECTS["can"][1] * sim.MAX_MASS_SCALE * sim.GRAVITY)
 
 
-def test_contact_runs_on_the_control_layer_and_gives_the_force_to_the_haptics():
+def test_contact_runs_on_the_control_layer_and_gives_the_touch_to_the_haptics():
     import time
     from types import SimpleNamespace
     import tools
     predictor = SimpleNamespace(state={"running": True, "control": True})
     control = SimpleNamespace(state={"angles": GESTURES["fist"][1], "effort": 0.5, "locked": False, "grip": "fist"})
     contact = tools.Contact(predictor, control)
-    assert contact.grip_force() == 0.0
+    assert contact.touch() == (0.0, 0.0)
     contact.start()
     try:
         time.sleep(0.5)
@@ -213,4 +213,4 @@ def test_contact_runs_on_the_control_layer_and_gives_the_force_to_the_haptics():
     finally:
         contact.stop()
         contact.join(2)
-    assert contact.grip_force() == 0.0
+    assert contact.touch() == (0.0, 0.0)

@@ -28,7 +28,7 @@ import hum_test
 import mac_wifi
 from control import DEFAULT_RULES, DEFAULTS, STILL_S, Controller, check_rules, movement, split_rules, still_limit
 from cursor import DEFAULTS as CURSOR_DEFAULTS, LEVEL_SCALE as CURSOR_LEVEL_SCALE, Cursor
-from esp32_link import Esp32, self_test
+from esp32_link import Esp32, Esp32Error, self_test
 from gestures import GESTURE_SET, GESTURES, LIBRARY
 from session import DATA_DIR, load_session, segments
 from haptics import (HAPTIC_DEFAULTS, OUTPUTS, UPDATE_HZ, channel_levels, effort, output_duties, pattern, scaled_duty,
@@ -428,11 +428,12 @@ class HumTest(Tool):
 
 
 class Haptics(Tool):
-    """haptics.py's loop. It shares the ESP32 with the output test, only one of them can hold the port. Started from
-    the Control tab it follows the tab's haptics setting: effort (each output follows its channels), selections
-    (only the patterns of the control layer's events, cue()), force (every output follows the contact
-    simulation's grip force, full duty at haptic_full_force) or surface (every output pulses while the simulated hand
-    touches something, the rate from the surface's friction, haptics.surface_hz, the duty from the force)."""
+    """haptics.py's loop. It shares the ESP32 with the output test, only one of them can hold the port. Two modes:
+    effort (System > Haptics: each output follows its channels' effort) and, started from the Control tab, combined
+    (Noah, 2026-11-20): the selection patterns of the control layer's events (cue()) play over everything while they
+    run; otherwise, while the simulated hand touches something, every output vibrates at a base duty that follows
+    the force on it, with pulses on top at the surface's rate (haptics.surface_hz) that go up to the full force duty
+    and back to haptic_pulse_off % of it. A lost ESP32 is reconnected every second until stopped."""
 
     def __init__(self, recorder, esp_lock):
         super().__init__()
@@ -441,18 +442,14 @@ class Haptics(Tool):
         self._stop = threading.Event()
         self._cue = None
         self._settings = HAPTIC_DEFAULTS
-        # The contact simulation's grip force in N (Contact.grip_force), for force mode
-        self.grip_force = lambda: 0.0
         # Force on everything the simulated hand touches (N) and those surfaces' friction (Contact.touch)
         self.touch = lambda: (0.0, 0.0)
 
-    def start(self, port, wifi, session=None, settings=None, sim_effort=None):
-        """With session, the levels come from that recorded session (calibrate.from_session), else from
-        calibration.json. settings: the Control tab's parameters, read on every update so a change of mode, floor
-        or strength applies straight away; None is effort mode with no floor. sim_effort: no band, every output
-        follows this function's effort (the Control tab's simulated model)."""
-        if sim_effort is not None:
-            ranges, car, source = None, False, "effort from the simulated model"
+    def start(self, port, wifi, session=None, settings=None):
+        """settings: the Control tab's parameters, combined mode, read on every update so a change applies straight
+        away. Without them, effort mode with levels from session (calibrate.from_session) or calibration.json."""
+        if settings is not None:
+            ranges, car, source = None, False, "the control layer's events and the 3D contact"
         elif session is not None:
             ranges, car = calibrate.session_ranges(session, self.recorder.band.channels), True
             source = f"levels from session {Path(session).name}"
@@ -474,7 +471,7 @@ class Haptics(Tool):
         self._cue = None
         self._settings = settings or HAPTIC_DEFAULTS
         try:
-            self._launch(self._run, port, wifi, ranges, car, source, self._settings, sim_effort)
+            self._launch(self._run, port, wifi, ranges, car, source, settings)
         except ValueError:
             self.esp_lock.release()
             raise
@@ -483,7 +480,7 @@ class Haptics(Tool):
         self._stop.set()
 
     def cue(self, kind, grip=None, haptic="auto"):
-        """Plays haptics.pattern(kind) from the next update, in selections mode, or the rule's own pattern (haptic). A
+        """Plays haptics.pattern(kind) from the next update, in combined mode, or the rule's own pattern (haptic). A
         newer event cuts the one playing, except that a tick never cuts a pick or release."""
         if self._cue and self._cue[2] != "tick" and kind == "tick" and self._pattern_step(self._cue) is not None:
             return
@@ -497,54 +494,59 @@ class Haptics(Tool):
         i = int((time.perf_counter() - t0) * UPDATE_HZ)
         return steps[i] if i < len(steps) else None
 
-    def _run(self, port, wifi, ranges, car, source, settings, sim_effort):
+    def _run(self, port, wifi, ranges, car, source, settings):
         band = self.recorder.band
         self.state.update(duties=[0] * len(OUTPUTS), lost=[False] * len(band.channels), car=car, watchdog=0,
-                          outputs=[list(chs) for chs in OUTPUTS], source=source)
+                          outputs=[list(chs) for chs in OUTPUTS], source=source,
+                          mode="effort" if settings is None else "combined")
         try:
-            with Esp32(port, wifi) as esp:
-                self.state["link"] = esp.link.name
-                self._log_session(True, esp.link.name)
-                next_tick = time.perf_counter()
-                # Surface mode: where in its pulse the output is (0 to 1, on for the first half), from the last update
-                phase, last = 0.0, next_tick
-                while not self._stop.is_set():
-                    now = time.perf_counter()
-                    dt, last = now - last, now
-                    mode, floor = settings["haptics"], settings["haptic_floor"]
-                    self.state.update(mode=mode, floor=floor, strength=settings["haptic_strength"])
-                    duties = None
-                    if mode == "selections":
-                        step = self._pattern_step(self._cue) if self._cue else None
-                        duties, lost = step or [0] * len(OUTPUTS), np.zeros(len(band.channels), bool)
-                    elif mode == "force":
-                        level_ = min(self.grip_force() / settings["haptic_full_force"], 1.0)
-                        duties, lost = [scaled_duty(level_, floor)] * len(OUTPUTS), np.zeros(len(band.channels), bool)
-                    elif mode == "surface":
-                        force, friction = self.touch()
-                        # A new touch starts on a pulse, so the contact is felt at once
-                        phase = (phase + surface_hz(friction) * dt) % 1.0 if force > 0 else 0.0
-                        level_ = min(force / settings["haptic_full_force"], 1.0) if phase < 0.5 else 0.0
-                        duties, lost = [scaled_duty(level_, floor)] * len(OUTPUTS), np.zeros(len(band.channels), bool)
-                    elif sim_effort is not None:
-                        duties = [scaled_duty(min(max(sim_effort(), 0.0), 1.0), floor)] * len(OUTPUTS)
-                        lost = np.zeros(len(band.channels), bool)
-                    else:
-                        raw, filtered = self.recorder.window(self.recorder.env_len)
-                        if raw.shape[1] == self.recorder.env_len:
-                            duties, lost = output_duties(raw, filtered, band.channels, ranges, car, floor)
-                    if duties is not None:
-                        esp.set_outputs(duties)
-                        self.state.update(duties=duties, lost=lost.tolist())
-                    if esp.watchdog_fired:
-                        self.state["watchdog"] += 1
-                        esp.watchdog_fired = False
-                    # If a slow reply made this update late, don't try to catch up with a burst
-                    next_tick = max(next_tick + 1 / UPDATE_HZ, time.perf_counter())
-                    time.sleep(max(0.0, next_tick - time.perf_counter()))
+            while not self._stop.is_set():
+                try:
+                    self._drive(port, wifi, ranges, car, settings)
+                except (Esp32Error, OSError) as e:
+                    self.state.update(link=None, error=f"ESP32 lost ({e}), reconnecting")
+                    self._stop.wait(1.0)
         finally:
             self._log_session(False)
             self.esp_lock.release()
+
+    def _drive(self, port, wifi, ranges, car, settings):
+        band = self.recorder.band
+        no_loss = np.zeros(len(band.channels), bool)
+        with Esp32(port, wifi) as esp:
+            self.state.update(link=esp.link.name, error=None)
+            self._log_session(True, esp.link.name)
+            next_tick = time.perf_counter()
+            # Where the surface pulse is (0 to 1, up for the first half), advanced by the time since the last update
+            phase, last = 0.0, next_tick
+            while not self._stop.is_set():
+                now = time.perf_counter()
+                dt, last = now - last, now
+                duties = None
+                if settings is not None:
+                    floor = settings["haptic_floor"]
+                    self.state.update(floor=floor, strength=settings["haptic_strength"])
+                    step = self._pattern_step(self._cue) if self._cue else None
+                    force, friction = self.touch()
+                    # A new touch starts on a pulse, so the contact is felt at once
+                    phase = (phase + surface_hz(friction) * dt) % 1.0 if force > 0 else 0.0
+                    level_ = min(force / settings["haptic_full_force"], 1.0)
+                    if phase >= 0.5:
+                        level_ *= settings["haptic_pulse_off"] / 100
+                    duties, lost = step or [scaled_duty(level_, floor)] * len(OUTPUTS), no_loss
+                else:
+                    raw, filtered = self.recorder.window(self.recorder.env_len)
+                    if raw.shape[1] == self.recorder.env_len:
+                        duties, lost = output_duties(raw, filtered, band.channels, ranges, car, 0)
+                if duties is not None:
+                    esp.set_outputs(duties)
+                    self.state.update(duties=duties, lost=lost.tolist())
+                if esp.watchdog_fired:
+                    self.state["watchdog"] += 1
+                    esp.watchdog_fired = False
+                # If a slow reply made this update late, don't try to catch up with a burst
+                next_tick = max(next_tick + 1 / UPDATE_HZ, time.perf_counter())
+                time.sleep(max(0.0, next_tick - time.perf_counter()))
 
     def _log_session(self, on, link=None):
         # Motor vibration might show up in the EMG, so recordings note when the haptics ran
@@ -761,7 +763,7 @@ class Control:
                 grips[self._map[c]] += v
             probs = grips
         out = self._controller.step(probs, e, dt, distance, moving)
-        if self.params["haptics"] == "selections" and self.haptics is not None and self.haptics.state["running"]:
+        if self.haptics is not None and self.haptics.state["running"] and self.haptics.state.get("mode") == "combined":
             # Only confirmed events play, not each clench or flick counted on the way (Noah, 2026-11-05). The open
             # hand picked in lock mode leaves the hand where it is, nothing to feel
             if out["event"] in ("start", "release", "lock", "unlock"):
@@ -778,9 +780,9 @@ class Control:
 class Contact(Tool):
     """sim.World in real time on the Control tab's output: the control layer's angles, effort and lock. While no model
     or simulated model runs with the control layer, the hand rests with no effort. The page places the hand and the
-    object (set_hand, place) and reads frame(); the haptics' force mode reads grip_force(). The Quest app runs its own
-    copy of the sim on quest_frame() and shares the settings: params_seq goes up on every change so the headset knows
-    when to take them, and its grip force replaces this one's while it sends it."""
+    object (set_hand, place) and reads frame(); the haptics read touch(). The Quest app runs its own copy of the sim
+    on quest_frame() and shares the settings: params_seq goes up on every change so the headset knows when to take
+    them, and its touch replaces this one's while it sends it."""
 
     def __init__(self, predictor, control):
         super().__init__()
@@ -891,13 +893,6 @@ class Contact(Tool):
     def quest_readout(self):
         quest = self._quest
         return quest[1] if quest is not None and time.monotonic() - quest[0] < QUEST_FRESH_S else None
-
-    def grip_force(self):
-        quest = self.quest_readout()
-        if quest is not None:
-            return float(quest.get("grip_force", 0.0))
-        world = self.world
-        return world.grip_force() if world is not None and self.state["running"] else 0.0
 
     def touch(self):
         """Force on everything the hand touches (N) and those surfaces' friction, from the Quest app while it sends."""
@@ -1393,7 +1388,6 @@ class Tools:
         self.predictor = Predictor(recorder)
         self.control = Control(recorder, self.haptics)
         self.contact = Contact(self.predictor, self.control)
-        self.haptics.grip_force = self.contact.grip_force
         self.haptics.touch = self.contact.touch
         self.cursor = CursorTask(recorder)
         self.trainer = Trainer(self.predictor)

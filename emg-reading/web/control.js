@@ -40,16 +40,11 @@ const MODE_HELP = {
 };
 // The haptics that run with it (haptics.py), each setting only shown for the haptics mode that uses it
 const HAPTIC_PARAMS = [
-  { key: "haptic_floor", haptics: ["effort", "force", "surface"], label: "Lowest duty", min: 0, max: 90, step: 1, help: "duty the outputs start at above 0, so the start of a squeeze is felt. Coin motors don't turn under about 30 to 40 %, set it to the lowest duty you feel. 0 is plain proportional" },
-  { key: "haptic_strength", haptics: "selections", label: "Strength", min: 10, max: 100, step: 5, help: "duty of the selection patterns" },
-  { key: "haptic_full_force", haptics: ["force", "surface"], label: "Full force N", min: 2, max: 100, step: 1, help: "force of the hand in 3D contact that runs the motors at full duty" },
+  { key: "haptic_floor", label: "Lowest duty", min: 0, max: 90, step: 1, help: "duty the outputs start at above 0, so a light touch is felt. Coin motors don't turn under about 30 to 40 %, set it to the lowest duty you feel" },
+  { key: "haptic_strength", label: "Pattern strength", min: 10, max: 100, step: 5, help: "duty of the selection patterns" },
+  { key: "haptic_full_force", label: "Full force N", min: 2, max: 100, step: 1, help: "force of the hand in 3D contact on what it touches that runs the motors at full duty" },
+  { key: "haptic_pulse_off", label: "Between pulses %", min: 0, max: 100, step: 5, help: "duty between the surface's pulses as % of the force's: 0 is on and off pulses, 100 no pulses, only the force" },
 ];
-const HAPTICS_HELP = {
-  effort: "each motor follows the effort of the channels under it, off at rest",
-  force: "every motor follows the total force the hand presses on the object with in 3D contact, off when nothing is touched",
-  surface: "every motor pulses while the hand in 3D contact touches something (object or desk): fast pulses on a slippery surface, slow on a rough one, stronger the harder it presses",
-  selections: "motors only buzz once a rule is confirmed, with the rule's haptic from the mapping (picks start as the grip's code: fist one long, pinch one short, tripod two, key three, point two long; release a fading buzz; lock and unlock a sweep round the band). Clenches and flicks on the way to a pattern play nothing",
-};
 // A rule's haptic as settings (haptics.haptic_settings). The smart settings (times, length, speed) set the ms, the
 // advanced ones show them; times play in steps of config.haptic_codes.step_ms
 const HAPTIC_NAMES = { buzz: "buzz", fade: "fading buzz", sweep: "sweep", none: "none", default: "default" };
@@ -168,14 +163,7 @@ function showParamsForMode() {
     $(`ctl-${d.key}`).closest(".param").hidden = !visible;
   }
   $("ctl-mode").closest(".param").querySelector("small").textContent = MODE_HELP[ctl.params.mode] || "";
-  document.querySelector(`input[name=ctl-haptics-mode][value=${ctl.params.haptics}]`).checked = true;
-  $("ctl-haptics-help").textContent = HAPTICS_HELP[ctl.params.haptics];
-  for (const d of HAPTIC_PARAMS) $(`ctl-${d.key}`).closest(".param").hidden = ![d.haptics].flat().includes(ctl.params.haptics);
 }
-document.querySelectorAll("input[name=ctl-haptics-mode]").forEach((r) => r.addEventListener("change", () => {
-  ctl.params.haptics = r.value;
-  editedParams();
-}));
 
 function editedParams() {
   ctl.changed = true;

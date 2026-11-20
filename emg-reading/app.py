@@ -231,10 +231,10 @@ class ControlParams(BaseModel):
     pinch_clenches: int = Field(CONTROL_DEFAULTS["pinch_clenches"], ge=1, le=2)
     spring_w: float = Field(ge=0, le=50)
     # The haptics that run with it, see haptics.py
-    haptics: Literal["effort", "selections", "force", "surface"] = HAPTIC_DEFAULTS["haptics"]
     haptic_floor: int = Field(HAPTIC_DEFAULTS["haptic_floor"], ge=0, le=90)
     haptic_strength: int = Field(HAPTIC_DEFAULTS["haptic_strength"], ge=10, le=100)
     haptic_full_force: float = Field(HAPTIC_DEFAULTS["haptic_full_force"], ge=1, le=200)
+    haptic_pulse_off: int = Field(HAPTIC_DEFAULTS["haptic_pulse_off"], ge=0, le=100)
 
 
 class ContactParams(BaseModel):
@@ -911,7 +911,7 @@ def make_app(recorder, band, camera, tools, lan=True, serving=False):
     @app.post("/api/control/simulate")
     def control_simulate(sim: SimStart):
         """The control layer without a model or the band: the page plays the model (class, effort, arm moving). The
-        haptics run with it, every output on the page's effort in effort mode."""
+        Control tab's haptics run with it."""
         if len(sim.classes) < 2:
             refuse("the simulated model needs at least two classes")
         tools.control.prepare_sim()
@@ -922,12 +922,11 @@ def make_app(recorder, band, camera, tools, lan=True, serving=False):
         tools.haptics.stop()
         tools.haptics.join(timeout=3)
         try:
-            tools.haptics.start(sim.port, sim.wifi, settings=tools.control.params,
-                                sim_effort=lambda: tools.predictor.sim["effort"])
+            tools.haptics.start(sim.port, sim.wifi, settings=tools.control.params)
         except ValueError as e:
             return {"ok": True, "haptics": f"haptics not started: {e}"}
         tools.haptics.state["with_model"] = True
-        return {"ok": True, "haptics": "haptics starting on the simulated effort, see the Haptics tab"}
+        return {"ok": True, "haptics": "haptics starting, see the Haptics tab"}
 
     @app.post("/api/control/sim")
     def control_sim(inputs: SimInputs):
@@ -1003,9 +1002,8 @@ def make_app(recorder, band, camera, tools, lan=True, serving=False):
             settings = haptic_settings(play.haptic)
         except ValueError as e:
             refuse(e)
-        if not tools.haptics.state["running"] or tools.haptics.state.get("mode") != "selections":
-            refuse("plays with the haptics running in Selections: start the model on the Control tab with the motors "
-                   "connected and Selections picked")
+        if not tools.haptics.state["running"] or tools.haptics.state.get("mode") != "combined":
+            refuse("plays with the Control tab's haptics: start the model on the Control tab with the motors connected")
         tools.haptics.cue("start", None, settings)
         return {"ok": True}
 
@@ -1121,19 +1119,20 @@ def make_app(recorder, band, camera, tools, lan=True, serving=False):
         return session if session and (DATA_DIR / session / "session.json").exists() else None
 
     def start_model_haptics(model, link, settings=None):
-        """Haptics run with every prediction model, with levels from model_session. settings: the Control tab's,
-        for its haptics mode. Returns what happened, for the page. The model keeps running when the haptics can't
-        start."""
+        """Haptics run with every prediction model: the Control tab's (settings), or effort mode with levels from
+        model_session. Returns what happened, for the page. The model keeps running when the haptics can't start."""
         session = model_session(model)
-        if session is None:
+        if session is None and settings is None:
             return "haptics not started: the model's calibration session isn't on this computer"
         tools.haptics.stop()
         tools.haptics.join(timeout=3)
         try:
-            tools.haptics.start(link.port, link.wifi, DATA_DIR / session, settings)
+            tools.haptics.start(link.port, link.wifi, None if settings else DATA_DIR / session, settings)
         except ValueError as e:
             return f"haptics not started: {e}"
         tools.haptics.state["with_model"] = True
+        if settings:
+            return "haptics starting, see the Haptics tab"
         return f"haptics starting with levels from {session}, see the Haptics tab"
 
     # The hub's side, for devices (hub.py). Access only lets these through with a device token
