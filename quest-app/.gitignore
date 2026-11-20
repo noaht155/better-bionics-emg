@@ -1,0 +1,17 @@
+# Unity's generated folders and what the build script copies in
+/Library/
+/Temp/
+/Obj/
+/Logs/
+/UserSettings/
+/Build/
+/Assets/Resources/
+/Assets/Resources.meta
+/Assets/Plugins/
+/Assets/Plugins.meta
+*.csproj
+*.sln
+*.slnx
+/.utmp/
+/.vscode/
+.vs/

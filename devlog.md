@@ -2390,6 +2390,15 @@ levels: r 0.995 to 0.999 per session, mean difference 0.005 to 0.013, a clench l
   since the C force rule already matched Python; the bench now runs through it, so there's one copy.
   `export_model.py` adds the rule's constants to sim.py's XML as custom numerics, so the XML alone carries the model.
   On the headset: can at 0.1324 m like Python in 3 of 3 runs, 7.0 to 7.7x real time, no blow-ups.
+- Unity app in `quest-app/` (`build.sh`: bbsim, model export, APK through the Unity CLI, install over USB). Unity's
+  OpenXR with the Meta Quest feature and Touch profile, no Meta SDK yet; project settings set in code
+  (`Assets/Editor/QuestBuild.cs`). Multi-pass rendering, since the panel's text shader isn't checked for single
+  pass. Sim on its own thread at 90 Hz. Right grip moves the hand, right trigger works the panel (object, mass,
+  strength, assist, reset, recentre, link status, grip force, sim speed), left X recentres.
+- In the headset over USB (2026-11-20): runs, links by itself, readout reaches the laptop, an object change on the
+  laptop reaches the headset. Sim 17.8 to 18.8x real time with rendering, hand at rest. adb loses the headset's
+  approval whenever the adb server restarts (the Unity build restarts it) unless "Always allow from this computer" is
+  ticked. Not yet tried by Noah: sizes, the panel, dragging, a grasp driven by the control layer.
 
 ## Open
 
@@ -2454,15 +2463,10 @@ Now: 3D contact
   desktop page keeps the Python sim. MuJoCo runs on the headset at 6.8 to 7.9x real time (2026-11-20). Not CPU:
   the MacBook runs the sim at 11.6x real time (3 runs, app not running; desktop 17.4x). Build order, each step
   tried in the headset by Noah before the next:
-  1. Unity 6.3 project in `quest-app/` (Meta XR SDK, OpenXR, arm64, `Library/` etc. ignored), built headless with
-     the Unity CLI and installed with Unity's `adb`. Shows a 3D hand (hand.js geometry) at a fixed spot. Test: it
-     opens, the hand is the right size, recentre works.
-  2. Link: the app connects to `localhost:8000` through `adb reverse`; a new app.py websocket sends the control
-     layer's angles, effort and lock at 60 Hz. Test: the hand follows the live control output (or `--replay`).
-     The laptop runs `adb reverse` itself when the Quest is plugged in; Mac needs Android platform-tools.
-  3. MuJoCo in the app: `libmujoco.so` from `build-mujoco.sh` as a plugin, the model XML from `sim.py` sent by the
-     laptop, the force rule in C# checked against `sim.py` with `bench/record.py`'s grasp. Sim on its own thread.
-     Test: the can grasp in the headset, the sim rate with rendering on, grip force back to the laptop for the motors.
+  1-3, merged (built 2026-11-20, see that day): the Unity app with the contact sim on the headset, the USB link and
+     settings shared with the desktop page. Noah to try in the headset: the table and hand sit right, the panel
+     text reads, grip-drag and recentre work, the can grasp with a model or Simulate running, settings follow both
+     ways, sim speed stays over 1x. Mac needs Android platform-tools for the link.
   4. Hand placed by a Touch controller strapped to the forearm (offset measured once), the other controller moves
      and resets objects. Ghost hand when the hand is held back by the table, a cap on the weld pull, a speed limit
      on the hand target. Sim table matched to the real one from room setup. VR default, passthrough option.
