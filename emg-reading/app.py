@@ -30,6 +30,7 @@ from pydantic import BaseModel, Field, model_validator
 import devices
 import hub
 import hum_test
+import quest_link
 from armband import Armband, Replay
 from calibrate import load_calibration
 from camera import Camera
@@ -59,6 +60,8 @@ SEND_HZ = 20
 # The 3D contact page: frames sent per second, and how far from the table's centre the hand and object can go
 CONTACT_HZ = 30
 CONTACT_REACH_M = 0.45
+# The Quest app's sim gets the control layer's output this often
+QUEST_HZ = 60
 PREVIEW_HZ = 15
 LOOPBACK = ("127.0.0.1", "::1")
 # What the Train tab may ask the hub for through this app, as paths under /api/
@@ -1354,6 +1357,40 @@ def make_app(recorder, band, camera, tools, lan=True, serving=False):
         finally:
             task.cancel()
 
+    @app.websocket("/ws/quest")
+    async def quest(ws: WebSocket):
+        """The Quest app over USB (quest_link): the control layer's output and the contact settings out, settings
+        changed in the headset and its grip force in."""
+        import sim
+        await ws.accept()
+
+        async def receive():
+            while True:
+                msg = await ws.receive_json()
+                if not isinstance(msg, dict):
+                    continue
+                if isinstance(msg.get("params"), dict):
+                    try:
+                        changes = ContactParams(**msg["params"]).model_dump(exclude_none=True)
+                    except ValueError:
+                        continue
+                    if changes.get("object", sim.SIM_DEFAULTS["object"]) in sim.OBJECTS:
+                        tools.contact.set_params(changes)
+                readout = msg.get("readout")
+                if isinstance(readout, dict) and isinstance(readout.get("grip_force"), (int, float))                         and np.isfinite(readout["grip_force"]):
+                    tools.contact.set_quest_readout(readout)
+
+        task = asyncio.create_task(receive())
+        try:
+            while not task.done():
+                await ws.send_json(tools.contact.quest_frame())
+                await asyncio.sleep(1 / QUEST_HZ)
+        except WebSocketDisconnect:
+            pass
+        finally:
+            task.cancel()
+            tools.contact.quest_gone()
+
     @app.websocket("/ws/signals")
     async def signals(ws: WebSocket):
         """New raw and filtered EMG samples as they arrive, for the signal view."""
@@ -1412,6 +1449,7 @@ def main():
     parser.add_argument("--host", help="address to listen on (default 127.0.0.1, 0.0.0.0 with --hub)")
     parser.add_argument("--port", type=int, default=8000)
     parser.add_argument("--hub", action="store_true", help="let devices with a token send sessions and train here")
+    parser.add_argument("--no-quest", action="store_true", help="don't link a Quest plugged in over USB")
     args = parser.parse_args()
     # Only an explicit --host opens the page to the network. --hub alone listens everywhere, for the devices
     lan = args.host is not None and args.host not in LOOPBACK + ("localhost",)
@@ -1427,6 +1465,7 @@ def main():
         recorder.start()
         tools = Tools(recorder)
         print(f"EMG from {band.source}, open http://localhost:{args.port}")
+        quest = None if args.no_quest or args.hub else quest_link.start(args.port)
         if args.hub:
             print(f"hub for {', '.join(hub.devices()) or 'no devices yet (python hub.py add-device NAME)'}, "
                   f"at http://{socket.gethostname()}:{args.port}")
@@ -1439,6 +1478,8 @@ def main():
             # Leaving the haptics thread running would leave the motors on until the ESP32 watchdog fires
             tools.haptics.stop()
             tools.haptics.join(timeout=3)
+            if quest is not None:
+                quest.stop()
             recorder.stop()
             if camera is not None:
                 camera.stop()

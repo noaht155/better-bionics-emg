@@ -126,6 +126,11 @@ function applyFrame(f) {
     loadScene();
     return;
   }
+  // The Quest app changes the same settings
+  if (f.params && JSON.stringify(f.params) !== JSON.stringify(cx.params)) {
+    cx.params = { ...f.params };
+    showParams(CONTACT_PARAMS, "ctl-contact-", cx.params);
+  }
   const r = f.readout;
   cx.meshes.forEach((mesh, i) => {
     if (!mesh) return;
@@ -142,10 +147,10 @@ function applyFrame(f) {
     const [p, q] = f.hand;
     cx.hand = { pos: new THREE.Vector3(...p), quat: new THREE.Quaternion(q[1], q[2], q[3], q[0]) };
   }
-  showReadout(r, f.control);
+  showReadout(r, f.control, f.quest);
 }
 
-function showReadout(r, control) {
+function showReadout(r, control, quest) {
   const needed = r.weight / r.friction;
   const fingers = FINGER_NAMES.map((n, i) => `${n} ${r.finger_force[i].toFixed(1)}`).join(", ");
   $("ctl-contact-readout").innerHTML = `
@@ -157,6 +162,10 @@ function showReadout(r, control) {
   $("ctl-contact-status").textContent = control
     ? `${control.grip ?? "relaxed"}${control.locked ? ", locked" : ""}, effort ${control.effort?.toFixed(2)}`
     : "No model runs: start one, or Simulate, on Grip control to move the fingers.";
+  if (quest) {
+    $("ctl-contact-status").textContent +=
+      ` Quest on USB: its grip force (${quest.grip_force.toFixed(1)} N) drives the motors.`;
+  }
 }
 
 // Hand and object placement

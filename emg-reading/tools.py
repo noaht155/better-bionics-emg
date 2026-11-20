@@ -59,6 +59,8 @@ DELAY_FLASH_TIMEOUT_S = 120
 # The contact simulation's real time loop (sim.py)
 CONTACT_TICK_S = 1 / 60
 CONTACT_MAX_STEP_S = 0.05
+# The Quest app's grip force drives the haptics while its readouts are this fresh
+QUEST_FRESH_S = 0.5
 # The Control tab's simulated model steps as often as the models do (50 ms window step)
 SIM_STEP_S = 0.05
 # How often the header's sync line asks the hub, and how long it waits for an answer. The Mac has one WiFi, so the hub
@@ -760,7 +762,9 @@ class Control:
 class Contact(Tool):
     """sim.World in real time on the Control tab's output: the control layer's angles, effort and lock. While no model
     or simulated model runs with the control layer, the hand rests with no effort. The page places the hand and the
-    object (set_hand, place) and reads frame(); the haptics' force mode reads grip_force()."""
+    object (set_hand, place) and reads frame(); the haptics' force mode reads grip_force(). The Quest app runs its own
+    copy of the sim on quest_frame() and shares the settings: params_seq goes up on every change so the headset knows
+    when to take them, and its grip force replaces this one's while it sends it."""
 
     def __init__(self, predictor, control):
         super().__init__()
@@ -772,6 +776,9 @@ class Contact(Tool):
         self.params = None
         # Goes up when the world is rebuilt (another object), so the page fetches the scene again
         self.version = 0
+        self.params_seq = 0
+        # (time, readout) last sent by the Quest app
+        self._quest = None
 
     def start(self):
         # Imported here so the app still runs where mujoco isn't installed
@@ -790,6 +797,7 @@ class Contact(Tool):
 
     def set_params(self, params):
         with self._lock:
+            self.params_seq += 1
             if self.world is None:
                 import sim
                 self.params = dict(sim.SIM_DEFAULTS, **(self.params or {}), **params)
@@ -829,9 +837,37 @@ class Contact(Tool):
             control = {k: c.get(k) for k in ("state", "grip", "effort", "closure", "locked")} if driven else None
             return dict(self.world.poses(), readout=self.world.readout(), version=self.version,
                         running=self.state["running"], hand=[v.tolist() for v in self.world.hand_pose()],
-                        control=control)
+                        control=control, params=self.world.params, quest=self.quest_readout())
+
+    def quest_frame(self):
+        """What the Quest app's sim runs on: the control layer's output and the shared settings."""
+        angles, effort_, locked = self._inputs()
+        driven = bool(self.predictor.state.get("running") and self.predictor.state.get("control"))
+        with self._lock:
+            params = dict(self.params) if self.params else None
+        if params is None:
+            try:
+                import sim
+                params = dict(sim.SIM_DEFAULTS)
+            except ImportError:
+                params = {}
+        return {"angles": [float(a) for a in angles], "effort": float(effort_), "locked": bool(locked),
+                "driven": driven, "params": params, "params_seq": self.params_seq}
+
+    def set_quest_readout(self, readout):
+        self._quest = (time.monotonic(), readout)
+
+    def quest_gone(self):
+        self._quest = None
+
+    def quest_readout(self):
+        quest = self._quest
+        return quest[1] if quest is not None and time.monotonic() - quest[0] < QUEST_FRESH_S else None
 
     def grip_force(self):
+        quest = self.quest_readout()
+        if quest is not None:
+            return float(quest.get("grip_force", 0.0))
         world = self.world
         return world.grip_force() if world is not None and self.state["running"] else 0.0
 

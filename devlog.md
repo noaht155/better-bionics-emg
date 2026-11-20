@@ -2378,6 +2378,14 @@ levels: r 0.995 to 0.999 per session, mean difference 0.005 to 0.013, a clench l
   (two sets of 3 runs; desktop Python 8.5x on the same grasp). Replaying the recorded torques open loop instead dropped the can:
   the Quest's rounding drifts a fraction of a mm after 2 s and fixed torques don't correct it, the force rule does.
   No rendering running, so the app will have less; the sim can take its own core.
+- Step 1 changed (Noah): the first build already runs the contact sim on the headset, so the Quest doesn't depend on
+  the laptop for it, and its settings change both from the desktop page and in VR. Link stays USB (`adb reverse`).
+- Laptop side: `/ws/quest` sends the control layer's angles, effort, lock and the contact settings at 60 Hz and takes
+  settings changed in the headset and its grip force back. Settings are shared with the desktop page (`params_seq`
+  goes up on every change, the page follows changes from the headset), and the headset's grip force drives the
+  haptics' force mode while it keeps coming (0.5 s). `quest_link.py` keeps `adb reverse` on a plugged-in Quest
+  (Unity's adb or one on PATH); a second copy of the app only takes the mapping once the first stops answering, and
+  `--no-quest` turns it off.
 
 ## Open
 
