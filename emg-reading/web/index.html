@@ -37,6 +37,7 @@
   <button data-tab="record" class="active">Record</button>
   <button data-tab="train">Train</button>
   <button data-tab="control">Control</button>
+  <button data-tab="vr">VR</button>
   <button data-tab="system">System</button>
   <span id="tab-ink"></span>
   </div>
@@ -231,6 +232,37 @@
     </div>
     <div id="view-camera" class="view">
       <div class="mirror"><img id="video" alt=""><canvas id="overlay"></canvas></div>
+    </div>
+  </section>
+</main>
+
+<main id="tab-vr" class="tab single" hidden>
+  <section>
+    <h1>VR</h1>
+    <p class="muted">What the person in the headset sees, drawn here from the headset's own simulation. The prosthetic
+      hand follows the control layer while a model or the simulated model runs; the free hand is on the controller.
+      Settings here and in the headset are the same ones. The Quest connects over USB when this app runs.</p>
+    <div class="contact-layout">
+      <div class="contact-view">
+        <canvas id="vr-canvas" tabindex="0"></canvas>
+        <div class="row filters">
+          <label class="check"><input type="radio" name="vr-camera" value="eyes" checked> Their eyes</label>
+          <label class="check"><input type="radio" name="vr-camera" value="orbit"> Orbit</label>
+        </div>
+        <div id="vr-status" class="battery-detail"></div>
+      </div>
+      <div class="contact-side">
+        <h2>Physics</h2>
+        <div id="vr-params"></div>
+        <h2>Objects</h2>
+        <div id="vr-spawn" class="controls"></div>
+        <div class="controls"><button id="vr-clear">Clear the desk</button></div>
+        <p id="vr-error" class="error"></p>
+        <h2>Grip</h2>
+        <div id="vr-readout" class="contact-readout"></div>
+        <h2>Orbit view</h2>
+        <p class="muted">Right drag: turn the view, wheel: zoom.</p>
+      </div>
     </div>
   </section>
 </main>
@@ -798,5 +830,6 @@
 <script src="/web/control.js"></script>
 <script src="/web/cursor.js"></script>
 <script type="module" src="/web/contact.js"></script>
+<script type="module" src="/web/vr.js"></script>
 </body>
 </html>

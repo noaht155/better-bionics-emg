@@ -2399,6 +2399,26 @@ levels: r 0.995 to 0.999 per session, mean difference 0.005 to 0.013, a clench l
   laptop reaches the headset. Sim 17.8 to 18.8x real time with rendering, hand at rest. adb loses the headset's
   approval whenever the adb server restarts (the Unity build restarts it) unless "Always allow from this computer" is
   ticked. Not yet tried by Noah: sizes, the panel, dragging, a grasp driven by the control layer.
+- Rework (Noah): the first app was a bare rig. Both controllers are hands now: the prosthetic side (a setting, left
+  by default) is placed by its strapped controller and follows the control layer; the free hand is on the normal
+  controls (grip closes three fingers and holds what it touches, trigger the index, thumb down on the buttons).
+  Each hand has an offset from its controller set on the menu's Setup page and kept on the headset.
+- Scene (`export_model.scene_xml`): both hands (`sim.hand_xml` builds a mirrored left hand; same angles give the
+  mirrored pose, exact to 3e-16 m), a 1 x 0.7 m box desk over a floor, and a pool of 2 of each object parked off
+  the desk, so spawning only moves one. The desktop model is unchanged (same XML text).
+- Two findings on the headset bench (can wrap, right hand prosthetic, free hand parked): on the box desk the can
+  never lifted (rests at 0.0625 m) with MuJoCo's native collision code; with libccd (`nativeccd` off) it lifts to
+  0.1352 m, the same in Python and on the headset (plane desk: 0.1324). Parked objects resting on the floor cost
+  speed: 3.9x real time; taken out of the collisions and held still, 5.1x.
+- Menu (B or Y on the free hand, ray and trigger): Play (status, mass, strength, assist), Objects (spawn, clear,
+  move the desk with the grip, height, desk in front of me), Setup (prosthetic arm, hand offsets). TextMeshPro text
+  (its resources unpacked into the project: the editor's batch import never ran), soft shadows, 4x MSAA, a floor
+  grid, a desk with legs down to the real floor so it can match the real desk.
+- VR tab on the page (Noah): the headset sends its scene once and its poses and head at 30 Hz, the tab draws them
+  from the user's eyes or an orbit view, with the physics settings, spawn and clear (sent to the headset as
+  numbered commands). `web/scene3d.js` holds the three.js setup the contact page and the VR tab share. Checked:
+  scene of 48 geoms reaches the tab, a spawn from the tab lands on the headset's desk, headset sim 6.2 to 6.7x
+  real time with rendering, no console errors on any tab.
 
 ## Open
 
@@ -2463,15 +2483,17 @@ Now: 3D contact
   desktop page keeps the Python sim. MuJoCo runs on the headset at 6.8 to 7.9x real time (2026-11-20). Not CPU:
   the MacBook runs the sim at 11.6x real time (3 runs, app not running; desktop 17.4x). Build order, each step
   tried in the headset by Noah before the next:
-  1-3, merged (built 2026-11-20, see that day): the Unity app with the contact sim on the headset, the USB link and
-     settings shared with the desktop page. Noah to try in the headset: the table and hand sit right, the panel
-     text reads, grip-drag and recentre work, the can grasp with a model or Simulate running, settings follow both
-     ways, sim speed stays over 1x. Mac needs Android platform-tools for the link.
-  4. Hand placed by a Touch controller strapped to the forearm (offset measured once), the other controller moves
-     and resets objects. Ghost hand when the hand is held back by the table, a cap on the weld pull, a speed limit
-     on the hand target. Sim table matched to the real one from room setup. VR default, passthrough option.
-  5. Training cues in first person during a recording started on the laptop, then the live predicted hand as a
-     new protocol beside F. Laptop view by casting, its own spectator view later.
+  1-4, built 2026-11-20 (see that day): the app with the contact sim on the headset, both controllers as hands
+     with setup offsets, the free hand on the normal controls, objects, the desk, the menu and the laptop's VR tab.
+     Noah to try in the headset: default hand offsets, menu text size, grabbing with the free hand, the can grasp
+     with a model or Simulate running, settings and spawns both ways, sim speed over 1x. Still to do from the old
+     step 4: ghost hand when the desk holds the hand back, a cap on the weld pull, a speed limit on the hand target,
+     passthrough option. Mac needs Android platform-tools for the link.
+  5. Training from VR (Noah, 2026-11-20): pick a protocol in the headset, cues as a 3D hand in first person while
+     the laptop records, then Train in VR runs training on the desktop. Then the live predicted hand as a new
+     protocol beside F.
+  Desktop app (Noah, 2026-11-20): either a browser page or its own window is fine; a window (pywebview over the
+  same pages) can come later without changing the pages.
   Uses: training cues as a 3D hand in first person, later the live predicted hand (a new protocol beside F, never a
   change to F), and the contact sim with a Touch controller strapped to the socket placing the hand, the other
   controller for everything else. The laptop sees the view by casting first, its own spectator view later.

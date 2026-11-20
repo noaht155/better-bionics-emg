@@ -22,6 +22,7 @@
   --predicted: #ff7a3d;
   --effort: #c93ee6;
   --sim-object: #71717a;
+  --sim-free-hand: #8e8e96;
   --mains: #4a1f26;
   --font-sans: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, Consolas, "SF Mono", monospace;
@@ -455,8 +456,8 @@ th { color: var(--muted); font: 400 11px var(--font-mono); letter-spacing: 0.12e
 /* 3D contact page: the view takes most of the width, settings and readout beside it on a landscape screen */
 .contact-layout { display: grid; gap: 24px; grid-template-columns: 1fr; align-items: start; }
 @media (orientation: landscape) and (min-width: 900px) { .contact-layout { grid-template-columns: 2.4fr 1fr; } }
-#ctl-contact-canvas { display: block; width: 100%; height: 68vh; background: var(--bg); border: 1px solid var(--line); border-radius: 2px; touch-action: none; outline: none; }
-#ctl-contact-canvas:focus-visible { border-color: var(--line-strong); }
+#ctl-contact-canvas, #vr-canvas { display: block; width: 100%; height: 68vh; background: var(--bg); border: 1px solid var(--line); border-radius: 2px; touch-action: none; outline: none; }
+#ctl-contact-canvas:focus-visible, #vr-canvas:focus-visible { border-color: var(--line-strong); }
 .contact-side h2:first-child { margin-top: 0; }
 .contact-readout { display: flex; flex-wrap: wrap; gap: 8px 32px; }
 .contact-readout p { flex-basis: 100%; margin: 0; }

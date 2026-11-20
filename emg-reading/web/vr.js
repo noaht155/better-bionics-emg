@@ -1,0 +1,172 @@
+// VR tab: what the person in the headset sees, drawn from the Quest app's own simulation (/ws/vr: its scene once,
+// then poses and head at 30 Hz), with its settings and objects beside it. From their eyes, or an orbit view.
+import { THREE, color, createView, geometryFor, orbit, placeMesh } from "./scene3d.js";
+import { CONTACT_PARAMS } from "./contact.js";
+
+// A finger pressing this hard shows fully in the effort colour, as on the contact page
+const TINT_FULL_N = 10;
+const EYES_FOV = 75, ORBIT_FOV = 40;
+const VIEW_DEG_PER_PX = 0.3;
+const OBJECT_NAMES = { can: "Can", ball: "Ball", block: "Block", "small cube": "Cube", pen: "Pen" };
+
+const canvas = $("vr-canvas");
+const { world, camera, bodies, resize, render } = createView(canvas, 0.8);
+const HAND = color("--hand-solid"), FREE = color("--sim-free-hand"), OBJECT = color("--sim-object");
+const PRESSED = color("--effort"), HELD = color("--accent-orange");
+const vr = { open: false, ws: null, meshes: [], params: {}, lastView: 0, mode: "eyes", turning: null };
+// Behind the user's seat, looking over the desk
+const orbitView = { yaw: 90, pitch: 32, dist: 1.1, target: new THREE.Vector3(0, -0.1, 0.05) };
+
+function material(c, rough = 0.65) {
+  return new THREE.MeshStandardMaterial({ color: c, roughness: rough });
+}
+
+function buildScene(scene) {
+  bodies.clear();
+  vr.meshes = scene.geoms.map((g) => {
+    let geo;
+    let base;
+    if (g.type === "plane") {
+      // The floor plane is infinite in the sim; drawn as 8 m with the page's grid
+      geo = new THREE.PlaneGeometry(8, 8);
+      base = color("--panel");
+    } else {
+      geo = geometryFor(g);
+      base = g.role === "static" ? color("--raised") : g.role === "object" ? OBJECT : g.hand === 0 ? HAND : FREE;
+    }
+    if (!geo) return null;
+    const mesh = new THREE.Mesh(geo, material(base));
+    if (g.type === "plane") {
+      const grid = new THREE.GridHelper(8, 16, color("--line"), color("--line"));
+      grid.rotation.x = Math.PI / 2;
+      grid.position.z = 0.001;
+      mesh.add(grid);
+    }
+    mesh.castShadow = g.role !== "static";
+    mesh.receiveShadow = true;
+    mesh.userData = { role: g.role, hand: g.hand, finger: g.finger, obj: g.obj };
+    bodies.add(mesh);
+    return mesh;
+  });
+}
+
+function applyView(v, readout) {
+  vr.lastView = performance.now();
+  vr.meshes.forEach((mesh, i) => {
+    if (!mesh) return;
+    placeMesh(mesh, v.pos.slice(3 * i, 3 * i + 3), v.mat.slice(9 * i, 9 * i + 9));
+    const { role, hand, finger, obj } = mesh.userData;
+    if (role === "object") {
+      mesh.visible = !v.parked[obj];
+      mesh.material.color.copy(v.held.includes(obj) ? OBJECT.clone().lerp(HELD, 0.35) : OBJECT);
+    } else if (role === "hand" && hand === 0 && readout) {
+      const force = finger >= 0 ? readout.finger_force[finger] : readout.palm_force;
+      mesh.material.color.lerpColors(HAND, PRESSED, Math.min(force / TINT_FULL_N, 1));
+    }
+  });
+  if (vr.mode === "eyes") {
+    const h = v.head;
+    camera.position.set(h[0], h[1], h[2]);
+    camera.up.set(h[6], h[7], h[8]);
+    camera.lookAt(h[0] + h[3], h[1] + h[4], h[2] + h[5]);
+  }
+}
+
+function showReadout(readout) {
+  if (!readout) {
+    $("vr-readout").innerHTML = "";
+    return;
+  }
+  $("vr-readout").innerHTML = `
+    <div class="contact-force"><b>${readout.grip_force.toFixed(1)} N</b><span>prosthetic grip</span></div>
+    <div class="contact-force"><b>${(readout.free_grip_force ?? 0).toFixed(1)} N</b><span>free hand grip</span></div>`;
+}
+
+function applyFrame(msg) {
+  if (msg.scene) {
+    buildScene(msg.scene);
+    return;
+  }
+  if (msg.params && JSON.stringify(msg.params) !== JSON.stringify(vr.params)) {
+    vr.params = { ...msg.params };
+    showParams(CONTACT_PARAMS, "vr-", vr.params);
+  }
+  if (msg.view && vr.meshes.length) applyView(msg.view, msg.readout);
+  showReadout(msg.readout);
+  $("vr-status").textContent = !msg.view
+    ? "Waiting for the headset: plug the Quest in over USB and open BB Contact."
+    : `Headset sim ${msg.readout ? msg.readout.speed.toFixed(1) : "?"}x real time${msg.view.menu ? ", menu open" : ""}.`;
+}
+
+function connect() {
+  const ws = new WebSocket(`ws://${location.host}/ws/vr`);
+  vr.ws = ws;
+  ws.onmessage = (e) => { if (vr.ws === ws) applyFrame(JSON.parse(e.data)); };
+  ws.onclose = () => { if (vr.ws === ws && vr.open) setTimeout(connect, 1000); };
+}
+
+function tick() {
+  if (!vr.open) return;
+  if (vr.mode === "orbit") orbit(camera, orbitView);
+  if (performance.now() - vr.lastView > 2000 && vr.ws?.readyState === WebSocket.OPEN) {
+    $("vr-status").textContent = "Waiting for the headset: plug the Quest in over USB and open BB Contact.";
+  }
+  render();
+  requestAnimationFrame(tick);
+}
+
+function setMode(mode) {
+  vr.mode = mode;
+  camera.fov = mode === "eyes" ? EYES_FOV : ORBIT_FOV;
+  camera.up.set(0, 0, 1);
+  camera.updateProjectionMatrix();
+}
+
+document.addEventListener("tabshown", (e) => {
+  const on = e.detail === "vr";
+  if (on === vr.open) return;
+  vr.open = on;
+  if (!on) {
+    const ws = vr.ws;
+    vr.ws = null;
+    ws?.close();
+    return;
+  }
+  resize();
+  setMode(vr.mode);
+  connect();
+  requestAnimationFrame(tick);
+});
+
+document.querySelectorAll("[name=vr-camera]").forEach((r) => r.addEventListener("change", () => setMode(r.value)));
+canvas.addEventListener("contextmenu", (e) => e.preventDefault());
+canvas.addEventListener("pointerdown", (e) => {
+  if (e.button !== 2 || vr.mode !== "orbit") return;
+  vr.turning = { x: e.clientX, y: e.clientY };
+  canvas.setPointerCapture(e.pointerId);
+});
+canvas.addEventListener("pointermove", (e) => {
+  if (!vr.turning) return;
+  orbitView.yaw -= (e.clientX - vr.turning.x) * VIEW_DEG_PER_PX;
+  orbitView.pitch = Math.min(85, Math.max(5, orbitView.pitch + (e.clientY - vr.turning.y) * VIEW_DEG_PER_PX));
+  vr.turning = { x: e.clientX, y: e.clientY };
+});
+canvas.addEventListener("pointerup", () => { vr.turning = null; });
+canvas.addEventListener("wheel", (e) => {
+  if (vr.mode !== "orbit") return;
+  e.preventDefault();
+  orbitView.dist = Math.min(4, Math.max(0.3, orbitView.dist * Math.exp(e.deltaY * 0.001)));
+}, { passive: false });
+window.addEventListener("resize", () => { if (vr.open) resize(); });
+
+buildParams($("vr-params"), CONTACT_PARAMS, "vr-", () => vr.params, () => {
+  const { mass_scale, max_force, assist } = vr.params;
+  postShowing("/api/contact/params", { mass_scale, max_force, assist }, "vr-error");
+});
+$("vr-spawn").innerHTML = Object.entries(OBJECT_NAMES)
+  .map(([kind, name]) => `<button data-kind="${kind}">${name}</button>`).join("");
+$("vr-spawn").addEventListener("click", (e) => {
+  const kind = e.target.dataset?.kind;
+  if (kind) postShowing("/api/vr/spawn", { kind }, "vr-error");
+});
+$("vr-clear").addEventListener("click", () => postShowing("/api/vr/clear", null, "vr-error"));

@@ -1,6 +1,6 @@
 // 3D contact page on the Control tab: draws sim.py's world with three.js, moves the hand from the keys and mouse
 // and slides the object over the table. The physics runs on the server (tools.Contact), this page only draws it.
-import * as THREE from "./vendor/three.module.min.js";
+import { THREE, color, createView, geometryFor, orbit, placeMesh, rad } from "./scene3d.js";
 
 const FINGER_NAMES = ["thumb", "index", "middle", "ring", "pinky"];
 // A finger pressing this hard shows fully in the effort colour
@@ -13,7 +13,7 @@ const VIEW_DEG_PER_PX = 0.3;
 // Hand pose and object drags sent at most this often
 const SEND_MS = 33;
 const MOVE_KEYS = ["w", "a", "s", "d", "q", "e", "z", "x"];
-const CONTACT_PARAMS = [
+export const CONTACT_PARAMS = [
   { key: "mass_scale", label: "Mass x", min: 0.25, max: 3, step: 0.25, help: "the object's mass as a multiple of its own: can 350 g, ball 58 g, block 120 g, small cube 10 g, pen 12 g" },
   { key: "max_force", label: "Hand strength N", min: 2, max: 40, step: 1, help: "force each finger presses with at full effort" },
   { key: "assist", label: "Grasp assist", help: "holds the object to the palm while the thumb and a finger press on it hard enough for friction to carry its weight, for grasps physics alone can't hold. A grip too light for the weight still drops it" },
@@ -24,69 +24,15 @@ const cx = { open: false, ws: null, meshes: [], version: -1, hand: null, keys: n
 const view = { yaw: -55, pitch: 28, dist: 0.65, target: new THREE.Vector3(0, -0.09, 0.05) };
 
 const canvas = $("ctl-contact-canvas");
-const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
-renderer.shadowMap.enabled = true;
-renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-const world = new THREE.Scene();
-const camera = new THREE.PerspectiveCamera(40, 1, 0.01, 5);
-camera.up.set(0, 0, 1);
-const bodies = new THREE.Group();
-world.add(bodies);
-
-const color = (name) => new THREE.Color(cssVar(name));
+const { renderer, world, camera, bodies, resize } = createView(canvas);
 const HAND = color("--hand-solid");
 const PRESSED = color("--effort");
-world.background = color("--bg");
-world.add(new THREE.HemisphereLight(color("--text"), color("--bg"), 1.2));
-const sun = new THREE.DirectionalLight(color("--text"), 2.2);
-sun.position.set(0.3, -0.4, 1.0);
-sun.castShadow = true;
-sun.shadow.mapSize.set(2048, 2048);
-Object.assign(sun.shadow.camera, { left: -0.5, right: 0.5, top: 0.5, bottom: -0.5, near: 0.1, far: 3 });
-world.add(sun);
 const grid = new THREE.GridHelper(0.9, 18, color("--line-strong"), color("--line"));
 grid.rotation.x = Math.PI / 2;
 grid.position.z = 0.0005;
 world.add(grid);
 
-const rad = (d) => (d * Math.PI) / 180;
-
-function placeCamera() {
-  const p = rad(view.pitch), y = rad(view.yaw);
-  camera.position.set(Math.cos(p) * Math.cos(y), Math.cos(p) * Math.sin(y), Math.sin(p))
-    .multiplyScalar(view.dist).add(view.target);
-  camera.lookAt(view.target);
-}
-
-function resize() {
-  const w = canvas.clientWidth, h = canvas.clientHeight;
-  if (!w || !h) return;
-  renderer.setPixelRatio(window.devicePixelRatio || 1);
-  renderer.setSize(w, h, false);
-  camera.aspect = w / h;
-  camera.updateProjectionMatrix();
-}
-
-function geometryFor(g) {
-  const [a, b, c] = g.size;
-  switch (g.type) {
-    // MuJoCo's capsules and cylinders run along their z axis, three.js's along y
-    case "capsule": return new THREE.CapsuleGeometry(a, 2 * b, 6, 16).rotateX(Math.PI / 2);
-    case "cylinder": return new THREE.CylinderGeometry(a, a, 2 * b, 40).rotateX(Math.PI / 2);
-    case "sphere": return new THREE.SphereGeometry(a, 32, 16);
-    case "ellipsoid": return new THREE.SphereGeometry(1, 24, 12).scale(a, b, c);
-    case "box": return new THREE.BoxGeometry(2 * a, 2 * b, 2 * c);
-    case "plane": return new THREE.PlaneGeometry(2 * a, 2 * b);
-    case "mesh": {
-      const geo = new THREE.BufferGeometry();
-      geo.setAttribute("position", new THREE.Float32BufferAttribute(g.vertices.flat(), 3));
-      geo.setIndex(g.faces.flat());
-      geo.computeVertexNormals();
-      return geo;
-    }
-  }
-  return null;
-}
+const placeCamera = () => orbit(camera, view);
 
 function buildScene(scene) {
   bodies.clear();
@@ -114,7 +60,6 @@ async function loadScene() {
   if (res.ok) buildScene(await res.json());
 }
 
-const rot = new THREE.Matrix4();
 function applyFrame(f) {
   cx.lastFrame = performance.now();
   if (!f.running) {
@@ -134,10 +79,7 @@ function applyFrame(f) {
   const r = f.readout;
   cx.meshes.forEach((mesh, i) => {
     if (!mesh) return;
-    mesh.position.fromArray(f.pos[i]);
-    const m = f.mat[i];
-    rot.set(m[0], m[1], m[2], 0, m[3], m[4], m[5], 0, m[6], m[7], m[8], 0, 0, 0, 0, 1);
-    mesh.quaternion.setFromRotationMatrix(rot);
+    placeMesh(mesh, f.pos[i], f.mat[i]);
     const { finger, palm, role } = mesh.userData;
     if (role !== "hand") return;
     const force = finger >= 0 ? r.finger_force[finger] : palm ? r.palm_force : 0;

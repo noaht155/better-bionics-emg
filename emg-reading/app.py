@@ -242,6 +242,10 @@ class ContactParams(BaseModel):
     assist: bool | None = None
 
 
+class VrSpawn(BaseModel):
+    kind: str
+
+
 class ObjectPlace(BaseModel):
     pos: list[float] = Field(min_length=3, max_length=3)
 
@@ -935,6 +939,19 @@ def make_app(recorder, band, camera, tools, lan=True, serving=False):
         tools.contact.place(clip_workspace(place.pos))
         return {"ok": True}
 
+    @app.post("/api/vr/spawn")
+    def vr_spawn(spawn: VrSpawn):
+        import sim
+        if spawn.kind not in sim.OBJECTS:
+            refuse(f"no object {spawn.kind}")
+        tools.contact.quest_command("spawn", spawn.kind)
+        return {"ok": True}
+
+    @app.post("/api/vr/clear")
+    def vr_clear():
+        tools.contact.quest_command("clear")
+        return {"ok": True}
+
     @app.post("/api/contact/reset")
     def contact_reset():
         tools.contact.reset_object()
@@ -1376,6 +1393,10 @@ def make_app(recorder, band, camera, tools, lan=True, serving=False):
                         continue
                     if changes.get("object", sim.SIM_DEFAULTS["object"]) in sim.OBJECTS:
                         tools.contact.set_params(changes)
+                if isinstance(msg.get("scene"), dict):
+                    tools.contact.quest_scene = msg["scene"]
+                if isinstance(msg.get("view"), dict):
+                    tools.contact.quest_view = msg["view"]
                 readout = msg.get("readout")
                 if isinstance(readout, dict) and isinstance(readout.get("grip_force"), (int, float))                         and np.isfinite(readout["grip_force"]):
                     tools.contact.set_quest_readout(readout)
@@ -1390,6 +1411,25 @@ def make_app(recorder, band, camera, tools, lan=True, serving=False):
         finally:
             task.cancel()
             tools.contact.quest_gone()
+
+    @app.websocket("/ws/vr")
+    async def vr_frames(ws: WebSocket):
+        """The VR tab: the headset's scene when it changes, then what it shows (poses, head, readout) at
+        CONTACT_HZ."""
+        await ws.accept()
+        sent = None
+        try:
+            while True:
+                contact = tools.contact
+                scene = contact.quest_scene
+                if scene is not None and scene is not sent:
+                    await ws.send_json({"scene": scene})
+                    sent = scene
+                await ws.send_json({"view": contact.quest_view, "readout": contact.quest_readout(),
+                                    "params": contact.quest_frame()["params"]})
+                await asyncio.sleep(1 / CONTACT_HZ)
+        except WebSocketDisconnect:
+            pass
 
     @app.websocket("/ws/signals")
     async def signals(ws: WebSocket):

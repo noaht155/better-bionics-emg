@@ -61,6 +61,8 @@ CONTACT_TICK_S = 1 / 60
 CONTACT_MAX_STEP_S = 0.05
 # The Quest app's grip force drives the haptics while its readouts are this fresh
 QUEST_FRESH_S = 0.5
+# Commands for the headset are resent with every frame until this many newer ones push them out
+QUEST_COMMANDS = 20
 # The Control tab's simulated model steps as often as the models do (50 ms window step)
 SIM_STEP_S = 0.05
 # How often the header's sync line asks the hub, and how long it waits for an answer. The Mac has one WiFi, so the hub
@@ -779,6 +781,12 @@ class Contact(Tool):
         self.params_seq = 0
         # (time, readout) last sent by the Quest app
         self._quest = None
+        # What the headset shows, for the VR tab: its scene (geoms, sent when it changes) and newest view (poses and
+        # head), and commands for it (spawn, clear) numbered so it runs each once
+        self.quest_scene = None
+        self.quest_view = None
+        self._commands = []
+        self._command_id = 0
 
     def start(self):
         # Imported here so the app still runs where mujoco isn't installed
@@ -852,13 +860,19 @@ class Contact(Tool):
             except ImportError:
                 params = {}
         return {"angles": [float(a) for a in angles], "effort": float(effort_), "locked": bool(locked),
-                "driven": driven, "params": params, "params_seq": self.params_seq}
+                "driven": driven, "params": params, "params_seq": self.params_seq, "commands": list(self._commands)}
+
+    def quest_command(self, kind, arg=""):
+        """Queues a command for the headset; the newest QUEST_COMMANDS go out with every frame."""
+        self._command_id += 1
+        self._commands = (self._commands + [{"id": self._command_id, "kind": kind, "arg": arg}])[-QUEST_COMMANDS:]
 
     def set_quest_readout(self, readout):
         self._quest = (time.monotonic(), readout)
 
     def quest_gone(self):
         self._quest = None
+        self.quest_view = None
 
     def quest_readout(self):
         quest = self._quest

@@ -93,6 +93,8 @@ function showTab(name) {
   if (name === "cursor") loadCursorSessions();
   if (name === "sync") loadSyncConfig().then(loadSyncStatus);
   if (name === "dev") loadCacheSize();
+  // Module pages (vr.js) start and stop their streams on this
+  document.dispatchEvent(new CustomEvent("tabshown", { detail: name }));
   moveTabInk();
 }
 
