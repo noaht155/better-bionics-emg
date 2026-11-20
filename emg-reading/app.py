@@ -16,6 +16,7 @@ import importlib.util
 import json
 import socket
 import sys
+import time
 from pathlib import Path
 from typing import Literal
 
@@ -62,6 +63,8 @@ CONTACT_HZ = 30
 CONTACT_REACH_M = 0.45
 # The Quest app's sim gets the control layer's output this often
 QUEST_HZ = 60
+# How often the recording's cue state is taken for the headset
+QUEST_RECORD_HZ = 10
 PREVIEW_HZ = 15
 LOOPBACK = ("127.0.0.1", "::1")
 # What the Train tab may ask the hub for through this app, as paths under /api/
@@ -495,6 +498,36 @@ def clip_workspace(pos):
 
 def refuse(e):
     raise HTTPException(409, str(e))
+
+
+def headset_session_settings(quick):
+    """Settings for a protocol F session started from the headset: the newest real session's setup (subject, band
+    arm and placement), which the Record tab's form also starts from."""
+    for path in sorted(DATA_DIR.glob("*/session.json"), reverse=True):
+        try:
+            settings = json.loads(path.read_text()).get("settings") or {}
+        except (OSError, ValueError):
+            continue
+        if settings.get("practice") or settings.get("dev_cues") or "subject" not in settings:
+            continue
+        settings = {k: v for k, v in settings.items() if k in SessionSettings.model_fields}
+        return SessionSettings(**dict(settings, protocol="F", quick=quick, practice=False, dev_cues=0)).model_dump()
+    raise ValueError("record one session on the Record tab first, the headset starts from its setup")
+
+
+def headset_record_state(recorder):
+    """The running session as the headset shows it: the cue, its target pose, progress and pauses."""
+    session = recorder.snapshot()["session"]
+    if session is None:
+        return {"running": False}
+    cue = session["cue"]
+    upcoming = session["next"]
+    return {"running": True, "paused": session["paused"], "hum": session["hum_pause"] is not None,
+            "index": session["index"], "count": session["count"], "label": cue["label"], "kind": cue["kind"],
+            "text": cue["text"], "seconds": cue["seconds"] or 0, "elapsed": session["cue_elapsed"],
+            "marked_bad": session["marked_bad"], "next": upcoming["text"].splitlines()[0] if upcoming else "",
+            "target": [float(a) for a in POSES.get(cue["label"], POSES["rest"])],
+            "has_target": cue["label"] in POSES}
 
 
 def session_folder(name):
@@ -1397,14 +1430,34 @@ def make_app(recorder, band, camera, tools, lan=True, serving=False):
                     tools.contact.quest_scene = msg["scene"]
                 if isinstance(msg.get("view"), dict):
                     tools.contact.quest_view = msg["view"]
+                record = msg.get("record")
+                if isinstance(record, dict):
+                    action = record.get("action")
+                    try:
+                        if action == "start":
+                            if tools.calibration.state["running"]:
+                                raise ValueError("wait for the calibration to finish")
+                            recorder.start_session(headset_session_settings(bool(record.get("quick"))))
+                        elif action in ("continue", "pause", "bad", "stop"):
+                            recorder.command(action)
+                        record_error[0] = ""
+                    except ValueError as e:
+                        record_error[0] = str(e)
                 readout = msg.get("readout")
                 if isinstance(readout, dict) and isinstance(readout.get("grip_force"), (int, float))                         and np.isfinite(readout["grip_force"]):
                     tools.contact.set_quest_readout(readout)
 
+        record_error = [""]
+        record_state, record_at = {"running": False}, 0.0
         task = asyncio.create_task(receive())
         try:
             while not task.done():
-                await ws.send_json(tools.contact.quest_frame())
+                frame = tools.contact.quest_frame()
+                # The recorder's snapshot is more than the headset needs 60 times a second
+                if time.monotonic() - record_at > 1 / QUEST_RECORD_HZ:
+                    record_state, record_at = headset_record_state(recorder), time.monotonic()
+                frame["record"] = dict(record_state, error=record_error[0])
+                await ws.send_json(frame)
                 await asyncio.sleep(1 / QUEST_HZ)
         except WebSocketDisconnect:
             pass
