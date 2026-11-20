@@ -229,7 +229,8 @@ Skips without mujoco.
 
 | Test | Checks |
 |---|---|
-| `test_exported_model_carries_the_force_rule` | Every object's model for the headset loads, has the same geoms and 20 motors as `sim.py`'s, and carries the force rule's constants and joint arms |
+| `test_scene_has_both_hands_the_pool_and_the_force_rule` | The headset's scene (either prosthetic side) loads with both hands' 40 motors in `JOINTS` order, the object pool at `sim.py`'s sizes and the force rule's constants; the prosthetic hand is the left one when asked |
+| `test_left_hand_mirrors_the_right` | With the same angles every part of the left hand sits at the mirror image of the right hand's |
 | `test_quest_gets_the_control_output_and_shared_settings` | `/ws/quest`'s frame has the control layer's angles, effort, lock and whether a model drives it, plus the contact settings; a settings change raises `params_seq` |
 | `test_quest_grip_force_drives_the_haptics_while_fresh` | The headset's grip force drives the haptics while its readouts keep coming, not once they stop |
 | `test_link_maps_the_quest_once_and_leaves_another_live_copy` | `adb reverse` is set once per plugged-in Quest, an unauthorized one is left alone, and a second app copy only takes the mapping once the first stops answering |
