@@ -1,7 +1,9 @@
-// sim.py's World in C for the Quest app, with two hands and a pool of objects (export_model.py's scene). Each hand
-// follows its own angles with sim.py's per-finger force rule. The prosthetic hand ("p_") has sim.py's grasp assist;
-// the free hand ("f_") holds whatever it touches while its grab is on, so grabbing with a controller is never
-// fiddly. The rule's constants come in the XML as custom numerics. Coordinates and units as in sim.py.
+// The contact sim, for the Quest app and for the PC through sim.py's World, with two hands and a pool of objects
+// (sim.scene_xml). Each hand follows its own angles with the per-finger force rule sim.py describes. The prosthetic
+// hand ("p_") has sim.py's grasp assist; the free hand ("f_") holds whatever it touches while its grab is on, so
+// grabbing with a controller is never fiddly. The rule's constants come in the XML as custom numerics. Coordinates
+// and units as in sim.py.
+#define _USE_MATH_DEFINES
 #include <math.h>
 #include <stdlib.h>
 #include <string.h>
@@ -12,7 +14,11 @@
 #define NF 5
 #define NH 2
 #define MAXOBJ 64
+#ifdef _WIN32
+#define EXPORT __declspec(dllexport)
+#else
 #define EXPORT __attribute__((visibility("default")))
+#endif
 
 static const char* FINGERS[NF] = {"thumb", "index", "middle", "ring", "pinky"};
 static const char* PREFIX[NH] = {"p_", "f_"};
@@ -262,6 +268,17 @@ EXPORT void bb_place_object(World* w, int o, const double* pos, const double* qu
 }
 
 EXPORT int bb_nobjects(World* w) { return w->nobj; }
+
+// Hand h's target position and orientation (w x y z)
+EXPORT void bb_hand_target(World* w, int h, double* pos, double* quat) {
+  memcpy(pos, w->d->mocap_pos + 3 * w->hand[h].mocap, 3 * sizeof(double));
+  memcpy(quat, w->d->mocap_quat + 4 * w->hand[h].mocap, 4 * sizeof(double));
+}
+
+// Hand h's joint angles (degrees, JOINTS order)
+EXPORT void bb_joint_angles(World* w, int h, double* out) {
+  for (int j = 0; j < NJ; j++) out[j] = w->d->qpos[w->hand[h].qadr[j]] * 180 / M_PI;
+}
 
 // Moves the floor to height below the desk top; objects resting on it need placing again
 EXPORT void bb_set_floor(World* w, double height) {

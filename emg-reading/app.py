@@ -58,7 +58,7 @@ PRESET_FILE = gesture_model.MODEL_DIR.parent / "control_presets.json"
 # Saved mappings (rule lists) of the Control tab, apart from the profiles (presets) that also carry one
 MAPPING_FILE = gesture_model.MODEL_DIR.parent / "control_mappings.json"
 SEND_HZ = 20
-# The 3D contact page: frames sent per second, and how far from the table's centre the hand and object can go
+# The 3D contact page: frames sent per second, and how high above the desk the hand and object can go
 CONTACT_HZ = 30
 CONTACT_REACH_M = 0.45
 # The Quest app's sim gets the control layer's output this often
@@ -491,9 +491,11 @@ def saved_mappings():
 
 
 def clip_workspace(pos):
-    """Keeps the hand and object over the table and near it (m)."""
-    return [float(np.clip(pos[0], -CONTACT_REACH_M, CONTACT_REACH_M)),
-            float(np.clip(pos[1], -CONTACT_REACH_M, CONTACT_REACH_M)), float(np.clip(pos[2], 0.0, CONTACT_REACH_M))]
+    """Keeps the hand and object over the desk and near it (m)."""
+    import sim
+    hx, hy, _ = sim.DESK_HALF
+    return [float(np.clip(pos[0], -hx, hx)), float(np.clip(pos[1], sim.DESK_CENTRE_Y - hy, sim.DESK_CENTRE_Y + hy)),
+            float(np.clip(pos[2], 0.0, CONTACT_REACH_M))]
 
 
 def refuse(e):

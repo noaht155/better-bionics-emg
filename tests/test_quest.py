@@ -1,6 +1,4 @@
 """Laptop side of the Quest app: the model it gets, what /ws/quest sends and takes, and the adb reverse link."""
-import sys
-from pathlib import Path
 from types import SimpleNamespace
 
 import numpy as np
@@ -15,19 +13,15 @@ import tools  # noqa: E402
 from gestures import GESTURES  # noqa: E402
 from hand_angles import JOINTS  # noqa: E402
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "quest-app" / "native"))
-import export_model  # noqa: E402
-
 
 def test_scene_has_both_hands_the_pool_and_the_force_rule():
     for left in (True, False):
-        m = mujoco.MjModel.from_xml_string(export_model.scene_xml(left))
+        m = mujoco.MjModel.from_xml_string(sim.scene_xml(left))
         assert m.nu == 40 and m.nmocap == 2
         names = [m.actuator(i).name for i in range(m.nu)]
-        assert names == [f"{p}{j}" for p in export_model.HANDS for j in JOINTS]
-        for i, kind in enumerate(export_model.pool()):
-            assert m.geom(f"obj{i}").size == pytest.approx(mujoco.MjModel.from_xml_string(sim.model_xml(kind))
-                                                             .geom("object").size)
+        assert names == [f"{p}{j}" for p in sim.HANDS for j in JOINTS]
+        assert [m.body(f"obj{i}").mass[0] for i in range(len(sim.pool()))] == pytest.approx(
+            [sim.OBJECTS[kind][1] for kind in sim.pool()])
 
         def numeric(name):
             i = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_NUMERIC, name)

@@ -27,10 +27,6 @@ const canvas = $("ctl-contact-canvas");
 const { renderer, world, camera, bodies, resize } = createView(canvas);
 const HAND = color("--hand-solid");
 const PRESSED = color("--effort");
-const grid = new THREE.GridHelper(0.9, 18, color("--line-strong"), color("--line"));
-grid.rotation.x = Math.PI / 2;
-grid.position.z = 0.0005;
-world.add(grid);
 
 const placeCamera = () => orbit(camera, view);
 
@@ -45,6 +41,14 @@ function buildScene(scene) {
     mesh.receiveShadow = true;
     const part = g.name?.split("_")[0];
     mesh.userData = { role: g.role, finger: FINGER_NAMES.indexOf(part), palm: part === "palm" };
+    if (g.role === "table") {
+      // A square grid on the desk top, 5 cm squares
+      const side = 2 * Math.min(g.size[0], g.size[1]);
+      const grid = new THREE.GridHelper(side, Math.round(side / 0.05), color("--line-strong"), color("--line"));
+      grid.rotation.x = Math.PI / 2;
+      grid.position.z = g.size[2] + 0.0005;
+      mesh.add(grid);
+    }
     bodies.add(mesh);
     return mesh;
   });

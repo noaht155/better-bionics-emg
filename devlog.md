@@ -2440,6 +2440,12 @@ levels: r 0.995 to 0.999 per session, mean difference 0.005 to 0.013, a clench l
   dropped by a light grip sank 2 cm into the desk and blew the sim up (the PC's Python sim on its plane: fell over
   cleanly). Built 3x heavy in the XML it fell cleanly. `bb_set_params` now reruns `mj_setConst` (on a scratch
   `mjData`, it overwrites the state) when the mass changes; all lift cases clean again.
+- One sim for the PC and the headset (Noah): `bbsim.c` is the only copy of the force rule and assist, and the PC
+  runs it through ctypes (`sim.World`), on the headset's scene (`sim.scene_xml`, moved from `export_model.py`):
+  right hand prosthetic, the free hand parked off to the side, one object of the pool on the desk. `sim.py` keeps
+  the model: geometry, constants, objects. bbsim is built on first use against the venv's MuJoCo and rebuilt when
+  `bbsim.c` changes (MSVC Build Tools on the desktop, 4 s; Apple clang and MuJoCo 3.3.7 on the Mac), into ignored
+  `quest-app/native/build/host/`. The contact page now shows the desk (box, grid on it) and clips placing to it.
 
 ## Open
 

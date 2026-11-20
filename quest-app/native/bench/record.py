@@ -12,7 +12,7 @@ sys.path.insert(0, str(ROOT / "quest-app" / "native"))
 import ml  # noqa: E402,F401  puts emg-reading on the path
 import numpy as np  # noqa: E402
 import sim  # noqa: E402
-from export_model import pool, scene_xml  # noqa: E402
+from sim import pool, scene_xml  # noqa: E402
 from test_sim import SIDE, WRAP, grasp  # noqa: E402
 
 OUT = Path(__file__).resolve().parents[1] / "build" / "bench"

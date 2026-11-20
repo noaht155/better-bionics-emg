@@ -33,8 +33,8 @@ def test_geometry_matches_hand_js():
 
 def test_motors_in_joint_order():
     w = sim.World()
-    names = [mujoco.mj_id2name(w.model, mujoco.mjtObj.mjOBJ_ACTUATOR, i) for i in range(w.model.nu)]
-    assert names == JOINTS
+    names = [mujoco.mj_id2name(w.model, mujoco.mjtObj.mjOBJ_ACTUATOR, i) for i in range(len(JOINTS))]
+    assert names == ["p_" + j for j in JOINTS]
 
 
 def test_hand_reaches_the_pose_in_free_air():
@@ -43,8 +43,7 @@ def test_hand_reaches_the_pose_in_free_air():
     target = np.array(GESTURES["fist"][1])
     for _ in range(50):
         w.step(0.02, target, 1.0)
-    reached = np.degrees(w.data.qpos[w._qadr])
-    assert np.abs(reached - target).max() < 5
+    assert np.abs(w.joint_angles() - target).max() < 5
     assert w.grip_force() == 0
 
 
@@ -66,9 +65,7 @@ def lift(effort, assist, mass_scale=1.0):
     q = np.zeros(4)
     mujoco.mju_mat2Quat(q, rot.flatten())
     base = np.array([-0.11, -0.12 - 0.033 - 0.012, 0.066])
-    w.set_hand(base, q)
-    w.data.qpos[0:7] = [*base, *q]
-    mujoco.mj_forward(w.model, w.data)
+    w.set_hand(base, q, teleport=True)
     rest, grip = np.array(GESTURES["open"][1]), np.array(WRAP)
     for k in range(180):
         t = k * 0.02
@@ -120,16 +117,16 @@ SIDE = np.array([[0, 1, 0], [0, 0, 1], [1, 0, 0]], float)
 
 def grasp_centre(pose, fingers, palm):
     """Mean of the fingertips (and the palm) in the hand frame with the pose closed in free air."""
-    w = sim.World()
-    w.data.qpos[0:7] = [0, 0, 0, 1, 0, 0, 0]
-    w.data.qpos[w._qadr] = np.radians(pose)
-    mujoco.mj_forward(w.model, w.data)
+    m = mujoco.MjModel.from_xml_string(sim.ghost_xml(False))
+    d = mujoco.MjData(m)
+    d.qpos[[m.jnt_qposadr[m.actuator_trnid[i, 0]] for i in range(m.nu)]] = np.radians(pose)
+    mujoco.mj_kinematics(m, d)
     points = [np.array([-0.005, 0.06, 0.012])] if palm else []
     for f in fingers:
-        g = mujoco.mj_name2id(w.model, mujoco.mjtObj.mjOBJ_GEOM, f"{f}_dist")
-        axis = w.data.geom_xmat[g].reshape(3, 3)[:, 2] * w.model.geom_size[g][1]
-        joint = w.data.xpos[w.model.geom_bodyid[g]]
-        points.append(max((w.data.geom_xpos[g] + axis, w.data.geom_xpos[g] - axis),
+        g = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_GEOM, f"g_{f}_dist")
+        axis = d.geom_xmat[g].reshape(3, 3)[:, 2] * m.geom_size[g][1]
+        joint = d.xpos[m.geom_bodyid[g]]
+        points.append(max((d.geom_xpos[g] + axis, d.geom_xpos[g] - axis),
                           key=lambda end: np.linalg.norm(end - joint)))
     return np.mean(points, 0)
 
@@ -143,9 +140,7 @@ def grasp(obj, pose, rot, fingers, palm, effort, offset):
     mujoco.mju_mat2Quat(q, rot.flatten())
     base = np.array([0, -0.12, half]) - rot @ grasp_centre(pose, fingers, palm) + rot @ np.array(offset)
     back = -rot[:, 2] * 0.02
-    w.set_hand(base + back, q)
-    w.data.qpos[0:7] = [*(base + back), *q]
-    mujoco.mj_forward(w.model, w.data)
+    w.set_hand(base + back, q, teleport=True)
     rest, grip = np.array(GESTURES["open"][1]), np.array(pose)
     for k in range(200):
         t = k * 0.02
@@ -187,7 +182,7 @@ def test_contact_runs_on_the_control_layer_and_gives_the_force_to_the_haptics():
         frame = contact.frame()
         assert frame["running"] and frame["control"]["grip"] == "fist"
         assert len(frame["pos"]) == len(contact.scene()["geoms"])
-        reached = np.degrees(contact.world.data.qpos[contact.world._qadr])
+        reached = contact.world.joint_angles()
         assert reached[JOINTS.index("index_pip")] > 50
         version = contact.version
         contact.set_params({"object": "ball"})

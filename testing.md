@@ -206,16 +206,16 @@ These decide when the recorder marks a cue bad and redoes it.
 
 ### Contact simulation (`tests/test_sim.py`)
 
-Skips without mujoco.
+Skips without mujoco. Runs bbsim.c (built on first use) on the Quest app's scene.
 
 | Test | Checks |
 |---|---|
 | `test_geometry_matches_hand_js` | The simulated hand's knuckles, splay and segment lengths are the ones `web/hand.js` draws |
-| `test_motors_in_joint_order` | The 20 motors are in `JOINTS` order, so the control layer's angles reach the right joints |
+| `test_motors_in_joint_order` | The prosthetic hand's 20 motors are in `JOINTS` order, so the control layer's angles reach the right joints |
 | `test_hand_reaches_the_pose_in_free_air` | With nothing to touch the hand reaches the fist within 5 degrees (the thumb doesn't block the fingers) and grip force is 0 |
-| `test_scene_and_poses_line_up` | The page's scene and pose lists have one entry per geom, with table, hand and object, and the palm mesh has its hull |
+| `test_scene_and_poses_line_up` | The page's scene and pose lists have one entry per geom, with desk, hand and object, and the palm mesh has its hull |
 | `test_assist_lifts_and_grip_force_follows_effort` | With the assist the hand wraps the can and lifts it 10 cm at effort 0.3 and 1.0, and grip force at full effort is over 1.5 times that at 0.3 |
-| `test_grip_too_light_for_the_weight_drops_it` | The same grip on a can 3 times as heavy doesn't lift it: grip force x friction under the weight lets go |
+| `test_grip_too_light_for_the_weight_drops_it` | The same grip on a can 3 times as heavy doesn't lift it: grip force x friction under the weight lets go, and the dropped can doesn't blow the sim up |
 | `test_pure_physics_holds_from_light_effort_on` | Without the assist the hand lifts the can at effort 0.2, 0.6 and 1.0 (the no-slip pass and hand friction) and drops it at 0.05 |
 | `test_heavier_object_needs_more_effort` | The can lifts at effort 0.2, one 3 times as heavy slips out at 0.2 and lifts at full effort |
 | `test_grip_force_follows_effort_without_the_assist` | Without the assist grip force on the can rises from effort 0.2 to 0.6 to 1.0 |
@@ -229,7 +229,7 @@ Skips without mujoco.
 
 | Test | Checks |
 |---|---|
-| `test_scene_has_both_hands_the_pool_and_the_force_rule` | The headset's scene (either prosthetic side) loads with both hands' 40 motors in `JOINTS` order, the object pool at `sim.py`'s sizes and the force rule's constants; the prosthetic hand is the left one when asked |
+| `test_scene_has_both_hands_the_pool_and_the_force_rule` | The headset's scene (either prosthetic side) loads with both hands' 40 motors in `JOINTS` order, the object pool at `sim.OBJECTS`' masses and the force rule's constants; the prosthetic hand is the left one when asked |
 | `test_left_hand_mirrors_the_right` | With the same angles every part of the left hand sits at the mirror image of the right hand's |
 | `test_quest_gets_the_control_output_and_shared_settings` | `/ws/quest`'s frame has the control layer's angles, effort, lock and whether a model drives it, plus the contact settings; a settings change raises `params_seq` |
 | `test_quest_grip_force_drives_the_haptics_while_fresh` | The headset's grip force drives the haptics while its readouts keep coming, not once they stop |
@@ -348,7 +348,8 @@ Checks that need training runs, too slow for the test suite. Numbers in `devlog.
 - Epoch sweep (5 to 50): held-out scores stop improving at 10 to 15.
 - Mirrored band simulated by reversing the channel order: 70 % to 38 % without calibration.
 - MuJoCo on the Quest 3 (`quest-app/native/bench/`): the C force rule gives the same can grasp as `sim.py` (object
-  height to 0.1 mm) at 6.8 to 7.9x real time on the headset.
+  height to 0.1 mm) at 6.8 to 7.9x real time on the headset. Since 2026-11-20 the PC runs the same bbsim.c, so the
+  bench now only compares the headset's build with the desktop's.
 - Run-to-run noise (2026-10-06, 5 seeds): a single run is good to about +-1.5 points on grip accuracy and +-0.03 in angle r. LDA has no randomness and repeats exactly.
 
 ## Not checked yet

@@ -20,8 +20,18 @@ definitions as hand_angles.py. The page moves the hand through a mocap body the 
 stops at the table instead of passing through it. Coordinates in metres, z up. The hand doesn't
 collide with itself (contype and conaffinity): fingers pass each other as real ones slide past, and the thumb of the
 fist pose would otherwise stop the index from curling.
+
+One sim for the PC and the Quest app: this module is the model (geometry, constants, objects, scene_xml) and
+quest-app/native/bbsim.c the rule, run on the headset and here through ctypes. World builds bbsim for this computer
+against the venv's MuJoCo the first time and again whenever bbsim.c changes (MSVC Build Tools on Windows, cc on a
+Mac), into the ignored quest-app/native/build/host/.
 """
+import ctypes
 import math
+import os
+import subprocess
+import sys
+from pathlib import Path
 
 import mujoco
 import numpy as np
@@ -69,6 +79,22 @@ SIM_DEFAULTS = {"object": "can", "mass_scale": 1.0, "max_force": 15.0, "assist":
 ASSIST_N = 1.0
 FINGERS = ["thumb", "index", "middle", "ring", "pinky"]
 GRAVITY = 9.81
+
+NATIVE = Path(__file__).resolve().parents[1] / "quest-app" / "native"
+SOURCE = NATIVE / "bbsim.c"
+HANDS = ("p_", "f_")
+# Copies of each object in the pool
+POOL = 2
+# MuJoCo's native collision code keeps the can from lifting off the box desk in the wrap grasp (it rests at
+# 0.0625 m, 0.1352 m with libccd; on a plane 0.1324 m, 2026-11-20), so the scene uses libccd
+# Desk half sizes and centre (m): 1 m wide, 70 cm deep, its near edge 20 cm in front of the hand's start
+DESK_HALF = (0.5, 0.35, 0.02)
+DESK_CENTRE_Y = -0.15
+DESK_HEIGHT = 0.74
+PARK_X, PARK_Y, PARK_STEP = 2.0, 2.0, 0.25
+# The PC's hand starts above the desk, palm down, fingers away from the viewer; its free hand waits off to the side
+HAND_START, HAND_QUAT = (0.0, -0.05, 0.25), (0.0, 1.0, 0.0, 0.0)
+FREE_HAND_AWAY = (-1.5, 2.0, 0.0)
 
 
 def _mm(v):
@@ -146,29 +172,13 @@ def palm_mesh_xml(prefix="", mirror=False):
     return f'<mesh name="{prefix}palm" vertex="{_palm_vertices(-1 if mirror else 1)}"/>'
 
 
-def model_xml(obj):
-    shape, mass, friction, half = OBJECTS[obj]
-    motors = "".join(f'<motor name="{j}" joint="{j}"/>' for j in JOINTS)
-    return f"""<mujoco model="contact">
-<option timestep="{TIMESTEP}" integrator="implicitfast" gravity="0 0 -{GRAVITY}" cone="elliptic"
-noslip_iterations="{NOSLIP_ITERATIONS}"/>
-<asset>{palm_mesh_xml()}</asset>
-<default><joint damping="0.02" armature="0.0002"/><default class="hand">
-<geom friction="{HAND_FRICTION} 0.01 0.001" condim="4" density="1100" contype="1" conaffinity="2"/></default></default>
-<worldbody>
-<light pos="0 -0.3 0.8" dir="0 0.3 -1" directional="true"/>
-<geom name="table" type="plane" size="0.5 0.5 0.01" friction="0.6 0.01 0.001" contype="2" conaffinity="3"
-priority="1"/>
-<body name="target" mocap="true" pos="0 -0.05 0.25" xyaxes="1 0 0 0 -1 0"/>
-<body name="palm" pos="0 -0.05 0.25" xyaxes="1 0 0 0 -1 0"><freejoint/>
-{hand_xml()}</body>
-<body name="object" pos="0 -0.12 {half + 0.001:.4f}"><freejoint/>
-<geom name="object" {shape} mass="{mass}" friction="{friction} 0.01 0.001" condim="4" contype="2"
-conaffinity="3"/></body>
-</worldbody>
-<equality><weld name="hand" body1="palm" body2="target" solref="0.02 1"/>
-<weld name="assist" body1="palm" body2="object" active="false"/></equality>
-<actuator>{motors}</actuator></mujoco>"""
+def pool():
+    return [kind for kind in OBJECTS for _ in range(POOL)]
+
+
+def parked(i, height=DESK_HEIGHT):
+    """Where object i waits off the desk, resting on the floor."""
+    return [PARK_X + PARK_STEP * i, PARK_Y, -height + OBJECTS[pool()[i]][3] + 0.001]
 
 
 def _arms():
@@ -185,184 +195,247 @@ def _arms():
     return np.array([arms[j] for j in JOINTS])
 
 
+def constants():
+    values = {"kp": KP, "kp_press": KP_PRESS, "assist_n": ASSIST_N, "max_mass_scale": MAX_MASS_SCALE,
+              "gravity": GRAVITY}
+    custom = "".join(f'<numeric name="{k}" data="{v!r}"/>' for k, v in values.items())
+    return custom + f'<numeric name="arm" data="{" ".join(repr(float(a)) for a in _arms())}"/>'
+
+
+def scene_xml(prosthetic_left=True):
+    """Both hands, the desk over the floor and the object pool parked on the floor away from the desk, so showing an
+    object only moves it. Names: the prosthetic hand's start with "p_", the free hand's with "f_", objects are obj0,
+    obj1, ... The desk top is at z 0 and the user sits on its +y side, so +x is the user's left."""
+    mirror = {"p_": prosthetic_left, "f_": not prosthetic_left}
+    bodies, welds = "", ""
+    for p in HANDS:
+        x = 0.15 if mirror[p] else -0.15
+        pose = f'pos="{x} 0.1 0.25" xyaxes="1 0 0 0 -1 0"'
+        bodies += (f'<body name="{p}target" mocap="true" {pose}/>'
+                   f'<body name="{p}palm" {pose}><freejoint/>{hand_xml(p, mirror[p])}</body>\n')
+        welds += f'<weld name="{p}hand" body1="{p}palm" body2="{p}target" solref="0.02 1"/>'
+    for i, kind in enumerate(pool()):
+        shape, mass, friction, _ = OBJECTS[kind]
+        pos = " ".join(f"{v:.4f}" for v in parked(i))
+        bodies += (f'<body name="obj{i}" pos="{pos}"><freejoint/><geom name="obj{i}" {shape} mass="{mass}" '
+                   f'friction="{friction} 0.01 0.001" condim="4" contype="2" conaffinity="3"/></body>\n')
+        welds += "".join(f'<weld name="{p}hold{i}" body1="{p}palm" body2="obj{i}" active="false"/>' for p in HANDS)
+    motors = "".join(f'<motor name="{p}{j}" joint="{p}{j}"/>' for p in HANDS for j in JOINTS)
+    meshes = "".join(palm_mesh_xml(p, mirror[p]) for p in HANDS)
+    hx, hy, hz = DESK_HALF
+    return f"""<mujoco model="contact">
+<option timestep="{TIMESTEP}" integrator="implicitfast" gravity="0 0 -{GRAVITY}" cone="elliptic"
+noslip_iterations="{NOSLIP_ITERATIONS}"><flag nativeccd="disable"/></option>
+<asset>{meshes}</asset>
+<default><joint damping="0.02" armature="0.0002"/><default class="hand">
+<geom friction="{HAND_FRICTION} 0.01 0.001" condim="4" density="1100" contype="1" conaffinity="2"/></default></default>
+<worldbody>
+<geom name="desk" type="box" size="{hx} {hy} {hz}" pos="0 {DESK_CENTRE_Y} {-hz}" friction="0.6 0.01 0.001"
+contype="2" conaffinity="3" priority="1"/>
+<geom name="floor" type="plane" size="0 0 1" pos="0 0 {-DESK_HEIGHT}" friction="0.8 0.01 0.001" contype="2"
+conaffinity="3" priority="1"/>
+{bodies}</worldbody>
+<equality>{welds}</equality>
+<actuator>{motors}</actuator>
+<custom>{constants()}</custom></mujoco>"""
+
+
+def ghost_xml(left):
+    """One hand on its own, for showing a pose without physics (bbsim's bb_fk)."""
+    motors = "".join(f'<motor joint="g_{j}"/>' for j in JOINTS)
+    return (f'<mujoco model="ghost"><default><default class="hand"><geom contype="0" conaffinity="0"/></default>'
+            f'</default><asset>{palm_mesh_xml("g_", left)}</asset><worldbody><body name="g_palm">'
+            f'{hand_xml("g_", left)}</body></worldbody><actuator>{motors}</actuator></mujoco>')
+
+
+def _library():
+    """Path of bbsim built for this computer against the venv's MuJoCo, building it when bbsim.c is newer."""
+    mj = Path(mujoco.__file__).parent
+    ext = {"win32": ".dll", "darwin": ".dylib"}.get(sys.platform, ".so")
+    out = NATIVE / "build" / "host" / f"bbsim-{mujoco.__version__}{ext}"
+    if out.exists() and out.stat().st_mtime >= SOURCE.stat().st_mtime:
+        return out
+    out.parent.mkdir(parents=True, exist_ok=True)
+    # Built under another name first, so a second process never loads a half written file
+    tmp = out.with_name(f"{out.stem}-{os.getpid()}{ext}")
+    if sys.platform == "win32":
+        _build_msvc(mj, tmp)
+    else:
+        lib = next(p for p in mj.glob("libmujoco*") if p.suffix in (".dylib", ".so") or ".so." in p.name)
+        subprocess.run(["cc", "-O2", "-shared", "-fPIC", "-fvisibility=hidden", f"-I{mj / 'include'}", str(SOURCE),
+                        str(lib), f"-Wl,-rpath,{mj}", "-lm", "-o", str(tmp)], check=True)
+    os.replace(tmp, out)
+    return out
+
+
+def _build_msvc(mj, out):
+    """MSVC can't link against a DLL directly: an import library made from mujoco.dll's exports goes in between."""
+    vswhere = Path(os.environ.get("ProgramFiles(x86)", "")) / "Microsoft Visual Studio" / "Installer" / "vswhere.exe"
+    found = subprocess.run([str(vswhere), "-latest", "-products", "*", "-property", "installationPath"],
+                           capture_output=True, text=True).stdout.strip() if vswhere.exists() else ""
+    if not found:
+        raise RuntimeError("the contact sim needs a C compiler: install Visual Studio Build Tools (C++)")
+    env = f'"{Path(found) / "VC" / "Auxiliary" / "Build" / "vcvars64.bat"}" >nul && '
+    work = out.parent / "msvc"
+    work.mkdir(exist_ok=True)
+    dump = subprocess.run(env + f'dumpbin /nologo /exports "{mj / "mujoco.dll"}"', shell=True, capture_output=True,
+                          text=True, check=True).stdout
+    names = [line.split()[3] for line in dump.splitlines() if len(line.split()) == 4 and line.split()[0].isdigit()]
+    (work / "mujoco.def").write_text("EXPORTS\n" + "\n".join(names) + "\n")
+    subprocess.run(env + f'lib /nologo /machine:x64 /def:"{work / "mujoco.def"}" /out:"{work / "mujoco.lib"}" && '
+                   f'cl /nologo /O2 /LD /I"{mj / "include"}" "{SOURCE}" "{work / "mujoco.lib"}" '
+                   f'/Fo"{work}\\\\" /Fe"{out}" /link /implib:"{work / "bbsim.lib"}"',
+                   shell=True, capture_output=True, text=True, check=True)
+
+
+_lib = None
+
+
+def _load():
+    global _lib
+    if _lib is None:
+        if sys.platform == "win32":
+            os.add_dll_directory(str(Path(mujoco.__file__).parent))
+        lib = ctypes.CDLL(str(_library()))
+        P, D, I = ctypes.c_void_p, ctypes.c_double, ctypes.c_int
+        DP, FP, IP, S = ctypes.POINTER(D), ctypes.POINTER(ctypes.c_float), ctypes.POINTER(I), ctypes.c_char_p
+        for name, res, args in [("bb_create", P, [S, I, S, I]), ("bb_free", None, [P]),
+                                ("bb_set_params", None, [P, D, D, I]), ("bb_set_input", None, [P, I, DP, D, I, I]),
+                                ("bb_set_hand", None, [P, I, DP, DP, I]), ("bb_hand_target", None, [P, I, DP, DP]),
+                                ("bb_joint_angles", None, [P, I, DP]), ("bb_place_object", None, [P, I, DP, DP, I]),
+                                ("bb_object_pose", None, [P, I, DP, DP]), ("bb_step", None, [P, D]),
+                                ("bb_poses", None, [P, FP, FP]), ("bb_readout", None, [P, DP])]:
+            fn = getattr(lib, name)
+            fn.restype, fn.argtypes = res, args
+        _lib = lib
+    return _lib
+
+
+def _doubles(values):
+    return (ctypes.c_double * len(values))(*map(float, values))
+
+
 class World:
-    """One hand and one object. step() advances it; the hand pose, object and settings can change between steps."""
+    """The scene (scene_xml) in bbsim, the code the Quest app runs, seen as one hand and one object: the prosthetic
+    hand (a right hand, the mirror convention of the drawn hands) and the chosen object on the desk. The free hand
+    waits out of the way and the rest of the pool stays parked. step() advances it; the hand pose, object and settings
+    can change between steps. model is the scene loaded in MuJoCo's Python bindings for names and shapes only, the
+    state lives in bbsim."""
 
     def __init__(self, params=None):
         self.params = dict(SIM_DEFAULTS, **(params or {}))
-        self._build(self.params["object"])
+        lib = _load()
+        xml = scene_xml(prosthetic_left=False)
+        self.model = mujoco.MjModel.from_xml_string(xml)
+        err = ctypes.create_string_buffer(1000)
+        self._w = lib.bb_create(xml.encode(), len(xml.encode()), err, len(err))
+        if not self._w:
+            raise RuntimeError(err.value.decode())
+        self._lib = lib
+        self._pool = pool()
+        self.object, self._index = None, None
+        self.set_hand(HAND_START, HAND_QUAT, teleport=True)
+        lib.bb_set_hand(self._w, 1, _doubles(FREE_HAND_AWAY), _doubles([1, 0, 0, 0]), 1)
+        self.set_params({})
 
-    def _build(self, obj):
-        self.model = mujoco.MjModel.from_xml_string(model_xml(obj))
-        self.data = mujoco.MjData(self.model)
+    def __del__(self):
+        if getattr(self, "_w", None):
+            self._lib.bb_free(self._w)
+            self._w = None
+
+    def _show(self, obj):
+        """Parks the shown object and puts obj on the desk in its place."""
+        if self._index is not None:
+            self._lib.bb_place_object(self._w, self._index, _doubles(parked(self._index)), _doubles([1, 0, 0, 0]), 1)
+        self.object, self._index = obj, self._pool.index(obj)
+        self.reset_object()
         m = self.model
-        self.object = obj
-        self._qadr = np.array([m.jnt_qposadr[m.actuator_trnid[i, 0]] for i in range(m.nu)])
-        self._vadr = np.array([m.jnt_dofadr[m.actuator_trnid[i, 0]] for i in range(m.nu)])
-        self._finger_of_joint = np.array([FINGERS.index(j.split("_")[0]) for j in JOINTS])
-        # Spreading the fingers stays on the angles, only bending presses
-        self._bends = np.array(["abd" not in j or j == "thumb_cmc_abd" for j in JOINTS])
-        self._arm = _arms()
-        self._object_body = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_BODY, "object")
-        self._object_geom = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_GEOM, "object")
-        self._palm = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_BODY, "palm")
-        self._assist = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_EQUALITY, "assist")
-        # Finger per hand geom, -1 for the palm
-        self._finger_of_geom = {}
+        geom = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_GEOM, f"obj{self._index}")
+        palm = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_BODY, "p_palm")
+        hand = []
         for g in range(m.ngeom):
-            name = mujoco.mj_id2name(m, mujoco.mjtObj.mjOBJ_GEOM, g) or ""
-            if m.geom_bodyid[g] not in (0, self._object_body):
-                part = name.split("_")[0]
-                self._finger_of_geom[g] = FINGERS.index(part) if part in FINGERS else -1
-        self._base_mass = m.body_mass[self._object_body]
-        self._base_inertia = m.body_inertia[self._object_body].copy()
-        self.set_mass(self.params["mass_scale"])
-        self.data.qpos[self._qadr] = 0.0
-        mujoco.mj_forward(m, self.data)
-        self.finger_force = np.zeros(5)
-        self.palm_force = 0.0
-        self.time = 0.0
-        self.blowups = 0
-        self._lock_effort = None
+            b = m.geom_bodyid[g]
+            while b > 0 and b != palm:
+                b = m.body_parentid[b]
+            if b == palm:
+                hand.append(g)
+        self._shown = [mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_GEOM, "desk"), *hand, geom]
 
     def set_params(self, params):
         self.params.update(params)
         if self.params["object"] != self.object:
-            hand = self.hand_pose()
-            self._build(self.params["object"])
-            self.set_hand(*hand)
-            self.data.qpos[self.model.jnt_qposadr[0]:self.model.jnt_qposadr[0] + 7] = [*hand[0], *hand[1]]
-            mujoco.mj_forward(self.model, self.data)
-        self.set_mass(self.params["mass_scale"])
-        if not self.params["assist"]:
-            self.data.eq_active[self._assist] = 0
-
-    def set_mass(self, scale):
-        scale = min(max(float(scale), 0.05), MAX_MASS_SCALE)
-        self.model.body_mass[self._object_body] = self._base_mass * scale
-        self.model.body_inertia[self._object_body] = self._base_inertia * scale
+            self._show(self.params["object"])
+        self._lib.bb_set_params(self._w, self.params["mass_scale"], self.params["max_force"],
+                                int(self.params["assist"]))
 
     def hand_pose(self):
-        return self.data.mocap_pos[0].copy(), self.data.mocap_quat[0].copy()
+        pos, quat = _doubles([0] * 3), _doubles([0] * 4)
+        self._lib.bb_hand_target(self._w, 0, pos, quat)
+        return np.array(pos), np.array(quat)
 
-    def set_hand(self, pos, quat):
-        q = np.asarray(quat, float)
-        self.data.mocap_pos[0] = pos
-        self.data.mocap_quat[0] = q / (np.linalg.norm(q) or 1.0)
+    def set_hand(self, pos, quat, teleport=False):
+        """Moves the hand's target; the palm follows through its weld, or is put there at once with teleport."""
+        self._lib.bb_set_hand(self._w, 0, _doubles(pos), _doubles(quat), int(teleport))
+
+    def joint_angles(self):
+        """The hand's joint angles now (degrees, JOINTS order)."""
+        out = _doubles([0] * len(JOINTS))
+        self._lib.bb_joint_angles(self._w, 0, out)
+        return np.array(out)
 
     def place_object(self, pos):
         """Puts the object at pos (m), upright and still, and lets go of the assist."""
-        adr = self.model.jnt_qposadr[self.model.body_jntadr[self._object_body]]
-        dof = self.model.jnt_dofadr[self.model.body_jntadr[self._object_body]]
-        self.data.eq_active[self._assist] = 0
-        self.data.qpos[adr:adr + 7] = [*pos, 1, 0, 0, 0]
-        self.data.qvel[dof:dof + 6] = 0
-        mujoco.mj_forward(self.model, self.data)
+        self._lib.bb_place_object(self._w, self._index, _doubles(pos), _doubles([1, 0, 0, 0]), 0)
 
     def reset_object(self):
-        half = OBJECTS[self.object][3]
-        self.place_object([0.0, -0.12, half + 0.001])
+        self.place_object([0.0, -0.12, OBJECTS[self.object][3] + 0.001])
 
     def step(self, dt, angles, effort, locked=False):
         """Advances dt seconds towards the control layer's angles (degrees, JOINTS order) at effort 0 to 1."""
-        if locked:
-            if self._lock_effort is None:
-                self._lock_effort = effort
-            effort = self._lock_effort
-        else:
-            self._lock_effort = None
-        target = np.radians(np.asarray(angles, float))
-        cap_full = self.params["max_force"] * self._arm
-        cap_effort = cap_full * float(np.clip(effort, 0.0, 1.0))
-        d = self.data
-        for _ in range(max(1, round(dt / TIMESTEP))):
-            q = d.qpos[self._qadr]
-            touching = self.finger_force[self._finger_of_joint] > 0
-            pressing = touching & self._bends
-            torque = np.where(pressing, np.clip(KP_PRESS * (target - q), -cap_full, cap_effort),
-                              np.clip(KP * (target - q), -cap_full, cap_full))
-            d.ctrl[:] = torque
-            hand, before = self.hand_pose(), d.time
-            mujoco.mj_step(self.model, d)
-            if d.time < before:
-                # MuJoCo resets everything, its clock and warning counts too, when it goes unstable: put the hand
-                # back and the object on the table
-                self.blowups += 1
-                self.set_hand(*hand)
-                self.data.qpos[0:7] = [*hand[0], *hand[1]]
-                self.reset_object()
-            self._read_forces()
-            self._update_assist()
-        self.time += dt
+        self._lib.bb_set_input(self._w, 0, _doubles(angles), float(effort), int(locked), 0)
+        self._lib.bb_step(self._w, float(dt))
 
-    def _read_forces(self):
-        f6 = np.zeros(6)
-        fingers = np.zeros(5)
-        palm = 0.0
-        d = self.data
-        for i in range(d.ncon):
-            c = d.contact[i]
-            if self._object_geom not in (c.geom1, c.geom2):
-                continue
-            other = c.geom2 if c.geom1 == self._object_geom else c.geom1
-            finger = self._finger_of_geom.get(other)
-            if finger is None:
-                continue
-            mujoco.mj_contactForce(self.model, d, i, f6)
-            if finger < 0:
-                palm += f6[0]
-            else:
-                fingers[finger] += f6[0]
-        self.finger_force, self.palm_force = fingers, palm
+    def _readout(self):
+        out = _doubles([0] * 14)
+        self._lib.bb_readout(self._w, out)
+        return np.array(out)
 
-    def _update_assist(self):
-        d = self.data
-        f = self.finger_force
-        if not self.params["assist"]:
-            return
-        holds = (f[0] >= ASSIST_N and f[1:].max() >= ASSIST_N
-                 and self.grip_force() * self.friction() >= self.weight())
-        if holds and not d.eq_active[self._assist]:
-            self._weld_here()
-        elif not holds and d.eq_active[self._assist]:
-            d.eq_active[self._assist] = 0
+    @property
+    def finger_force(self):
+        return self._readout()[1:6]
 
-    def _weld_here(self):
-        """Activates the assist weld at the object's current pose relative to the palm."""
-        d, m = self.data, self.model
-        palm_pos, palm_quat = d.xpos[self._palm], d.xquat[self._palm]
-        obj_pos, obj_quat = d.xpos[self._object_body], d.xquat[self._object_body]
-        inv = np.zeros(4)
-        mujoco.mju_negQuat(inv, palm_quat)
-        rel_pos, rel_quat = np.zeros(3), np.zeros(4)
-        mujoco.mju_rotVecQuat(rel_pos, obj_pos - palm_pos, inv)
-        mujoco.mju_mulQuat(rel_quat, inv, obj_quat)
-        # weld data: anchor, relative position, relative orientation, torque scale
-        m.eq_data[self._assist, 0:3] = 0
-        m.eq_data[self._assist, 3:6] = rel_pos
-        m.eq_data[self._assist, 6:10] = rel_quat
-        m.eq_data[self._assist, 10] = 1
-        d.eq_active[self._assist] = 1
+    @property
+    def palm_force(self):
+        return float(self._readout()[6])
+
+    @property
+    def time(self):
+        return float(self._readout()[12])
+
+    @property
+    def blowups(self):
+        return int(self._readout()[13])
 
     def grip_force(self):
         """Total force the hand presses on the object with (N), what the motors follow."""
-        return float(self.finger_force.sum() + self.palm_force)
+        return float(self._readout()[0])
 
     def weight(self):
-        return float(self.model.body_mass[self._object_body] * GRAVITY)
+        scale = min(max(float(self.params["mass_scale"]), 0.05), MAX_MASS_SCALE)
+        return OBJECTS[self.object][1] * scale * GRAVITY
 
     def friction(self):
-        return float(self.model.geom_friction[self._object_geom, 0])
+        return OBJECTS[self.object][2]
 
     def scene(self):
-        """Every geom once, for the page to build: type, size, body role and, for meshes, vertices and faces."""
+        """The shown geoms, for the page to build: type, size, body role and, for meshes, vertices and faces."""
         m = self.model
         geoms = []
-        for g in range(m.ngeom):
+        for g in self._shown:
             kind = mujoco.mjtGeom(m.geom_type[g]).name.removeprefix("mjGEOM_").lower()
-            body = m.geom_bodyid[g]
-            role = "table" if body == 0 else "object" if body == self._object_body else "hand"
-            entry = {"name": mujoco.mj_id2name(m, mujoco.mjtObj.mjOBJ_GEOM, g), "type": kind, "role": role,
+            name = mujoco.mj_id2name(m, mujoco.mjtObj.mjOBJ_GEOM, g)
+            role = "table" if name == "desk" else "hand" if name.startswith("p_") else "object"
+            entry = {"name": name.removeprefix("p_") if role == "hand" else role, "type": kind, "role": role,
                      "size": m.geom_size[g].round(5).tolist()}
             if kind == "mesh":
                 mesh = m.geom_dataid[g]
@@ -374,12 +447,17 @@ class World:
         return {"object": self.object, "objects": list(OBJECTS), "geoms": geoms}
 
     def poses(self):
-        """Position and orientation (3 x 3, row major) of every geom, in the order of scene()."""
-        d = self.data
-        return {"pos": d.geom_xpos.round(5).tolist(), "mat": d.geom_xmat.round(5).tolist()}
+        """Position and orientation (3 x 3, row major) of every shown geom, in the order of scene()."""
+        n = self.model.ngeom
+        pos, mat = (ctypes.c_float * (3 * n))(), (ctypes.c_float * (9 * n))()
+        self._lib.bb_poses(self._w, pos, mat)
+        pos, mat = np.array(pos).reshape(n, 3)[self._shown], np.array(mat).reshape(n, 9)[self._shown]
+        return {"pos": pos.round(5).tolist(), "mat": mat.round(5).tolist()}
 
     def readout(self):
-        return {"grip_force": round(self.grip_force(), 2), "finger_force": self.finger_force.round(2).tolist(),
-                "palm_force": round(self.palm_force, 2), "weight": round(self.weight(), 3),
-                "friction": self.friction(), "assisted": bool(self.data.eq_active[self._assist]),
-                "object_height": round(float(self.data.xpos[self._object_body][2]), 4), "time": round(self.time, 3)}
+        r = self._readout()
+        pos, quat = _doubles([0] * 3), _doubles([0] * 4)
+        self._lib.bb_object_pose(self._w, self._index, pos, quat)
+        return {"grip_force": round(float(r[0]), 2), "finger_force": r[1:6].round(2).tolist(),
+                "palm_force": round(float(r[6]), 2), "weight": round(self.weight(), 3), "friction": self.friction(),
+                "assisted": bool(r[8] >= 0), "object_height": round(pos[2], 4), "time": round(float(r[12]), 3)}
