@@ -773,7 +773,7 @@ class Control:
         s.update(step=s["step"] + 1, state=out["state"], grip=out["grip"], closure=round(out["closure"], 3),
                  effort=round(e, 3), angles=[round(a, 1) for a in out["angles"]],
                  distance=None if distance is None else round(distance, 2), pulses=out.get("pulses"),
-                 locked=out.get("locked", False), moving=moving)
+                 locked=out.get("locked", False), moving=moving, grip_effort=round(out["grip_effort"], 3))
         if out["event"]:
             s[out["event"] + "s"] += 1
 
@@ -909,10 +909,11 @@ class Contact(Tool):
         return world.touch() if world is not None and self.state["running"] else (0.0, 0.0)
 
     def _inputs(self):
-        """The control layer's angles, effort and lock, or the resting hand while nothing drives it."""
+        """The control layer's angles, effort and lock, or the resting hand while nothing drives it. While a grip is
+        held the effort is its grip effort, so the hand doesn't let the object push it open when the arm relaxes."""
         c = self.control.state
         if self.predictor.state.get("running") and self.predictor.state.get("control") and c.get("angles"):
-            return c["angles"], c["effort"], c.get("locked", False)
+            return c["angles"], max(c["effort"], c.get("grip_effort", 0.0)), c.get("locked", False)
         return POSES["rest"], 0.0, False
 
     def _run(self):

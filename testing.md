@@ -165,6 +165,7 @@ These decide when the recorder marks a cue bad and redoes it.
 | `test_open_class_start_stays_idle` | Picking the open hand keeps the hand idle and open, then blocks until effort drops |
 | `test_lock_ignores_other_classes` | A locked grip doesn't switch when another class wins |
 | `test_position_closure_holds_on_relax` | Position closure follows effort and doesn't go back down while relaxing holds the grip |
+| `test_grip_effort_holds_the_squeeze_until_release` | The grip effort is the highest effort since the grip started: relaxing doesn't lower it, a harder squeeze raises it, release sets it back to 0 |
 | `test_speed_closure` | Speed closure closes above the hold level and holds below it |
 | `test_release_modes` | Release on the open hand, on rest, or on either |
 | `test_angles_follow_closure` | Output angles sit at the right share of the way from relaxed to the grip's pose, and the spring only moves part of the way in one step |

@@ -81,6 +81,19 @@ def test_position_closure_holds_on_relax():
     assert c.step(probs("rest"), 0.2)["closure"] == pytest.approx(0.2)
 
 
+def test_grip_effort_holds_the_squeeze_until_release():
+    """The hand squeezes with the highest effort since the grip started, relaxing the arm doesn't loosen it, a harder
+    squeeze raises it, and it is 0 again once the grip is released."""
+    c = make(vote_n=1, start_level=0.1, gain=2, release_mode="open_class", release_n=1)
+    assert c.step(probs("rest"), 0.0)["grip_effort"] == 0.0
+    assert c.step(probs("fist"), 0.4)["grip_effort"] == pytest.approx(0.4)
+    assert c.step(probs("rest"), 0.05)["grip_effort"] == pytest.approx(0.4)
+    assert c.step(probs("fist"), 0.7)["grip_effort"] == pytest.approx(0.7)
+    assert c.step(probs("rest"), 0.0)["grip_effort"] == pytest.approx(0.7)
+    out = c.step(probs("open"), 0.0)
+    assert out["state"] != "active" and out["grip_effort"] == 0.0
+
+
 def test_speed_closure():
     c = make(vote_n=1, closure_mode="speed", hold_level=0.1, gain=2, release_mode="open_class")
     assert c.step(probs("fist"), 0.5)["closure"] == 0

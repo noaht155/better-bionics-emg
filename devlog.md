@@ -2475,6 +2475,10 @@ levels: r 0.995 to 0.999 per session, mean difference 0.005 to 0.013, a clench l
 - Two finger point did nothing after the app restarted: the server went back to the grip default rules (clench,
   point, open) while the open page still showed the sign mapping, and the sign network has no point class. Start
   and Simulate now send the page's rules and settings first.
+- Grip force let go when the arm relaxed (Noah): the closure held, but the sim's finger force was capped by the live
+  effort, so the object pushed the fingers open unless the clench was held. The control layer now outputs
+  `grip_effort`, the highest effort since the grip started (0 once released), and the sim and the headset squeeze
+  with that while a grip is held. Squeezing harder raises it; only release or open loosens the hand.
 
 ## Open
 

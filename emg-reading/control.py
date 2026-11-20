@@ -180,6 +180,7 @@ class Controller:
 
     def reset(self):
         self.state = "idle"
+        self.grip_effort = 0.0
         self.locked = False
         self.grip = None
         self.closure = 0.0
@@ -199,7 +200,15 @@ class Controller:
         self.v = np.zeros_like(self.x)
 
     def step(self, probs, effort, dt=0.05, distance=None, moving=False):
-        """moving: the arm moves (movement() above still_limit()), only used by trigger mode's still_gate."""
+        """moving: the arm moves (movement() above still_limit()), only used by trigger mode's still_gate. The output's
+        grip_effort is the highest effort since the grip started, 0 without a grip: what the hand squeezes with, so a
+        grasp keeps its force when the arm relaxes, like the closure does (Noah, 2026-11-20)."""
+        out = self._step(probs, effort, dt, distance, moving)
+        self.grip_effort = max(self.grip_effort, effort) if out["state"] == "active" else 0.0
+        out["grip_effort"] = self.grip_effort
+        return out
+
+    def _step(self, probs, effort, dt, distance, moving):
         p = self.params
         if not isinstance(probs, dict):
             probs = dict(zip(self.grips, np.asarray(probs, float)))
