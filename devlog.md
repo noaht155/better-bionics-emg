@@ -2440,8 +2440,22 @@ Now: 3D contact
   Quest never joins it, so changing armbands touches nothing on the Quest, and the cable charges it. Same model XML from
   `sim.py`, the per-finger force rule ported to C# and checked against the Python one on scripted grasps; the
   desktop page keeps the Python sim. MuJoCo runs on the headset at 6.8 to 7.9x real time (2026-11-20). Not CPU:
-  the MacBook runs the sim at 11.6x real time (3 runs, app not running; desktop 17.4x). Next: the Unity project
-  with MuJoCo inside, a hand following the laptop's control output over USB.
+  the MacBook runs the sim at 11.6x real time (3 runs, app not running; desktop 17.4x). Build order, each step
+  tried in the headset by Noah before the next:
+  1. Unity 6.3 project in `quest-app/` (Meta XR SDK, OpenXR, arm64, `Library/` etc. ignored), built headless with
+     the Unity CLI and installed with Unity's `adb`. Shows a 3D hand (hand.js geometry) at a fixed spot. Test: it
+     opens, the hand is the right size, recentre works.
+  2. Link: the app connects to `localhost:8000` through `adb reverse`; a new app.py websocket sends the control
+     layer's angles, effort and lock at 60 Hz. Test: the hand follows the live control output (or `--replay`).
+     The laptop runs `adb reverse` itself when the Quest is plugged in; Mac needs Android platform-tools.
+  3. MuJoCo in the app: `libmujoco.so` from `build-mujoco.sh` as a plugin, the model XML from `sim.py` sent by the
+     laptop, the force rule in C# checked against `sim.py` with `bench/record.py`'s grasp. Sim on its own thread.
+     Test: the can grasp in the headset, the sim rate with rendering on, grip force back to the laptop for the motors.
+  4. Hand placed by a Touch controller strapped to the forearm (offset measured once), the other controller moves
+     and resets objects. Ghost hand when the hand is held back by the table, a cap on the weld pull, a speed limit
+     on the hand target. Sim table matched to the real one from room setup. VR default, passthrough option.
+  5. Training cues in first person during a recording started on the laptop, then the live predicted hand as a
+     new protocol beside F. Laptop view by casting, its own spectator view later.
   Uses: training cues as a 3D hand in first person, later the live predicted hand (a new protocol beside F, never a
   change to F), and the contact sim with a Touch controller strapped to the socket placing the hand, the other
   controller for everything else. The laptop sees the view by casting first, its own spectator view later.
