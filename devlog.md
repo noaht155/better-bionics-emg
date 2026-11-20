@@ -2472,6 +2472,9 @@ levels: r 0.995 to 0.999 per session, mean difference 0.005 to 0.013, a clench l
   ball rested on the desk: 1.3 N at 3 cm); "Reset hand" puts it back at its start. Left drag on empty space turns
   the view now and right drag turns the hand (it was the other way round). Touch under 0.2 N plays nothing: the
   resting thumb grazing the can (0.06 to 0.08 N) started the motors at the lowest duty.
+- Two finger point did nothing after the app restarted: the server went back to the grip default rules (clench,
+  point, open) while the open page still showed the sign mapping, and the sign network has no point class. Start
+  and Simulate now send the page's rules and settings first.
 
 ## Open
 

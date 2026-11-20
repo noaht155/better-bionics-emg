@@ -244,8 +244,16 @@ async function followModelDefault() {
 $("ctl-model").addEventListener("change", loadControlLists);
 document.querySelectorAll("input[name=ctl-profile-filter]").forEach((r) => r.addEventListener("change", fillProfiles));
 
+// The server forgets the rules and settings when the app restarts while this page stays open, so starting sends
+// what the page shows
+async function sendControlSetup() {
+  if (!ctl.rules || !ctl.params) return true;
+  return (await sendRules()) && !!(await postShowing("/api/control/params", ctl.params, "ctl-error"));
+}
+
 $("ctl-start").addEventListener("click", async () => {
   $("ctl-haptics").textContent = "";
+  if (!(await sendControlSetup())) return;
   const r = await postShowing("/api/control/start", { name: $("ctl-model").value, ...linkBody() }, "ctl-error");
   if (r) $("ctl-haptics").textContent = r.haptics || "";
 });
@@ -278,6 +286,7 @@ function pickSim(label) {
 
 $("ctl-simulate").addEventListener("click", async () => {
   $("ctl-haptics").textContent = "";
+  if (!(await sendControlSetup())) return;
   const classes = selectedModel()?.classes || config.gesture_set;
   const r = await postShowing("/api/control/simulate", { classes, ...linkBody() }, "ctl-error");
   if (r) {
