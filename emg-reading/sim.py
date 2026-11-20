@@ -294,6 +294,8 @@ _lib = None
 def _load():
     global _lib
     if _lib is None:
+        # On the Mac bbsim only finds libmujoco because importing mujoco already loaded it: the wheel's library names
+        # itself inside a mujoco.framework folder the wheel doesn't have
         if sys.platform == "win32":
             os.add_dll_directory(str(Path(mujoco.__file__).parent))
         lib = ctypes.CDLL(str(_library()))
