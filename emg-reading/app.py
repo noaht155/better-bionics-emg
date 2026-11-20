@@ -12,6 +12,7 @@ camera and without connecting the armband (the Connection tab can still connect 
 import argparse
 import asyncio
 import contextlib
+import copy
 import importlib.util
 import json
 import socket
@@ -234,7 +235,15 @@ class ControlParams(BaseModel):
     haptic_floor: int = Field(HAPTIC_DEFAULTS["haptic_floor"], ge=0, le=90)
     haptic_strength: int = Field(HAPTIC_DEFAULTS["haptic_strength"], ge=10, le=100)
     haptic_full_force: float = Field(HAPTIC_DEFAULTS["haptic_full_force"], ge=1, le=200)
-    haptic_pulse_off: int = Field(HAPTIC_DEFAULTS["haptic_pulse_off"], ge=0, le=100)
+    surfaces: dict[Literal["slippery", "smooth", "normal", "rough"], SurfaceProfile] = Field(
+        default_factory=lambda: copy.deepcopy(HAPTIC_DEFAULTS["surfaces"]))
+
+
+class SurfaceProfile(BaseModel):
+    """One surface's pulses, see haptics.SURFACE_DEFAULTS."""
+    hz: float = Field(ge=0.5, le=10)
+    off: int = Field(ge=0, le=100)
+    strength: int = Field(ge=10, le=100)
 
 
 class HandPlace(BaseModel):
@@ -601,6 +610,14 @@ def make_app(recorder, band, camera, tools, lan=True, serving=False):
     def index():
         return FileResponse(WEB_DIR / "index.html")
 
+    def surfaces():
+        """What each object, the desk and the floor are made of, for the haptics settings; None without mujoco."""
+        try:
+            import sim
+        except ImportError:
+            return None
+        return {"names": list(sim.SURFACES), "of": sim.SURFACE_OF}
+
     @app.get("/api/config")
     def config():
         try:
@@ -617,7 +634,7 @@ def make_app(recorder, band, camera, tools, lan=True, serving=False):
                 "cue_timing": {"grip_close_s": GRIP_CLOSE_S, "c_close_s": C_CLOSE_S},
                 "postures": POSTURES, "camera": camera is not None, "hum_blocks": hum_test.BLOCKS,
                 "tracked_hand": camera.hand if camera else None, "esp32_wifi_ip": WIFI_IP, "platform": sys.platform,
-                "fixed_delay_s": dataset.CAMERA_DELAY_S}
+                "fixed_delay_s": dataset.CAMERA_DELAY_S, "surfaces": surfaces()}
 
     @app.get("/api/devices")
     def device_list():

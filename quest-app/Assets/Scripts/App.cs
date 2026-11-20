@@ -43,7 +43,7 @@ public class App : MonoBehaviour
     {
         public float grip_force, palm_force, free_grip_force, speed, touch_force, touch_friction;
         public float[] finger_force;
-        public int blowups;
+        public int blowups, touch_surface;
     }
 
     [Serializable] class ReadoutMessage { public Readout readout; }
@@ -780,7 +780,7 @@ public class App : MonoBehaviour
         {
             grip_force = (float)readout[0], finger_force = new float[5], palm_force = (float)readout[6],
             free_grip_force = (float)readout[7], speed = (float)sim.Speed, blowups = (int)readout[13],
-            touch_force = (float)readout[14], touch_friction = (float)readout[15]
+            touch_force = (float)readout[14], touch_friction = (float)readout[15], touch_surface = (int)readout[16]
         };
         for (int i = 0; i < 5; i++) r.finger_force[i] = (float)readout[1 + i];
         link.Readout = JsonUtility.ToJson(new ReadoutMessage { readout = r });

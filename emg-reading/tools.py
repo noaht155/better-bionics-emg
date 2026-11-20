@@ -6,6 +6,7 @@ ml.gesture_model's train and LivePredictor, ml.ringnet's NetPredictor, control.C
 shared stream instead of opening the armband again. Network training and evaluation run as their own process
 (NetworkJob).
 """
+import copy
 import json
 import os
 import re
@@ -32,7 +33,7 @@ from esp32_link import Esp32, Esp32Error, self_test
 from gestures import GESTURE_SET, GESTURES, LIBRARY
 from session import DATA_DIR, load_session, segments
 from haptics import (HAPTIC_DEFAULTS, OUTPUTS, TOUCH_MIN_N, UPDATE_HZ, channel_levels, effort, output_duties, pattern,
-                     scaled_duty, surface_hz)
+                     scaled_duty, surface_profile)
 
 # The ml package sits next to emg-reading/ in the repo
 REPO = Path(__file__).resolve().parent.parent
@@ -431,9 +432,9 @@ class Haptics(Tool):
     """haptics.py's loop. It shares the ESP32 with the output test, only one of them can hold the port. Two modes:
     effort (System > Haptics: each output follows its channels' effort) and, started from the Control tab, combined
     (Noah, 2026-11-20): the selection patterns of the control layer's events (cue()) play over everything while they
-    run; otherwise, while the simulated hand touches something, every output vibrates at a base duty that follows
-    the force on it, with pulses on top at the surface's rate (haptics.surface_hz) that go up to the full force duty
-    and back to haptic_pulse_off % of it. A lost ESP32 is reconnected every second until stopped."""
+    run; otherwise, while the simulated hand touches something, every output vibrates at a duty that follows the
+    force on it, pulsing as the profile of the surface it presses on most says (haptics.surface_profile): rate,
+    strength, and how far the duty drops between pulses. A lost ESP32 is reconnected every second until stopped."""
 
     def __init__(self, recorder, esp_lock):
         super().__init__()
@@ -442,8 +443,8 @@ class Haptics(Tool):
         self._stop = threading.Event()
         self._cue = None
         self._settings = HAPTIC_DEFAULTS
-        # Force on everything the simulated hand touches (N) and those surfaces' friction (Contact.touch)
-        self.touch = lambda: (0.0, 0.0)
+        # Force on everything the simulated hand touches (N) and the surface it presses on most (Contact.touch)
+        self.touch = lambda: (0.0, None)
 
     def start(self, port, wifi, session=None, settings=None):
         """settings: the Control tab's parameters, combined mode, read on every update so a change applies straight
@@ -527,13 +528,14 @@ class Haptics(Tool):
                     floor = settings["haptic_floor"]
                     self.state.update(floor=floor, strength=settings["haptic_strength"])
                     step = self._pattern_step(self._cue) if self._cue else None
-                    force, friction = self.touch()
+                    force, surface = self.touch()
                     force = force if force >= TOUCH_MIN_N else 0.0
+                    profile = surface_profile(settings, surface)
                     # A new touch starts on a pulse, so the contact is felt at once
-                    phase = (phase + surface_hz(friction) * dt) % 1.0 if force > 0 else 0.0
-                    level_ = min(force / settings["haptic_full_force"], 1.0)
+                    phase = (phase + profile["hz"] * dt) % 1.0 if force > 0 else 0.0
+                    level_ = min(force / settings["haptic_full_force"], 1.0) * profile["strength"] / 100
                     if phase >= 0.5:
-                        level_ *= settings["haptic_pulse_off"] / 100
+                        level_ *= profile["off"] / 100
                     duties, lost = step or [scaled_duty(level_, floor)] * len(OUTPUTS), no_loss
                 else:
                     raw, filtered = self.recorder.window(self.recorder.env_len)
@@ -698,7 +700,7 @@ class Control:
     def __init__(self, recorder, haptics=None):
         self.recorder = recorder
         self.haptics = haptics
-        self.params = dict(DEFAULTS, mode="rules", **HAPTIC_DEFAULTS)
+        self.params = dict(DEFAULTS, mode="rules", **copy.deepcopy(HAPTIC_DEFAULTS))
         self.rules = split_rules(DEFAULT_RULES)
         self.state = {"params": self.params, "rules": self.rules}
         self._controller = None
@@ -901,12 +903,16 @@ class Contact(Tool):
         return quest[1] if quest is not None and time.monotonic() - quest[0] < QUEST_FRESH_S else None
 
     def touch(self):
-        """Force on everything the hand touches (N) and those surfaces' friction, from the Quest app while it sends."""
+        """Force on everything the hand touches (N) and the surface it presses on most (sim.SURFACES, None for none),
+        from the Quest app while it sends."""
         quest = self.quest_readout()
         if quest is not None:
-            return float(quest.get("touch_force", 0.0)), float(quest.get("touch_friction", 0.0))
+            import sim
+            kind = quest.get("touch_surface", -1)
+            surface = sim.SURFACES[kind] if isinstance(kind, int) and 0 <= kind < len(sim.SURFACES) else None
+            return float(quest.get("touch_force", 0.0)), surface
         world = self.world
-        return world.touch() if world is not None and self.state["running"] else (0.0, 0.0)
+        return world.touch() if world is not None and self.state["running"] else (0.0, None)
 
     def _inputs(self):
         """The control layer's angles, effort and lock, or the resting hand while nothing drives it. While a grip is

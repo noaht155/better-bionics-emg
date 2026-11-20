@@ -43,8 +43,32 @@ const HAPTIC_PARAMS = [
   { key: "haptic_floor", label: "Lowest duty", min: 0, max: 90, step: 1, help: "duty the outputs start at above 0, so a light touch is felt. Coin motors don't turn under about 30 to 40 %, set it to the lowest duty you feel" },
   { key: "haptic_strength", label: "Pattern strength", min: 10, max: 100, step: 5, help: "duty of the selection patterns" },
   { key: "haptic_full_force", label: "Full force N", min: 2, max: 100, step: 1, help: "force of the hand in 3D contact on what it touches that runs the motors at full duty" },
-  { key: "haptic_pulse_off", label: "Between pulses %", min: 0, max: 100, step: 5, help: "duty between the surface's pulses as % of the force's: 0 is on and off pulses, 100 no pulses, only the force" },
 ];
+// Each surface's pulses (haptics.SURFACE_DEFAULTS), the help only under the first
+const SURFACE_PARAMS = [
+  { key: "hz", label: "Pulses Hz", min: 0.5, max: 8, step: 0.5, help: "pulses per second: fast for slippery, slow for rough" },
+  { key: "off", label: "Between pulses %", min: 0, max: 100, step: 5, help: "duty between pulses as % of the force's: 0 is on and off, 100 no pulses" },
+  { key: "strength", label: "Strength %", min: 10, max: 100, step: 5, help: "the force's duty is scaled by this" },
+];
+
+function buildSurfaces() {
+  const of = config.surfaces?.of || {};
+  const names = Object.keys(ctl.params.surfaces || {});
+  $("ctl-surface-params").innerHTML = names.map((s) => {
+    const things = Object.keys(of).filter((k) => of[k] === s).join(", ");
+    return `<p class="ctl-surface"><b>${s}</b>${things ? ` <span class="muted">${things}</span>` : ""}</p><div id="ctl-surface-${s}"></div>`;
+  }).join("");
+  names.forEach((s, i) => {
+    const defs = i === 0 ? SURFACE_PARAMS : SURFACE_PARAMS.map((d) => ({ ...d, help: "" }));
+    buildParams($(`ctl-surface-${s}`), defs, `ctl-surface-${s}-`, () => ctl.params.surfaces[s], editedParams);
+  });
+}
+
+function showSurfaces() {
+  for (const s of Object.keys(ctl.params.surfaces || {})) {
+    if ($(`ctl-surface-${s}`)) showParams(SURFACE_PARAMS, `ctl-surface-${s}-`, ctl.params.surfaces[s]);
+  }
+}
 // A rule's haptic as settings (haptics.haptic_settings). The smart settings (times, length, speed) set the ms, the
 // advanced ones show them; times play in steps of config.haptic_codes.step_ms
 const HAPTIC_NAMES = { buzz: "buzz", fade: "fading buzz", sweep: "sweep", none: "none", default: "default" };
@@ -152,6 +176,7 @@ function showControlParams() {
   showParams(BASIC_PARAMS, "ctl-", ctl.params);
   showParams(ADVANCED_PARAMS, "ctl-", ctl.params);
   showParams(HAPTIC_PARAMS, "ctl-", ctl.params);
+  showSurfaces();
   showParamsForMode();
 }
 
@@ -856,6 +881,7 @@ function drawControl(c, p) {
     buildParams($("ctl-basic"), BASIC_PARAMS, "ctl-", () => ctl.params, editedParams);
     buildParams($("ctl-params"), ADVANCED_PARAMS, "ctl-", () => ctl.params, editedParams);
     buildParams($("ctl-haptic-params"), HAPTIC_PARAMS, "ctl-", () => ctl.params, editedParams);
+    buildSurfaces();
     showControlParams();
   }
   if (!ctl.rules && c.rules) {

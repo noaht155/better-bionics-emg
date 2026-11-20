@@ -118,17 +118,20 @@ def test_haptic_settings_play_as_set():
 
 def test_control_haptics_layer_patterns_over_the_contact(monkeypatch):
     """The Control tab's combined mode with a fake ESP32: off while the hand touches nothing; touching, every output
-    vibrates at the force's duty (half of full force: 50 %) and drops to pulse_off % of it between pulses, starting on
-    a pulse; a slippery surface pulses faster than a rough one; a selection pattern plays over it; a lost link is
+    vibrates at the force's duty (half of full force: 50 % on a normal surface) and drops to the surface's off % of it
+    between pulses, starting on a pulse; a slippery surface pulses faster than a rough one; a selection pattern plays over it; a lost link is
     connected again."""
     import threading
     import time
     from types import SimpleNamespace
     import tools
     from esp32_link import Esp32Error
-    from haptics import HAPTIC_DEFAULTS, SURFACE_FRICTION, surface_hz
+    from haptics import HAPTIC_DEFAULTS, SURFACE_DEFAULTS, surface_profile
 
-    assert surface_hz(SURFACE_FRICTION[0]) > surface_hz(0.6) > surface_hz(SURFACE_FRICTION[1])
+    rates = [SURFACE_DEFAULTS[s]["hz"] for s in ("slippery", "smooth", "normal", "rough")]
+    assert rates == sorted(rates, reverse=True)
+    assert surface_profile({}, None) == SURFACE_DEFAULTS["normal"]
+    assert surface_profile({"surfaces": {"rough": {"hz": 1, "off": 0, "strength": 50}}}, "rough")["strength"] == 50
     sent, fail = [], []
 
     class FakeEsp:
@@ -167,15 +170,16 @@ def test_control_haptics_layer_patterns_over_the_contact(monkeypatch):
         assert all(len(set(d)) == 1 for d in sent)
         return firsts, sum(a < b for a, b in zip(firsts, firsts[1:]))
 
-    firsts, _ = run((0.0, 0.0))
+    firsts, _ = run((0.0, None))
     assert set(firsts) == {0}
     full = HAPTIC_DEFAULTS["haptic_full_force"]
-    firsts, fast = run((full / 2, SURFACE_FRICTION[0]))
+    firsts, _ = run((full / 2, "normal"))
     assert firsts[0] == 50 and set(firsts) == {25, 50}
-    _, slow = run((full / 2, SURFACE_FRICTION[1]))
+    _, fast = run((full / 2, "slippery"))
+    _, slow = run((full / 2, "rough"))
     assert fast > slow
-    firsts, _ = run((full / 2, SURFACE_FRICTION[0]), cue=True)
+    firsts, _ = run((full / 2, "normal"), cue=True)
     assert 100 in firsts
     fail.append(True)
-    firsts, _ = run((0.0, 0.0), seconds=1.6)
+    firsts, _ = run((0.0, None), seconds=1.6)
     assert firsts and set(firsts) == {0}

@@ -77,6 +77,11 @@ OBJECTS = {
     "small cube": ('type="box" size="0.01 0.01 0.01"', 0.01, 0.7, 0.01),
     "pen": ('type="capsule" size="0.0045 0.065" euler="0 90 0"', 0.012, 0.5, 0.0045),
 }
+# Surfaces the haptics tell apart (each has its pulses in haptics.SURFACE_DEFAULTS) and what each object, the desk
+# and the floor are, carried in the scene as each geom's user value (its index in SURFACES)
+SURFACES = ("slippery", "smooth", "normal", "rough")
+SURFACE_OF = {"can": "smooth", "ball": "rough", "block": "normal", "small cube": "normal", "pen": "slippery",
+              "desk": "normal", "floor": "rough"}
 SIM_DEFAULTS = {"object": "can", "mass_scale": 1.0, "max_force": 15.0, "assist": False}
 # Assist: thumb and another finger each press at least this hard
 ASSIST_N = 1.0
@@ -245,6 +250,10 @@ def constants():
     return custom + f'<numeric name="arm" data="{" ".join(repr(float(a)) for a in _arms())}"/>'
 
 
+def _surface(thing):
+    return SURFACES.index(SURFACE_OF[thing])
+
+
 def scene_xml(prosthetic_left=True):
     """Both hands, the desk over the floor and the object pool parked on the floor away from the desk, so showing an
     object only moves it. Names: the prosthetic hand's start with "p_", the free hand's with "f_", objects are obj0,
@@ -261,7 +270,8 @@ def scene_xml(prosthetic_left=True):
         shape, mass, friction, _ = OBJECTS[kind]
         pos = " ".join(f"{v:.4f}" for v in parked(i))
         bodies += (f'<body name="obj{i}" pos="{pos}"><freejoint/><geom name="obj{i}" {shape} mass="{mass}" '
-                   f'friction="{friction} 0.01 0.001" condim="4" contype="2" conaffinity="3"/></body>\n')
+                   f'friction="{friction} 0.01 0.001" condim="4" contype="2" conaffinity="3" '
+                   f'user="{_surface(kind)}"/></body>\n')
         welds += "".join(f'<weld name="{p}hold{i}" body1="{p}palm" body2="obj{i}" active="false"/>' for p in HANDS)
     motors = "".join(f'<motor name="{p}{j}" joint="{p}{j}"/>' for p in HANDS for j in JOINTS)
     meshes = "".join(palm_mesh_xml(p, mirror[p]) for p in HANDS)
@@ -269,14 +279,15 @@ def scene_xml(prosthetic_left=True):
     return f"""<mujoco model="contact">
 <option timestep="{TIMESTEP}" integrator="implicitfast" gravity="0 0 -{GRAVITY}" cone="elliptic"
 noslip_iterations="{NOSLIP_ITERATIONS}"><flag nativeccd="disable"/></option>
+<size nuser_geom="1"/>
 <asset>{meshes}</asset>
 <default><joint damping="0.02" armature="0.0002"/><default class="hand">
 <geom friction="{HAND_FRICTION} 0.01 0.001" condim="4" density="1100" contype="1" conaffinity="2"/></default></default>
 <worldbody>
 <geom name="desk" type="box" size="{hx} {hy} {hz}" pos="0 {DESK_CENTRE_Y} {-hz}" friction="0.6 0.01 0.001"
-contype="2" conaffinity="3" priority="1"/>
+contype="2" conaffinity="3" priority="1" user="{_surface("desk")}"/>
 <geom name="floor" type="plane" size="0 0 1" pos="0 0 {-DESK_HEIGHT}" friction="0.8 0.01 0.001" contype="2"
-conaffinity="3" priority="1"/>
+conaffinity="3" priority="1" user="{_surface("floor")}"/>
 {bodies}</worldbody>
 <equality>{welds}</equality>
 <actuator>{motors}</actuator>
@@ -461,7 +472,7 @@ class World:
         self._lib.bb_step(self._w, float(dt))
 
     def _readout(self):
-        out = _doubles([0] * 16)
+        out = _doubles([0] * 17)
         self._lib.bb_readout(self._w, out)
         return np.array(out)
 
@@ -486,10 +497,10 @@ class World:
         return float(self._readout()[0])
 
     def touch(self):
-        """Force the hand presses on everything it touches (N: object, desk) and those surfaces' own friction, weighted
-        by force, 0 while it touches nothing. What the haptics' surface mode plays."""
+        """Force the hand presses on everything it touches (N: object, desk) and the surface it presses on most
+        (SURFACES), None while it touches nothing. What the haptics play."""
         r = self._readout()
-        return float(r[14]), float(r[15])
+        return float(r[14]), SURFACES[int(r[16])] if r[16] >= 0 else None
 
     def weight(self):
         scale = min(max(float(self.params["mass_scale"]), 0.05), MAX_MASS_SCALE)
@@ -532,4 +543,4 @@ class World:
         return {"grip_force": round(float(r[0]), 2), "finger_force": r[1:6].round(2).tolist(),
                 "palm_force": round(float(r[6]), 2), "weight": round(self.weight(), 3), "friction": self.friction(),
                 "assisted": bool(r[8] >= 0), "object_height": round(pos[2], 4), "time": round(float(r[12]), 3),
-                "touch_force": round(float(r[14]), 2), "touch_friction": round(float(r[15]), 3)}
+                "touch_force": round(float(r[14]), 2), "touch_surface": SURFACES[int(r[16])] if r[16] >= 0 else None}

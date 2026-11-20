@@ -6,8 +6,8 @@ A channel whose pad loses contact is set to 0% until it recovers. Ctrl+C to stop
 
 The Control tab runs its own mode (tools.Haptics, combined): the control layer's discrete events play a short
 pattern (pattern()), so the user feels which grip was picked, a release or a lock without looking at the hand, and
-in between the outputs follow the 3D contact: the force the simulated hand presses with, pulsing at the surface's
-rate (surface_hz).
+in between the outputs follow the 3D contact: the force the simulated hand presses with, pulsing as the surface's
+profile says (SURFACE_DEFAULTS, surface_profile).
 
     python haptics.py [--synthetic] [--port COM3] [--wifi [IP]] [--rest 8 --max 80 [--no-car]]
 """
@@ -26,19 +26,21 @@ OUTPUTS = [(0,), (1,), (2,), (3,), (4,), (5,), (6, 7)]
 
 UPDATE_HZ = 20
 PRINT_EVERY_S = 0.5
+# Each surface's pulses (sim.SURFACES, Noah, 2026-11-20): rate (Hz, fast for slippery, slow for rough), the duty
+# between pulses as % of the force's (0 on and off, 100 no pulses) and strength as % of the force's duty. At UPDATE_HZ
+# a pulse is at least one step up and one down, so 10 Hz is the most
+SURFACE_DEFAULTS = {"slippery": {"hz": 6.0, "off": 60, "strength": 80},
+                    "smooth": {"hz": 4.0, "off": 70, "strength": 90},
+                    "normal": {"hz": 3.0, "off": 50, "strength": 100},
+                    "rough": {"hz": 1.5, "off": 0, "strength": 100}}
 # The Control tab's haptics settings (combined mode, tools.Haptics). floor: lowest duty above 0, 0 until the motors'
 # start duty is measured. strength: duty of the selection patterns. full force: force (N) of the simulated hand on
-# what it touches at full duty. pulse off: duty between the surface's pulses as % of the force's duty
-HAPTIC_DEFAULTS = {"haptic_floor": 0, "haptic_strength": 100, "haptic_full_force": 30.0, "haptic_pulse_off": 50}
+# what it touches at full duty. surfaces: SURFACE_DEFAULTS
+HAPTIC_DEFAULTS = {"haptic_floor": 0, "haptic_strength": 100, "haptic_full_force": 30.0, "surfaces": SURFACE_DEFAULTS}
 
-# Surface pulses (Noah, 2026-11-20): while the simulated hand touches something every motor pulses, fast on a
-# slippery surface and slow on a rough one. Rate from the surface's friction, linear between these ends; at UPDATE_HZ
-# the fastest is 2 steps up, 2 down
-SURFACE_FRICTION = (0.4, 0.9)
 # Lighter touch is contact noise (a resting thumb grazing the can: 0.06 to 0.08 N) and plays nothing, since any force
 # above 0 starts at the lowest duty
 TOUCH_MIN_N = 0.2
-SURFACE_HZ = (5.0, 1.5)
 
 # Selection patterns, built from steps of 1 / UPDATE_HZ. Contact and release bursts are what DESC feedback uses
 # (Cipriani group); coin motors take about 40 ms to spin up, so a short pulse is two steps and a long one six. The
@@ -73,11 +75,10 @@ def scaled_duty(level_, floor):
     return int(round(floor + (100 - floor) * level_)) if level_ > 0 else 0
 
 
-def surface_hz(friction):
-    """Pulse rate (Hz) for a surface of this friction."""
-    lo, hi = SURFACE_FRICTION
-    t = min(max((friction - lo) / (hi - lo), 0.0), 1.0)
-    return SURFACE_HZ[0] + t * (SURFACE_HZ[1] - SURFACE_HZ[0])
+def surface_profile(settings, surface):
+    """The pulses of this surface from the settings, the defaults for one they don't have, normal for an unknown."""
+    profiles = {**SURFACE_DEFAULTS, **settings.get("surfaces", {})}
+    return profiles.get(surface) or profiles["normal"]
 
 
 def buzz(code):

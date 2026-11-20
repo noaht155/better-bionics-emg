@@ -89,19 +89,20 @@ def test_assist_lifts_and_grip_force_follows_effort():
 
 
 def test_touch_reads_the_surface_pressed_on():
-    """Pressing the open hand down on the desk gives force on the desk's friction; the lifted can, held clear of the
-    desk, gives the can's."""
+    """Pressing the open hand down on the desk reads force on the desk's surface; the lifted can, held clear of the
+    desk, reads the can's."""
     w = sim.World()
     w.set_hand([0.2, -0.3, 0.05], sim.HAND_QUAT, teleport=True)
-    assert w.touch() == (0.0, 0.0)
+    assert w.touch() == (0.0, None)
     for _ in range(25):
         w.set_hand([0.2, -0.3, -0.02], sim.HAND_QUAT)
         w.step(0.02, GESTURES["open"][1], 0.5)
-    force, friction = w.touch()
-    assert force > 1 and friction == pytest.approx(0.6)
+    force, surface = w.touch()
+    assert force > 1 and surface == sim.SURFACE_OF["desk"]
     w = lift_world(1.0, False)
-    force, friction = w.touch()
-    assert force > 1 and friction == pytest.approx(sim.OBJECTS["can"][2])
+    force, surface = w.touch()
+    assert force > 1 and surface == sim.SURFACE_OF["can"]
+    assert set(sim.OBJECTS) <= set(sim.SURFACE_OF) and set(sim.SURFACE_OF.values()) <= set(sim.SURFACES)
 
 
 def test_grip_too_light_for_the_weight_drops_it():
@@ -134,7 +135,7 @@ def grasp(obj, effort):
     w = sim.World({"object": obj})
     half = sim.OBJECTS[obj][3]
     w.place_hand("object")
-    assert w.touch() == (0.0, 0.0)
+    assert w.touch() == (0.0, None)
     for _ in range(30):
         w.step(0.02, GESTURES["open"][1], 0.0)
     assert w.touch()[0] < 0.2
@@ -176,7 +177,7 @@ def test_contact_runs_on_the_control_layer_and_gives_the_touch_to_the_haptics():
     predictor = SimpleNamespace(state={"running": True, "control": True})
     control = SimpleNamespace(state={"angles": GESTURES["fist"][1], "effort": 0.5, "locked": False, "grip": "fist"})
     contact = tools.Contact(predictor, control)
-    assert contact.touch() == (0.0, 0.0)
+    assert contact.touch() == (0.0, None)
     contact.start()
     try:
         time.sleep(0.5)
@@ -191,4 +192,4 @@ def test_contact_runs_on_the_control_layer_and_gives_the_touch_to_the_haptics():
     finally:
         contact.stop()
         contact.join(2)
-    assert contact.touch() == (0.0, 0.0)
+    assert contact.touch() == (0.0, None)

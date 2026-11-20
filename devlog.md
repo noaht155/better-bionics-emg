@@ -2485,6 +2485,12 @@ levels: r 0.995 to 0.999 per session, mean difference 0.005 to 0.013, a clench l
   (normal 5 to 6); move_thumb_abd is close to little_out on ch 0 to 5 and differs mainly on ch 6 and 7 (38 vs 58,
   24 vs 37 uV), so it is the first sign the extra noise blurs. 60 Hz share of raw power highest on ch 3 (16 %) and
   ch 5 (19 %), the two old weak joints. Left for another day.
+- Surface profiles (Noah): slippery, smooth, normal and rough, each with pulse rate, duty between pulses and
+  strength, tuned on the Control tab's Surfaces section and saved with the control profile
+  (`haptics.SURFACE_DEFAULTS`: 6, 4, 3, 1.5 Hz). What each thing is made of is `sim.SURFACE_OF` (pen slippery, can
+  smooth, block, small cube and desk normal, ball and floor rough), carried in the scene as each geom's user value;
+  bbsim reports the surface the hand presses on most (readout 16, `ReadoutSize` 17 in the app) and the headset sends
+  it as `touch_surface`. Replaces the rate from friction.
 
 ## Open
 
@@ -2571,10 +2577,9 @@ Now: haptics
 - Motors: firmware 0.2.1 is flashed and channels 0 and 1 follow the duty. When the ULN2003, MOSFETs or LEDs go
   back on, set `OUTPUTS_INVERTED` to false. Still to measure: lowest duty that starts a motor (the haptics floor),
   how many levels can be told apart (then set effort mode's lowest duty on the Control tab), and EMG spectra with the motors off and on to see if they show up.
-- Control haptics on the motors: check the pulse rates are told apart (can 4.3 Hz vs ball 2.2 Hz) over the force
-  base and set "Between pulses %"; if objects feel alike, spread `SURFACE_FRICTION`/`SURFACE_HZ` or give objects a
-  separate roughness value instead of friction. Then on the headset (rebuild with `build.sh`).
-- Quest: the APK built today has the shared sim and the mass fix but not the palm collision; rebuild and install
+- Control haptics on the motors: tune the four surface profiles until slippery, smooth, normal and rough feel
+  different, then on the headset (rebuild with `build.sh`).
+- Quest: the APK built today has the shared sim and the mass fix but not the palm collision or surfaces; rebuild and install
   with `quest-app/build.sh` and try the touch haptics and the grip squeeze in the headset.
 - Motor pickup: run `diagnostics/motor_pickup.py` with the motor band below the pads, relaxed and with a steady
   clench.
