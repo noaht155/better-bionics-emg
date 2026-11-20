@@ -3,66 +3,131 @@ using System.Collections.Generic;
 using TMPro;
 using UnityEngine;
 
-// The menu: a floating panel with tabs, worked with the free hand's ray and trigger. Colours from the app's theme
-// (visual-style tokens), text in TextMeshPro so it stays sharp in the headset. Sizes in metres.
+// The headset's menu: the web app's look (its colour tokens, Inter and JetBrains Mono, numbered sections with the
+// dashed line and pink dot, gradient highlights) on a glass panel you touch with a fingertip or point at with a
+// controller. Every part is a flat mesh with vertex colours on one transparent material, drawn in layers by
+// sortingOrder. Sizes in metres; the panel's front faces -z.
 public class Ui
 {
-    public const float Width = 0.42f;
-    const float Pad = 0.018f, RowH = 0.042f, TabH = 0.04f, Corner = 0.008f;
+    public const float Width = 0.40f;
+    const float Pad = 0.02f, RowH = 0.04f, Corner = 0.012f;
     public static readonly Color Bg = SimView.Hex(0x0a0a0b), Raised = SimView.Hex(0x151517), Line = SimView.Hex(0x27272a),
         LineStrong = SimView.Hex(0x3f3f46), Text = SimView.Hex(0xf5f5f5), Muted = SimView.Hex(0xa1a1aa),
-        Accent = SimView.Hex(0xff3d8b), Good = SimView.Hex(0x3ddc84);
+        Accent = SimView.Hex(0xff3d8b), Orange = SimView.Hex(0xff7a3d), Magenta = SimView.Hex(0xc93ee6),
+        Good = SimView.Hex(0x3ddc84), Warn = SimView.Hex(0xffc233), Bad = SimView.Hex(0xff3b3b);
+    // Layers, back to front
+    const int LBack = 0, LEdge = 1, LControl = 2, LFill = 3, LKnob = 4, LText = 5;
 
-    class Button
+    public static Font InterFont, InterBoldFont, MonoFont;
+    static TMP_FontAsset inter, interBold, mono;
+
+    enum Kind { Button, Toggle, Slider, Handle }
+
+    class Element
     {
-        public Collider collider;
-        public Material material;
-        public Color color;
+        public Kind kind;
+        public Vector2 centre, size;
+        public Page page;
         public Action click;
         public Func<bool> on;
+        public Func<float> get;
+        public Action<float> set;
+        public float min, max, step;
+        public bool primary;
+        public MeshFilter face, edge, fill, knob;
+        public TextMeshPro label;
+        public float hover, press;
     }
 
     public class Page
     {
         public Transform root;
         public float y;
+        public int sections;
     }
 
     public readonly Transform root;
     readonly Material material;
     readonly Transform body;
-    readonly List<Button> buttons = new List<Button>();
+    readonly List<Element> elements = new List<Element>();
+    readonly List<(Element tab, Page page)> tabs = new List<(Element, Page)>();
     readonly List<Page> pages = new List<Page>();
-    readonly List<(Button b, Page p)> tabs = new List<(Button, Page)>();
-    Button hovered;
     Page shown;
-    Transform back;
+    MeshFilter back, backEdge, topStrip;
+    Element pressed, handle;
     float height;
+    float tabsY;
+    bool wasTouching, behind;
+    float prevZ = -1;
+    Vector3 grabOffset;
+    Quaternion grabTurn;
+    public TextMeshPro chip;
+    MeshFilter chipDot;
 
     public bool Visible => root.gameObject.activeSelf;
+    public bool Grabbed => handle != null && pressed == handle;
 
-    public Ui(Material material)
+    readonly bool header;
+
+    // header: the wordmark, status chip and tabs; without it the panel is only its page (the cue card, the dock)
+    public Ui(Material material, bool header = true)
     {
+        this.header = header;
         this.material = material;
+        if (inter == null)
+        {
+            inter = TMP_FontAsset.CreateFontAsset(InterFont);
+            interBold = TMP_FontAsset.CreateFontAsset(InterBoldFont);
+            mono = TMP_FontAsset.CreateFontAsset(MonoFont);
+        }
         root = new GameObject("menu").transform;
         body = new GameObject("body").transform;
         body.SetParent(root, false);
+        tabsY = -Pad - 0.03f;
+        if (!header) return;
+        var word = Label(body, new Vector3(-Width / 2 + Pad, -Pad - 0.008f, 0), "BETTER BIONICS", 0.012f, Text, mono,
+            TextAlignmentOptions.Left);
+        word.characterSpacing = 18;
+        word.enableVertexGradient = true;
+        word.colorGradient = new VertexGradient(Orange, Magenta, Orange, Magenta);
+        chip = Label(body, new Vector3(Width / 2 - Pad, -Pad - 0.008f, 0), "", 0.011f, Muted, mono, TextAlignmentOptions.Right);
+        chip.characterSpacing = 8;
+        chip.rectTransform.pivot = new Vector2(1, 0.5f);
+        chipDot = Shape(body, LText, Vector3.zero, Vector2.one * 0.008f, 0.004f, Muted);
     }
+
+    public static void SetChip(Ui ui, string text, Color dot)
+    {
+        ui.chip.text = text;
+        float w = ui.chip.preferredWidth;
+        ui.chipDot.transform.localPosition = new Vector3(Width / 2 - Pad - w - 0.01f, -Pad - 0.008f, -0.001f);
+        Recolor(ui.chipDot.sharedMesh, dot);
+    }
+
+    // Pages and tabs
 
     public Page AddPage(string title)
     {
-        var page = new Page { root = new GameObject(title).transform, y = -(Pad + TabH + Pad) };
+        var page = new Page { root = new GameObject(title).transform, y = header ? tabsY - 0.05f : -Pad };
         page.root.SetParent(body, false);
         pages.Add(page);
-        float w = (Width - 2 * Pad - (pages.Count - 1) * 0.006f) / pages.Count;
-        var tab = AddButton(body, Vector3.zero, new Vector2(w, TabH), title, () => Show(page), () => shown == page);
+        if (!header) return page;
+        var tab = new Element { kind = Kind.Button, size = new Vector2(0.06f, 0.03f), click = () => Show(page) };
+        tab.label = Label(body, Vector3.zero, title.ToUpperInvariant(), 0.011f, Muted, mono, TextAlignmentOptions.Center);
+        tab.label.characterSpacing = 10;
+        tab.fill = Shape(body, LFill, Vector3.zero, new Vector2(0.05f, 0.0025f), 0.001f, Accent, true);
+        elements.Add(tab);
         tabs.Add((tab, page));
+        float w = (Width - 2 * Pad) / tabs.Count;
         for (int i = 0; i < tabs.Count; i++)
         {
-            float tw = (Width - 2 * Pad - (tabs.Count - 1) * 0.006f) / tabs.Count;
-            tabs[i].b.collider.transform.parent.localPosition =
-                new Vector3(-Width / 2 + Pad + tw / 2 + i * (tw + 0.006f), -Pad - TabH / 2, 0);
-            Resize(tabs[i].b, new Vector2(tw, TabH));
+            var t = tabs[i].tab;
+            t.centre = new Vector2(-Width / 2 + Pad + w * (i + 0.5f), tabsY - 0.012f);
+            t.size = new Vector2(w, 0.03f);
+            t.label.transform.localPosition = new Vector3(t.centre.x, t.centre.y, -0.002f);
+            t.label.rectTransform.sizeDelta = t.size;
+            t.fill.transform.localPosition = new Vector3(t.centre.x, tabsY - 0.03f, -0.001f);
+            t.fill.sharedMesh = GradientBar(new Vector2(w * 0.7f, 0.0025f));
         }
         return page;
     }
@@ -71,141 +136,379 @@ public class Ui
     {
         foreach (var p in pages) p.root.gameObject.SetActive(p == page);
         shown = page;
-        Layout();
-    }
-
-    public TextMeshPro Heading(Page page, string text)
-    {
-        page.y -= 0.006f;
-        var t = Label(page.root, new Vector3(-Width / 2 + Pad, page.y - RowH * 0.35f, 0), text, 0.013f, Muted,
-            TextAlignmentOptions.Left);
-        page.y -= RowH * 0.7f;
-        return t;
-    }
-
-    // A label on the left and buttons on the right; returns the label to update
-    public TextMeshPro Row(Page page, string label, params (string text, Action click)[] actions) =>
-        Row(page, label, null, actions);
-
-    public TextMeshPro Row(Page page, string label, Func<bool> on, params (string text, Action click)[] actions)
-    {
-        float y = page.y - RowH / 2;
-        var t = Label(page.root, new Vector3(-Width / 2 + Pad, y, 0), label, 0.016f, Text, TextAlignmentOptions.Left);
-        float x = Width / 2 - Pad;
-        for (int i = actions.Length - 1; i >= 0; i--)
+        foreach (var (tab, p) in tabs)
         {
-            float w = Mathf.Max(0.04f, 0.0105f * actions[i].text.Length + 0.024f);
-            x -= w / 2;
-            AddButton(page.root, new Vector3(x, y, 0), new Vector2(w, RowH * 0.8f), actions[i].text, actions[i].click,
-                actions.Length == 1 ? on : null);
-            x -= w / 2 + 0.006f;
+            tab.label.color = p == page ? Text : Muted;
+            tab.fill.gameObject.SetActive(p == page);
         }
-        page.y -= RowH;
-        return t;
-    }
-
-    // A row of equal buttons across the panel
-    public void Buttons(Page page, params (string text, Action click)[] actions)
-    {
-        float y = page.y - RowH / 2;
-        float w = (Width - 2 * Pad - (actions.Length - 1) * 0.006f) / actions.Length;
-        for (int i = 0; i < actions.Length; i++)
-            AddButton(page.root, new Vector3(-Width / 2 + Pad + w / 2 + i * (w + 0.006f), y, 0), new Vector2(w, RowH * 0.8f),
-                actions[i].text, actions[i].click);
-        page.y -= RowH;
-    }
-
-    public TextMeshPro Note(Page page, int lines = 1)
-    {
-        var t = Label(page.root, new Vector3(-Width / 2 + Pad, page.y - 0.008f, 0), "", 0.013f, Muted,
-            TextAlignmentOptions.TopLeft);
-        t.rectTransform.pivot = new Vector2(0, 1);
-        t.rectTransform.sizeDelta = new Vector2(Width - 2 * Pad, lines * 0.02f);
-        t.textWrappingMode = TextWrappingModes.Normal;
-        page.y -= lines * 0.02f + 0.012f;
-        return t;
+        Layout();
     }
 
     void Layout()
     {
         height = -(shown?.y ?? 0) + Pad;
-        if (back != null) UnityEngine.Object.Destroy(back.gameObject);
-        back = Quad(body, new Vector3(0, -height / 2, 0.004f), new Vector2(Width, height), Bg, Corner * 1.5f, LineStrong).transform;
+        if (back == null)
+        {
+            back = Shape(body, LBack, Vector3.zero, Vector2.one, Corner, new Color(Bg.r, Bg.g, Bg.b, 0.9f));
+            backEdge = Shape(body, LBack, Vector3.zero, Vector2.one, Corner, LineStrong);
+            topStrip = Shape(body, LEdge, Vector3.zero, Vector2.one, 0, Accent, true);
+            var grip = new Element { kind = Kind.Handle, size = new Vector2(0.1f, 0.025f) };
+            grip.face = Shape(root, LControl, Vector3.zero, new Vector2(0.08f, 0.008f), 0.004f, LineStrong);
+            elements.Add(grip);
+            handle = grip;
+        }
+        back.sharedMesh = RoundedRect(new Vector2(Width, height), Corner, new Color(Bg.r, Bg.g, Bg.b, 0.92f));
+        back.transform.localPosition = new Vector3(0, -height / 2, 0.003f);
+        backEdge.sharedMesh = RoundedRect(new Vector2(Width + 0.0016f, height + 0.0016f), Corner + 0.0008f, LineStrong);
+        backEdge.transform.localPosition = new Vector3(0, -height / 2, 0.0035f);
+        topStrip.sharedMesh = GradientBar(new Vector2(Width - 2 * Corner, 0.0015f));
+        topStrip.transform.localPosition = new Vector3(0, -0.0008f, 0.002f);
         body.localPosition = new Vector3(0, height / 2, 0);
+        handle.centre = new Vector2(0, -height / 2 - 0.022f);
+        handle.face.transform.localPosition = new Vector3(0, handle.centre.y, 0);
     }
 
-    // Opens in front of the head, a little below the eyes, turned to face it
+    // Content
+
+    public void Section(Page page, string title)
+    {
+        page.sections++;
+        page.y -= 0.012f;
+        float y = page.y - 0.01f;
+        var t = Label(page.root, new Vector3(-Width / 2 + Pad, y, 0), $"<color=#ff3d8b>{page.sections:00}</color>  /  {title.ToUpperInvariant()}",
+            0.0105f, Muted, mono, TextAlignmentOptions.Left);
+        t.characterSpacing = 12;
+        float start = -Width / 2 + Pad + t.preferredWidth + 0.01f, end = Width / 2 - Pad - 0.006f;
+        for (float x = start; x < end - 0.004f; x += 0.006f)
+            Shape(page.root, LEdge, new Vector3(x + 0.0015f, y, 0), new Vector2(0.003f, 0.0007f), 0, LineStrong);
+        Shape(page.root, LEdge, new Vector3(end + 0.002f, y, 0), Vector2.one * 0.004f, 0.002f, Accent);
+        page.y -= 0.03f;
+    }
+
+    public TextMeshPro Paragraph(Page page, string text, float size = 0.014f, bool muted = true, int lines = 1)
+    {
+        var t = Label(page.root, new Vector3(-Width / 2 + Pad, page.y, 0), text, size, muted ? Muted : Ui.Text, inter,
+            TextAlignmentOptions.TopLeft);
+        t.rectTransform.pivot = new Vector2(0, 1);
+        t.rectTransform.sizeDelta = new Vector2(Width - 2 * Pad, lines * size * 1.5f);
+        t.textWrappingMode = TextWrappingModes.Normal;
+        page.y -= lines * size * 1.5f + 0.008f;
+        return t;
+    }
+
+    // A big number with a caption under it, side by side with the others in the same call
+    public TextMeshPro[] Readouts(Page page, params string[] captions)
+    {
+        var values = new TextMeshPro[captions.Length];
+        float w = (Width - 2 * Pad) / captions.Length;
+        for (int i = 0; i < captions.Length; i++)
+        {
+            float x = -Width / 2 + Pad + i * w;
+            values[i] = Label(page.root, new Vector3(x, page.y - 0.016f, 0), "", 0.03f, Ui.Text, interBold, TextAlignmentOptions.Left);
+            var c = Label(page.root, new Vector3(x, page.y - 0.042f, 0), captions[i].ToUpperInvariant(), 0.0095f, Muted, mono,
+                TextAlignmentOptions.Left);
+            c.characterSpacing = 12;
+        }
+        page.y -= 0.058f;
+        return values;
+    }
+
+    public TextMeshPro Slider(Page page, string label, float min, float max, float step, Func<float> get, Action<float> set)
+    {
+        float y = page.y - RowH / 2;
+        Label(page.root, new Vector3(-Width / 2 + Pad, y, 0), label, 0.015f, Ui.Text, inter, TextAlignmentOptions.Left);
+        var value = Label(page.root, new Vector3(Width / 2 - Pad, y, 0), "", 0.013f, Ui.Text, mono, TextAlignmentOptions.Right);
+        value.rectTransform.pivot = new Vector2(1, 0.5f);
+        var e = new Element
+        {
+            kind = Kind.Slider, page = page, centre = new Vector2(0.045f, y), size = new Vector2(0.17f, 0.03f),
+            get = get, set = set, min = min, max = max, step = step
+        };
+        e.face = Shape(page.root, LControl, new Vector3(e.centre.x, y, 0), new Vector2(e.size.x, 0.006f), 0.003f, Raised);
+        e.fill = Shape(page.root, LFill, Vector3.zero, Vector2.one, 0.003f, Accent, true);
+        e.knob = Shape(page.root, LKnob, Vector3.zero, Vector2.one * 0.016f, 0.008f, Ui.Text);
+        e.label = value;
+        elements.Add(e);
+        page.y -= RowH;
+        return value;
+    }
+
+    public void Toggle(Page page, string label, Func<bool> on, Action flip)
+    {
+        float y = page.y - RowH / 2;
+        Label(page.root, new Vector3(-Width / 2 + Pad, y, 0), label, 0.015f, Ui.Text, inter, TextAlignmentOptions.Left);
+        var e = new Element
+        {
+            kind = Kind.Toggle, page = page, centre = new Vector2(Width / 2 - Pad - 0.02f, y), size = new Vector2(0.04f, 0.022f),
+            on = on, click = flip
+        };
+        e.face = Shape(page.root, LControl, new Vector3(e.centre.x, y, 0), e.size, 0.011f, Raised);
+        e.fill = Shape(page.root, LFill, new Vector3(e.centre.x, y, -0.0005f), e.size, 0.011f, Accent, true);
+        e.knob = Shape(page.root, LKnob, Vector3.zero, Vector2.one * 0.016f, 0.008f, Ui.Text);
+        elements.Add(e);
+        page.y -= RowH;
+    }
+
+    // Buttons across the panel; primary ones are white with black text, the rest outlined
+    public void Buttons(Page page, params (string text, Action click)[] actions) => AddButtons(page, false, actions);
+
+    public void Primary(Page page, string text, Action click) => AddButtons(page, true, (text, click));
+
+    void AddButtons(Page page, bool primary, params (string text, Action click)[] actions)
+    {
+        float y = page.y - RowH / 2, gap = 0.008f;
+        float w = (Width - 2 * Pad - (actions.Length - 1) * gap) / actions.Length;
+        for (int i = 0; i < actions.Length; i++)
+        {
+            var e = new Element
+            {
+                kind = Kind.Button, page = page, primary = primary,
+                centre = new Vector2(-Width / 2 + Pad + w / 2 + i * (w + gap), y), size = new Vector2(w, RowH * 0.82f),
+                click = actions[i].click
+            };
+            var pos = new Vector3(e.centre.x, y, 0);
+            e.edge = Shape(page.root, LControl, pos + new Vector3(0, 0, 0.0004f), e.size + Vector2.one * 0.0016f, 0.0038f, LineStrong);
+            e.face = Shape(page.root, LFill, pos, e.size, 0.003f, primary ? Ui.Text : Bg);
+            e.label = Label(page.root, pos, actions[i].text, 0.0135f, primary ? Color.black : Ui.Text, primary ? interBold : inter,
+                TextAlignmentOptions.Center);
+            e.label.rectTransform.sizeDelta = e.size;
+            elements.Add(e);
+        }
+        page.y -= RowH;
+    }
+
+    public void Gap(Page page, float h = 0.008f) => page.y -= h;
+
+    // A progress bar across the panel in the gradient; returns what sets it, 0 to 1
+    public Action<float> Progress(Page page)
+    {
+        float y = page.y - 0.006f, w = Width - 2 * Pad, left = -Width / 2 + Pad;
+        Shape(page.root, LControl, new Vector3(0, y, 0), new Vector2(w, 0.004f), 0.002f, Raised);
+        var fill = Shape(page.root, LFill, Vector3.zero, Vector2.one, 0.002f, Accent, true);
+        page.y -= 0.016f;
+        return t =>
+        {
+            float fw = Mathf.Max(0.004f, w * Mathf.Clamp01(t));
+            fill.sharedMesh = GradientBar(new Vector2(fw, 0.004f), 0.002f);
+            fill.transform.localPosition = new Vector3(left + fw / 2, y, -0.0005f);
+        };
+    }
+
+    // Buttons whose labels change (Pause / Continue); returns their labels
+    public TextMeshPro[] ButtonsWithLabels(Page page, params (string text, Action click)[] actions)
+    {
+        int first = elements.Count;
+        AddButtons(page, false, actions);
+        var labels = new TextMeshPro[actions.Length];
+        for (int i = 0; i < actions.Length; i++) labels[i] = elements[first + i].label;
+        return labels;
+    }
+
+    public void Relayout() => Layout();
+
+    // Placement
+
+    // Opens within reach for a fingertip, a little below the eyes, tilted back towards the face
     public void Open(Transform head)
     {
         var forward = Vector3.ProjectOnPlane(head.forward, Vector3.up).normalized;
         if (forward.sqrMagnitude < 0.5f) forward = Vector3.forward;
-        root.position = head.position + forward * 0.55f + Vector3.down * 0.12f;
-        root.rotation = Quaternion.LookRotation(root.position - head.position, Vector3.up);
+        root.position = head.position + forward * 0.42f + Vector3.down * 0.18f;
+        root.rotation = Quaternion.LookRotation(forward, Vector3.up) * Quaternion.Euler(25, 0, 0);
         root.gameObject.SetActive(true);
     }
 
     public void Close() => root.gameObject.SetActive(false);
 
-    TextMeshPro Label(Transform parent, Vector3 pos, string text, float size, Color color, TextAlignmentOptions align)
+    // Interaction: a fingertip (poke) or a controller ray; down is the trigger for the ray, grab the fist or grip for
+    // the handle. Returns the ray's length to the panel, 0 when it misses
+    public float Interact(Vector3? tip, Ray? ray, bool down, bool grab, Transform grabber, out bool clicked)
+    {
+        clicked = false;
+        if (!Visible) return 0;
+        Vector2 at = default;
+        bool inFront = false, touching = false;
+        float length = 0;
+        if (tip.HasValue)
+        {
+            var local = root.InverseTransformPoint(tip.Value);
+            at = new Vector2(local.x, local.y - body.localPosition.y);
+            inFront = local.z > -0.04f && local.z < 0.015f;
+            touching = local.z > -0.004f && local.z < 0.015f;
+            // A fingertip coming through from behind the panel doesn't press until it has left the surface
+            if (touching && !wasTouching && !behind && prevZ > 0.015f) behind = true;
+            if (!touching) behind = false;
+            if (behind) touching = false;
+            prevZ = local.z;
+        }
+        else if (ray.HasValue)
+        {
+            var plane = new Plane(root.forward, root.position);
+            if (plane.Raycast(ray.Value, out float d) && d < 3)
+            {
+                var local = root.InverseTransformPoint(ray.Value.GetPoint(d));
+                at = new Vector2(local.x, local.y - body.localPosition.y);
+                inFront = true;
+                touching = down;
+                length = d;
+            }
+        }
+        Element hit = null;
+        if (inFront)
+            foreach (var e in elements)
+            {
+                if (e.page != null && e.page != shown) continue;
+                var c = e.kind == Kind.Handle ? new Vector2(e.centre.x, e.centre.y - body.localPosition.y) : e.centre;
+                var half = e.size / 2 + Vector2.one * 0.004f;
+                if (Mathf.Abs(at.x - c.x) <= half.x && Mathf.Abs(at.y - c.y) <= half.y) hit = e;
+            }
+        if (pressed == null && touching && hit != null && (!wasTouching || ray.HasValue) && hit.kind != Kind.Handle)
+        {
+            pressed = hit;
+            if (hit.kind == Kind.Button || hit.kind == Kind.Toggle)
+            {
+                hit.click?.Invoke();
+                clicked = true;
+            }
+        }
+        if (grab && pressed == null && hit == handle && grabber != null)
+        {
+            pressed = handle;
+            grabOffset = Quaternion.Inverse(grabber.rotation) * (root.position - grabber.position);
+            grabTurn = Quaternion.Inverse(grabber.rotation) * root.rotation;
+        }
+        if (pressed == handle)
+        {
+            if (!grab) pressed = null;
+            else
+            {
+                root.position = grabber.position + grabber.rotation * grabOffset;
+                var turned = grabber.rotation * grabTurn;
+                root.rotation = Quaternion.LookRotation(turned * Vector3.forward, Vector3.up);
+            }
+        }
+        else if (pressed != null)
+        {
+            if (pressed.kind == Kind.Slider && touching)
+            {
+                float t = Mathf.InverseLerp(pressed.centre.x - pressed.size.x / 2, pressed.centre.x + pressed.size.x / 2, at.x);
+                float v = Mathf.Lerp(pressed.min, pressed.max, t);
+                pressed.set(Mathf.Round(v / pressed.step) * pressed.step);
+            }
+            if (!touching) pressed = null;
+        }
+        wasTouching = touching;
+        Draw(hit);
+        return hit != null || pressed != null ? Mathf.Max(length, 0.0001f) : 0;
+    }
+
+    void Draw(Element hit)
+    {
+        float dt = Time.deltaTime;
+        foreach (var e in elements)
+        {
+            if (e.page != null && e.page != shown) continue;
+            e.hover = Mathf.MoveTowards(e.hover, e == hit ? 1 : 0, dt / 0.12f);
+            e.press = Mathf.MoveTowards(e.press, e == pressed ? 1 : 0, dt / 0.08f);
+            switch (e.kind)
+            {
+                case Kind.Button:
+                    if (e.edge != null) Recolor(e.edge.sharedMesh, Color.Lerp(LineStrong, Accent, e.hover));
+                    if (e.face != null)
+                    {
+                        var face = e.primary ? Color.Lerp(Ui.Text, Accent, e.press * 0.6f) : Color.Lerp(Bg, Raised, e.hover);
+                        Recolor(e.face.sharedMesh, Color.Lerp(face, Accent, e.primary ? 0 : e.press * 0.35f));
+                        e.face.transform.localPosition = new Vector3(e.centre.x, e.centre.y, 0.002f * e.press);
+                    }
+                    if (e.fill == null && e.label != null && !e.primary) e.label.color = Ui.Text;
+                    else if (e.fill != null) e.label.color = Color.Lerp(e.label.color, e.fill.gameObject.activeSelf ? Ui.Text : Muted, 1);
+                    break;
+                case Kind.Toggle:
+                {
+                    bool on = e.on();
+                    e.fill.gameObject.SetActive(on);
+                    Recolor(e.face.sharedMesh, Color.Lerp(Raised, LineStrong, e.hover));
+                    float x = e.centre.x + (on ? 1 : -1) * (e.size.x / 2 - 0.011f);
+                    e.knob.transform.localPosition = new Vector3(x, e.centre.y, -0.001f);
+                    break;
+                }
+                case Kind.Slider:
+                {
+                    float t = Mathf.InverseLerp(e.min, e.max, e.get());
+                    float left = e.centre.x - e.size.x / 2, w = Mathf.Max(0.006f, e.size.x * t);
+                    e.fill.sharedMesh = GradientBar(new Vector2(w, 0.006f), 0.003f);
+                    e.fill.transform.localPosition = new Vector3(left + w / 2, e.centre.y, -0.0005f);
+                    e.knob.transform.localPosition = new Vector3(left + e.size.x * t, e.centre.y, -0.001f);
+                    e.knob.transform.localScale = Vector3.one * (1 + 0.25f * e.hover);
+                    break;
+                }
+                case Kind.Handle:
+                    Recolor(e.face.sharedMesh, Color.Lerp(LineStrong, Accent, Mathf.Max(e.hover, e.press)));
+                    break;
+            }
+        }
+    }
+
+    // Meshes
+
+    TextMeshPro Label(Transform parent, Vector3 pos, string text, float size, Color color, TMP_FontAsset font,
+        TextAlignmentOptions align)
     {
         var go = new GameObject("text");
         go.transform.SetParent(parent, false);
         var t = go.AddComponent<TextMeshPro>();
+        t.font = font;
         t.text = text;
         // TextMeshPro's world text is about a tenth of a unit tall per point
         t.fontSize = size * 10;
         t.color = color;
         t.alignment = align;
         t.textWrappingMode = TextWrappingModes.NoWrap;
-        t.rectTransform.sizeDelta = new Vector2(Width * 0.6f, RowH);
+        t.rectTransform.sizeDelta = new Vector2(Width * 0.7f, RowH);
         t.rectTransform.pivot = new Vector2(align == TextAlignmentOptions.Center ? 0.5f : 0, 0.5f);
+        t.sortingOrder = LText;
         go.transform.localPosition = pos + new Vector3(0, 0, -0.002f);
         return t;
     }
 
-    Button AddButton(Transform parent, Vector3 pos, Vector2 size, string text, Action click, Func<bool> on = null)
+    MeshFilter Shape(Transform parent, int layer, Vector3 pos, Vector2 size, float corner, Color color, bool gradient = false)
     {
-        var holder = new GameObject("button").transform;
-        holder.SetParent(parent, false);
-        holder.localPosition = pos;
-        var quad = Quad(holder, Vector3.zero, size, Raised, Corner, Line);
-        var collider = quad.AddComponent<BoxCollider>();
-        collider.size = new Vector3(size.x, size.y, 0.01f);
-        var label = Label(holder, Vector3.zero, text, 0.015f, Text, TextAlignmentOptions.Center);
-        label.rectTransform.sizeDelta = size;
-        var b = new Button
-        {
-            collider = collider, material = quad.GetComponent<Renderer>().sharedMaterial, color = Raised, click = click, on = on
-        };
-        buttons.Add(b);
-        return b;
-    }
-
-    void Resize(Button b, Vector2 size)
-    {
-        var quad = b.collider.gameObject;
-        quad.GetComponent<MeshFilter>().sharedMesh = RoundedRect(size, Corner);
-        ((BoxCollider)b.collider).size = new Vector3(size.x, size.y, 0.01f);
-        quad.transform.parent.GetComponentInChildren<TextMeshPro>().rectTransform.sizeDelta = size;
-    }
-
-    GameObject Quad(Transform parent, Vector3 pos, Vector2 size, Color color, float corner, Color border)
-    {
-        var go = new GameObject("quad", typeof(MeshFilter), typeof(MeshRenderer));
+        var go = new GameObject("shape", typeof(MeshFilter), typeof(MeshRenderer));
         go.transform.SetParent(parent, false);
         go.transform.localPosition = pos;
-        go.GetComponent<MeshFilter>().sharedMesh = RoundedRect(size, corner);
-        go.GetComponent<Renderer>().sharedMaterial = new Material(material) { color = color };
-        var edge = new GameObject("edge", typeof(MeshFilter), typeof(MeshRenderer));
-        edge.transform.SetParent(go.transform, false);
-        edge.transform.localPosition = new Vector3(0, 0, 0.0005f);
-        edge.GetComponent<MeshFilter>().sharedMesh = RoundedRect(size + Vector2.one * 0.002f, corner + 0.001f);
-        edge.GetComponent<Renderer>().sharedMaterial = new Material(material) { color = border };
-        return go;
+        var mf = go.GetComponent<MeshFilter>();
+        mf.sharedMesh = gradient ? GradientBar(size, corner) : RoundedRect(size, corner, color);
+        var r = go.GetComponent<MeshRenderer>();
+        r.sharedMaterial = material;
+        r.sortingOrder = layer;
+        r.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+        r.receiveShadows = false;
+        return mf;
     }
 
-    // A flat rounded rectangle facing -z (towards the user), as a triangle fan round its centre
-    static Mesh RoundedRect(Vector2 size, float r)
+    static void Recolor(Mesh mesh, Color c)
+    {
+        var colors = new Color[mesh.vertexCount];
+        for (int i = 0; i < colors.Length; i++) colors[i] = c;
+        mesh.colors = colors;
+    }
+
+    // The site's gradient, orange to pink to magenta left to right
+    public static Color GradientAt(float t) =>
+        t < 0.5f ? Color.Lerp(Orange, Accent, t * 2) : Color.Lerp(Accent, Magenta, t * 2 - 1);
+
+    static Mesh GradientBar(Vector2 size, float corner = 0)
+    {
+        var mesh = RoundedRect(size, Mathf.Min(corner, size.y / 2), Color.white);
+        var v = mesh.vertices;
+        var colors = new Color[v.Length];
+        for (int i = 0; i < v.Length; i++) colors[i] = GradientAt(Mathf.InverseLerp(-size.x / 2, size.x / 2, v[i].x));
+        mesh.colors = colors;
+        return mesh;
+    }
+
+    // A flat rounded rectangle facing -z, as a triangle fan round its centre
+    public static Mesh RoundedRect(Vector2 size, float r, Color color)
     {
         const int arc = 6;
         r = Mathf.Min(r, size.x / 2, size.y / 2);
@@ -227,34 +530,47 @@ public class Ui
         var mesh = new Mesh();
         mesh.SetVertices(v);
         mesh.SetTriangles(t, 0);
-        mesh.RecalculateNormals();
+        var colors = new Color[v.Count];
+        for (int i = 0; i < colors.Length; i++) colors[i] = color;
+        mesh.colors = colors;
         return mesh;
     }
 
-    // Highlights what the ray points at and clicks it on a trigger press; returns the ray's length, 0 when it misses
-    public float Point(Ray ray, bool pressed, out bool clicked)
+    // A label in the world (the cue card), same fonts as the menu
+    public static TextMeshPro WorldLabel(Transform parent, Vector3 pos, string text, float size, Color color, bool bold,
+        bool monoFont, TextAlignmentOptions align, Vector2 box)
     {
-        clicked = false;
-        Button hit = null;
-        float length = 0;
-        if (Visible && Physics.Raycast(ray, out var info, 3f))
-        {
-            hit = buttons.Find(b => b.collider == info.collider);
-            length = info.distance;
-        }
-        hovered = hit;
-        if (pressed && hit != null)
-        {
-            hit.click();
-            clicked = true;
-        }
-        foreach (var b in buttons)
-        {
-            bool on = b.on != null && b.on();
-            var c = on ? Color.Lerp(Raised, Accent, 0.55f) : Raised;
-            if (b == hovered) c = Color.Lerp(c, LineStrong, 0.7f);
-            if (b.material.color != c) b.material.color = c;
-        }
-        return hit != null ? length : 0;
+        var go = new GameObject("text");
+        go.transform.SetParent(parent, false);
+        var t = go.AddComponent<TextMeshPro>();
+        t.font = monoFont ? mono : bold ? interBold : inter;
+        t.text = text;
+        t.fontSize = size * 10;
+        t.color = color;
+        t.alignment = align;
+        t.textWrappingMode = TextWrappingModes.Normal;
+        t.rectTransform.sizeDelta = box;
+        t.sortingOrder = LText;
+        go.transform.localPosition = pos;
+        return t;
     }
+
+    public static MeshFilter WorldShape(Transform parent, Material material, Vector3 pos, Vector2 size, float corner, Color color,
+        int layer, bool gradient = false)
+    {
+        var go = new GameObject("shape", typeof(MeshFilter), typeof(MeshRenderer));
+        go.transform.SetParent(parent, false);
+        go.transform.localPosition = pos;
+        var mf = go.GetComponent<MeshFilter>();
+        mf.sharedMesh = gradient ? GradientBar(size, corner) : RoundedRect(size, corner, color);
+        var r = go.GetComponent<MeshRenderer>();
+        r.sharedMaterial = material;
+        r.sortingOrder = layer;
+        r.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+        return mf;
+    }
+
+    public static void SetGradientBar(MeshFilter mf, Vector2 size, float corner) => mf.sharedMesh = GradientBar(size, corner);
+
+    public static void SetColor(MeshFilter mf, Color c) => Recolor(mf.sharedMesh, c);
 }

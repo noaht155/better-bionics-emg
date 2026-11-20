@@ -2,7 +2,9 @@
   "dependencies": {
     "com.unity.inputsystem": "1.20.1",
     "com.unity.ugui": "2.0.0",
-    "com.unity.xr.management": "4.6.1",
+    "com.unity.xr.hands": "1.10.0",
+    "com.unity.xr.management": "4.7.0",
+    "com.unity.xr.meta-openxr": "2.7.0",
     "com.unity.xr.openxr": "1.19.0",
     "com.unity.modules.androidjni": "1.0.0",
     "com.unity.modules.imgui": "1.0.0",

@@ -32,6 +32,17 @@ public class Link
         public string kind, arg;
     }
 
+    // The recording on the laptop as the headset shows it (app.py headset_record_state)
+    [Serializable]
+    public class Record
+    {
+        public bool running, paused, hum, marked_bad, has_target;
+        public int index, count;
+        public string label, kind, text, next, error;
+        public float seconds, elapsed;
+        public float[] target;
+    }
+
     [Serializable]
     public class Frame
     {
@@ -42,6 +53,7 @@ public class Link
         public Params @params;
         public int params_seq;
         public Command[] commands;
+        public Record record;
     }
 
     readonly CancellationTokenSource stop = new CancellationTokenSource();

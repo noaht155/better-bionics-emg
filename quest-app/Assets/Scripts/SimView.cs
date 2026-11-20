@@ -116,8 +116,15 @@ public class SimView
         return go;
     }
 
-    // MuJoCo geom types: 2 sphere, 3 capsule, 4 ellipsoid, 5 cylinder, 6 box, 7 mesh
     Transform Make(Sim.Geom g)
+    {
+        var color = g.role == 1 ? ObjectColor : g.hand == Sim.Prosthetic ? ProstheticColor : FreeColor;
+        return MakePart(g, Paint(material, color, g.role == 1 ? 0.3f : 0.55f));
+    }
+
+    // One geom as a mesh with this material. MuJoCo geom types: 2 sphere, 3 capsule, 4 ellipsoid, 5 cylinder, 6 box,
+    // 7 mesh
+    public static Transform MakePart(Sim.Geom g, Material paint)
     {
         var s = g.size;
         GameObject go;
@@ -150,8 +157,7 @@ public class SimView
             default:
                 return null;
         }
-        var color = g.role == 1 ? ObjectColor : g.hand == Sim.Prosthetic ? ProstheticColor : FreeColor;
-        go.GetComponent<Renderer>().sharedMaterial = Paint(material, color, g.role == 1 ? 0.3f : 0.55f);
+        go.GetComponent<Renderer>().sharedMaterial = paint;
         return go.transform;
     }
 

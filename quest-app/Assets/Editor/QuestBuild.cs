@@ -1,5 +1,6 @@
 using System.IO;
 using UnityEditor;
+using UnityEditor.Android;
 using UnityEditor.Build;
 using UnityEditor.Build.Reporting;
 using UnityEditor.SceneManagement;
@@ -12,10 +13,13 @@ using UnityEngine.XR.Management;
 using UnityEngine.XR.OpenXR;
 using UnityEngine.XR.OpenXR.Features.Interactions;
 using UnityEngine.XR.OpenXR.Features.MetaQuestSupport;
+using UnityEngine.XR.Hands.OpenXR;
+using UnityEngine.XR.ARFoundation;
+using UnityEngine.XR.OpenXR.Features.Meta;
 
 // Sets the project up for the Quest 3 and builds the APK; build.sh runs it through the Unity CLI. Everything the
 // build depends on is set here rather than by hand in the editor, so a fresh checkout builds the same.
-public static class QuestBuild
+public class QuestBuild : IPostGenerateGradleAndroidProject
 {
     const string ScenePath = "Assets/Scenes/Main.unity";
     const string MaterialPath = "Assets/Materials/Sim.mat";
@@ -88,9 +92,28 @@ public static class QuestBuild
         }
         openxr.GetFeature<MetaQuestFeature>().enabled = true;
         openxr.GetFeature<OculusTouchControllerProfile>().enabled = true;
+        openxr.GetFeature<HandTracking>().enabled = true;
+        openxr.GetFeature<Multimodal>().enabled = true;
+        // Passthrough, through ARFoundation's camera on Meta's OpenXR runtime
+        openxr.GetFeature<ARSessionFeature>().enabled = true;
+        openxr.GetFeature<ARCameraFeature>().enabled = true;
         // The panel's text shader isn't checked for single pass, and the scene is small enough to draw twice
         openxr.renderMode = OpenXRSettings.RenderMode.MultiPass;
         EditorUtility.SetDirty(openxr);
+    }
+
+    public int callbackOrder => 0;
+
+    // Hand tracking needs Meta's permission and feature in the manifest, which nothing else adds
+    public void OnPostGenerateGradleAndroidProject(string path)
+    {
+        var manifest = Path.Combine(path, "src/main/AndroidManifest.xml");
+        var text = File.ReadAllText(manifest);
+        if (text.Contains("HAND_TRACKING")) return;
+        text = text.Replace("</manifest>",
+            "  <uses-permission android:name=\"com.oculus.permission.HAND_TRACKING\" />\n" +
+            "  <uses-feature android:name=\"oculus.software.handtracking\" android:required=\"false\" />\n</manifest>");
+        File.WriteAllText(manifest, text);
     }
 
     // build.sh copies libbbsim and libmujoco in; Unity has to be told they're arm64 Android libraries
@@ -135,10 +158,12 @@ public static class QuestBuild
             material.SetFloat("_Glossiness", 0.35f);
             AssetDatabase.CreateAsset(material, MaterialPath);
         }
+        // The menu's meshes carry their colours, with alpha, in their vertices
         var uiMaterial = AssetDatabase.LoadAssetAtPath<Material>(UiMaterialPath);
-        if (uiMaterial == null)
+        if (uiMaterial == null || uiMaterial.shader.name != "Sprites/Default")
         {
-            uiMaterial = new Material(Shader.Find("Unlit/Color"));
+            if (uiMaterial != null) AssetDatabase.DeleteAsset(UiMaterialPath);
+            uiMaterial = new Material(Shader.Find("Sprites/Default"));
             AssetDatabase.CreateAsset(uiMaterial, UiMaterialPath);
         }
 
@@ -165,10 +190,19 @@ public static class QuestBuild
         camera.farClipPlane = 50;
         camera.clearFlags = CameraClearFlags.SolidColor;
         camera.backgroundColor = new Color(0.039f, 0.039f, 0.043f);
+        camera.allowHDR = false;
+        var passthrough = head.AddComponent<ARCameraManager>();
+        passthrough.enabled = false;
+        new GameObject("ar session").AddComponent<ARSession>();
 
         var app = new GameObject("app").AddComponent<App>();
         app.material = material;
         app.uiMaterial = uiMaterial;
+        app.eyes = camera;
+        app.passthroughCamera = passthrough;
+        app.interFont = AssetDatabase.LoadAssetAtPath<Font>("Assets/Fonts/Inter-Regular.ttf");
+        app.interBoldFont = AssetDatabase.LoadAssetAtPath<Font>("Assets/Fonts/Inter-SemiBold.ttf");
+        app.monoFont = AssetDatabase.LoadAssetAtPath<Font>("Assets/Fonts/JetBrainsMono-Medium.ttf");
         app.head = head.transform;
 
         EditorSceneManager.SaveScene(scene, ScenePath);

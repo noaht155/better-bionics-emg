@@ -1,7 +1,7 @@
 using UnityEngine;
 
 // What the setup screen sets, kept on the headset (PlayerPrefs) between runs: which arm is the prosthetic one, each
-// hand's offset from its controller, and where the desk stands in the room.
+// hand's offset from its controller, where the desk stands in the room, and passthrough.
 public class Settings
 {
     // Offset of the wrist from the controller, in the controller's frame (m), and the hand's turn from the pose that
@@ -20,6 +20,7 @@ public class Settings
     public bool deskPlaced;
     public Vector3 deskPos;
     public float deskYaw;
+    public bool passthrough;
 
     public static Settings Load()
     {
@@ -31,6 +32,7 @@ public class Settings
         s.deskPlaced = PlayerPrefs.GetInt("desk_placed", 0) == 1;
         s.deskPos = LoadVector("desk_pos", Vector3.zero);
         s.deskYaw = PlayerPrefs.GetFloat("desk_yaw", 0);
+        s.passthrough = PlayerPrefs.GetInt("passthrough", 0) == 1;
         return s;
     }
 
@@ -43,6 +45,7 @@ public class Settings
         PlayerPrefs.SetInt("desk_placed", deskPlaced ? 1 : 0);
         SaveVector("desk_pos", deskPos);
         PlayerPrefs.SetFloat("desk_yaw", deskYaw);
+        PlayerPrefs.SetInt("passthrough", passthrough ? 1 : 0);
         PlayerPrefs.Save();
     }
 

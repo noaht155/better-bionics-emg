@@ -4,18 +4,26 @@ using TMPro;
 using UnityEngine;
 using UnityEngine.XR;
 
-// The contact sim in the headset. Both controllers are hands: the one strapped to the prosthetic arm places the
-// prosthetic hand, whose fingers follow the control layer's output from the laptop; the other is the free hand on
-// the normal controls (grip closes the fingers and holds what it touches, trigger curls the index, thumb rests on
-// the buttons). The free hand's B/Y opens the menu, its ray and trigger work it.
+// The contact sim in the headset. The prosthetic hand is placed by the controller strapped to that arm and its
+// fingers follow the control layer from the laptop. The free hand is the real hand, hand tracked (Multimodal.cs),
+// fingers and all; a controller held in it works too (grip, trigger, thumb). The menu is touched with the fingertip
+// or pointed at with a controller, and opens from the button by the desk or B/Y. Recording sessions run from the
+// menu, with each cue on a card over the desk and its target pose on a ghost hand.
 public class App : MonoBehaviour
 {
     public Material material, uiMaterial;
     public Transform head;
+    public Camera eyes;
+    // ARFoundation's camera manager on the head camera: enabled, the headset shows passthrough
+    public Behaviour passthroughCamera;
+    public Font interFont, interBoldFont, monoFont;
 
     const float GrabOn = 0.6f, GrabOff = 0.35f;
-    // The desk's near edge this far in front of the eyes when it's put in front of the user
     const float DeskAhead = 0.4f;
+    // A fist this close to the prosthetic hand grabs it while adjusting (m)
+    const float AdjustReach = 0.12f;
+    // The ghost hand comes in from rest to the cue's pose over this long, as the page's target hand does
+    const float FollowInS = 1.0f;
 
     [Serializable]
     class Meta
@@ -28,11 +36,7 @@ public class App : MonoBehaviour
         public float desk_centre_y, desk_height;
     }
 
-    [Serializable]
-    class ParamsMessage
-    {
-        public Link.Params @params;
-    }
+    [Serializable] class ParamsMessage { public Link.Params @params; }
 
     [Serializable]
     class Readout
@@ -42,13 +46,8 @@ public class App : MonoBehaviour
         public int blowups;
     }
 
-    [Serializable]
-    class ReadoutMessage
-    {
-        public Readout readout;
-    }
+    [Serializable] class ReadoutMessage { public Readout readout; }
 
-    // For the laptop's VR tab, in sim coordinates: every geom once, then the poses and the head
     [Serializable]
     class SceneGeom
     {
@@ -58,11 +57,7 @@ public class App : MonoBehaviour
         public int[] faces;
     }
 
-    [Serializable]
-    class SceneMessage
-    {
-        public SceneBody scene;
-    }
+    [Serializable] class SceneMessage { public SceneBody scene; }
 
     [Serializable]
     class SceneBody
@@ -81,53 +76,70 @@ public class App : MonoBehaviour
         public bool menu;
     }
 
+    [Serializable] class ViewMessage { public View view; }
+
     [Serializable]
-    class ViewMessage
+    class RecordAction
     {
-        public View view;
+        public string action;
+        public bool quick;
     }
+
+    [Serializable] class RecordMessage { public RecordAction record; }
 
     static readonly string[] GeomTypes = { "plane", "hfield", "sphere", "capsule", "ellipsoid", "cylinder", "box", "mesh" };
 
     Meta meta;
     Settings settings;
-    string sceneLeft, sceneRight;
-    Transform deskRoot, ray;
+    string sceneLeft, sceneRight, ghostLeft, ghostRight;
+    Transform deskRoot, ray, grabber;
     readonly Transform[] controllerModels = new Transform[2];
     Room room;
     Sim sim;
     SimView view;
     Link link;
-    Ui ui;
-    Ui.Page setupPage;
+    Ui menu, card, dock;
+    Ghost ghost;
+    TrackedHand tracked;
+    bool prevMenuGesture;
     Link.Params current;
-    int seq = -1, blowups, sceneSent = -1, lastCommand = -1;
-    bool wasConnected;
-    readonly View viewOut = new View { head = new float[9], held = new int[2] };
-    readonly double[] headSim = new double[3];
+    Link.Record record;
+    int seq = -1, blowups, sceneSent = -1, lastCommand = -1, heldBefore = -1, cueIndex = -1;
+    float cueStartedAt;
     string laptopObject;
     bool[] parked;
     int[] fingerOf;
     readonly double[] readout = new double[Native.ReadoutSize];
-    readonly double[] simPos = new double[3], simQuat = new double[4];
-    readonly float[] freeAngles = new float[Sim.Joints];
-    bool grabbing, prevMenu, prevTrigger, movingDesk, deskDragging, adjustFree, showControllers;
-    int heldBefore = -1;
-    Vector3 dragStart, deskStart;
+    readonly double[] simPos = new double[3], simQuat = new double[4], headSim = new double[3];
+    readonly float[] freeAngles = new float[Sim.Joints], ghostAngles = new float[Sim.Joints];
+    readonly View viewOut = new View { head = new float[9], held = new int[2] };
+    bool grabbing, prevMenuButton, movingDesk, deskDragging, adjusting, adjustDragging, showControllers, wasConnected;
+    Vector3 dragStart, deskStart, adjustOffsetPos;
+    Quaternion adjustOffsetRot;
     float dragYaw, deskYawStart;
     readonly List<XRInputSubsystem> inputs = new List<XRInputSubsystem>();
     bool floorSet;
-    TextMeshPro linkText, simText, massText, forceText, assistText, heightText, sideText, adjustText, offsetText;
+
+    TextMeshPro linkText, simText, massText, forceText, heightText, sideText, freeText, recordText, recordError;
+    TextMeshPro[] readouts, sessionButtons;
+    TextMeshPro cueMeta, cueTitle, cueBody, cueNext, cueState;
+    Action<float> cueProgress;
 
     XRNode ProstheticNode => settings.prostheticLeft ? XRNode.LeftHand : XRNode.RightHand;
     XRNode FreeNode => settings.prostheticLeft ? XRNode.RightHand : XRNode.LeftHand;
+    bool FreeIsRight => settings.prostheticLeft;
 
     void Awake()
     {
         Application.targetFrameRate = 90;
+        Ui.InterFont = interFont;
+        Ui.InterBoldFont = interBoldFont;
+        Ui.MonoFont = monoFont;
         meta = JsonUtility.FromJson<Meta>(Resources.Load<TextAsset>("sim/scene").text);
         sceneLeft = Resources.Load<TextAsset>("sim/scene_left").text;
         sceneRight = Resources.Load<TextAsset>("sim/scene_right").text;
+        ghostLeft = Resources.Load<TextAsset>("sim/ghost_left").text;
+        ghostRight = Resources.Load<TextAsset>("sim/ghost_right").text;
         settings = Settings.Load();
         current = new Link.Params
         {
@@ -136,6 +148,8 @@ public class App : MonoBehaviour
         fingerOf = new int[Sim.Joints];
         string[] fingers = { "thumb", "index", "middle", "ring", "pinky" };
         for (int j = 0; j < Sim.Joints; j++) fingerOf[j] = Array.IndexOf(fingers, meta.joints[j].Split('_')[0]);
+        tracked = new TrackedHand(ghostLeft, ghostRight);
+        grabber = new GameObject("grabber").transform;
 
         deskRoot = new GameObject("desk root").transform;
         room = new Room(deskRoot, material, new Vector2(meta.desk_half[0], meta.desk_half[1]), meta.desk_centre_y,
@@ -150,11 +164,15 @@ public class App : MonoBehaviour
             controllerModels[i].localScale = new Vector3(0.04f, 0.04f, 0.1f);
             controllerModels[i].GetComponent<Renderer>().sharedMaterial = SimView.Paint(material, Ui.LineStrong);
         }
-        ray = GameObject.CreatePrimitive(PrimitiveType.Cube).transform;
-        Destroy(ray.GetComponent<Collider>());
-        ray.GetComponent<Renderer>().sharedMaterial = new Material(uiMaterial) { color = Ui.Accent };
+        ray = new GameObject("ray", typeof(MeshFilter), typeof(MeshRenderer)).transform;
+        ray.GetComponent<MeshFilter>().sharedMesh = Ui.RoundedRect(new Vector2(1, 1), 0, Ui.Accent);
+        ray.GetComponent<MeshRenderer>().sharedMaterial = uiMaterial;
         ray.gameObject.SetActive(false);
         BuildMenu();
+        BuildCard();
+        BuildDock();
+        BuildGhost();
+        SetPassthrough(settings.passthrough);
 
         sim = new Sim();
         LoadScene();
@@ -180,76 +198,131 @@ public class App : MonoBehaviour
         if (first.i >= 0) parked[first.i] = false;
     }
 
-    // Menu
+    // Menu, card, dock and ghost
 
     void BuildMenu()
     {
-        ui = new Ui(uiMaterial);
-        var play = ui.AddPage("Play");
-        ui.Heading(play, "STATUS");
-        linkText = ui.Row(play, "");
-        simText = ui.Row(play, "");
-        ui.Heading(play, "PHYSICS");
-        massText = ui.Row(play, "", ("-", () => Change(p => p.mass_scale = Mathf.Clamp(p.mass_scale - 0.25f, 0.25f, 3))),
-            ("+", () => Change(p => p.mass_scale = Mathf.Clamp(p.mass_scale + 0.25f, 0.25f, 3))));
-        forceText = ui.Row(play, "", ("-", () => Change(p => p.max_force = Mathf.Clamp(p.max_force - 1, 2, 40))),
-            ("+", () => Change(p => p.max_force = Mathf.Clamp(p.max_force + 1, 2, 40))));
-        assistText = ui.Row(play, "Grasp assist", () => current.assist, ("On", () => Change(p => p.assist = !p.assist)));
+        menu = new Ui(uiMaterial);
+        var play = menu.AddPage("Play");
+        menu.Section(play, "Status");
+        linkText = menu.Paragraph(play, "", 0.014f, false);
+        simText = menu.Paragraph(play, "");
+        readouts = menu.Readouts(play, "prosthetic grip", "free hand grip");
+        menu.Section(play, "Physics");
+        massText = menu.Slider(play, "Object mass", 0.25f, 3, 0.25f, () => current.mass_scale,
+            v => Change(p => p.mass_scale = v));
+        forceText = menu.Slider(play, "Hand strength", 2, 40, 1, () => current.max_force, v => Change(p => p.max_force = v));
+        menu.Toggle(play, "Grasp assist", () => current.assist, () => Change(p => p.assist = !p.assist));
+        menu.Toggle(play, "Passthrough", () => settings.passthrough, () => SetPassthrough(!settings.passthrough));
 
-        var objects = ui.AddPage("Objects");
-        ui.Heading(objects, "SPAWN ON THE DESK");
-        var spawns = new List<(string, Action)>();
-        foreach (var kind in meta.objects)
-        {
-            var k = kind;
-            spawns.Add((Title(kind), () => Spawn(k)));
-        }
-        ui.Buttons(objects, spawns.ToArray());
-        ui.Buttons(objects, ("Clear the desk", ClearDesk));
-        ui.Heading(objects, "DESK");
-        ui.Row(objects, "Move the desk with your grip", () => movingDesk, ("Move", () => movingDesk = !movingDesk));
-        heightText = ui.Row(objects, "", ("-", () => SetDeskHeight(settings.deskHeight - 0.01f)),
-            ("+", () => SetDeskHeight(settings.deskHeight + 0.01f)));
-        ui.Buttons(objects, ("Put the desk in front of me", DeskToMe));
+        var objects = menu.AddPage("Objects");
+        menu.Section(objects, "Spawn on the desk");
+        menu.Buttons(objects, ("Can", () => Spawn("can")), ("Ball", () => Spawn("ball")), ("Block", () => Spawn("block")));
+        menu.Buttons(objects, ("Cube", () => Spawn("small cube")), ("Pen", () => Spawn("pen")), ("Clear", ClearDesk));
+        menu.Section(objects, "Desk");
+        menu.Toggle(objects, "Move it with your hand", () => movingDesk, () => movingDesk = !movingDesk);
+        heightText = menu.Slider(objects, "Height", 50, 110, 1, () => Mathf.Round(settings.deskHeight * 100),
+            v => SetDeskHeight(v / 100));
+        menu.Buttons(objects, ("Put it in front of me", DeskToMe));
 
-        setupPage = ui.AddPage("Setup");
-        ui.Heading(setupPage, "PROSTHETIC ARM");
-        sideText = ui.Row(setupPage, "", ("Left", () => SetSide(true)), ("Right", () => SetSide(false)));
-        ui.Heading(setupPage, "HAND OFFSET FROM ITS CONTROLLER");
-        adjustText = ui.Row(setupPage, "", ("Prosthetic", () => adjustFree = false), ("Free", () => adjustFree = true));
-        ui.Row(setupPage, "Forward", ("-1 cm", () => Nudge(new Vector3(0, 0, -0.01f), Vector3.zero)),
-            ("+1 cm", () => Nudge(new Vector3(0, 0, 0.01f), Vector3.zero)));
-        ui.Row(setupPage, "Up", ("-1 cm", () => Nudge(new Vector3(0, -0.01f, 0), Vector3.zero)),
-            ("+1 cm", () => Nudge(new Vector3(0, 0.01f, 0), Vector3.zero)));
-        ui.Row(setupPage, "Right", ("-1 cm", () => Nudge(new Vector3(-0.01f, 0, 0), Vector3.zero)),
-            ("+1 cm", () => Nudge(new Vector3(0.01f, 0, 0), Vector3.zero)));
-        ui.Row(setupPage, "Tilt", ("-5°", () => Nudge(Vector3.zero, new Vector3(-5, 0, 0))),
-            ("+5°", () => Nudge(Vector3.zero, new Vector3(5, 0, 0))));
-        ui.Row(setupPage, "Turn", ("-5°", () => Nudge(Vector3.zero, new Vector3(0, -5, 0))),
-            ("+5°", () => Nudge(Vector3.zero, new Vector3(0, 5, 0))));
-        ui.Row(setupPage, "Roll", ("-5°", () => Nudge(Vector3.zero, new Vector3(0, 0, -5))),
-            ("+5°", () => Nudge(Vector3.zero, new Vector3(0, 0, 5))));
-        offsetText = ui.Note(setupPage);
-        ui.Buttons(setupPage, ("Reset this hand", ResetOffset), ("Show controllers", () => showControllers = !showControllers));
-        ui.Show(play);
-        ui.Close();
+        var rec = menu.AddPage("Record");
+        menu.Section(rec, "Protocol F");
+        menu.Paragraph(rec, "The laptop records as it does from the Record tab, with the setup of your last session. " +
+                            "Each cue shows on the card over the desk.", 0.013f, true, 3);
+        menu.Primary(rec, "Quick calibration", () => SendRecord("start", true));
+        menu.Buttons(rec, ("Full session", () => SendRecord("start", false)));
+        menu.Section(rec, "Session");
+        recordText = menu.Paragraph(rec, "", 0.014f, false);
+        recordError = menu.Paragraph(rec, "", 0.013f, false, 2);
+        sessionButtons = menu.ButtonsWithLabels(rec, ("Pause", PauseOrContinue), ("Mark bad", () => SendRecord("bad")),
+            ("Stop", () => SendRecord("stop")));
+
+        var setup = menu.AddPage("Setup");
+        menu.Section(setup, "Prosthetic arm");
+        sideText = menu.Paragraph(setup, "", 0.014f, false);
+        menu.Buttons(setup, ("Left arm", () => SetSide(true)), ("Right arm", () => SetSide(false)));
+        menu.Section(setup, "Placing its hand");
+        menu.Paragraph(setup, "Turn on passthrough to see your arm. With adjusting on, make a fist inside the virtual " +
+                              "hand with your other hand and move it to where it should sit on the strapped controller.",
+            0.013f, true, 4);
+        menu.Toggle(setup, "Adjust by hand", () => adjusting, () => adjusting = !adjusting);
+        menu.Toggle(setup, "Passthrough", () => settings.passthrough, () => SetPassthrough(!settings.passthrough));
+        menu.Toggle(setup, "Show controllers", () => showControllers, () => showControllers = !showControllers);
+        menu.Buttons(setup, ("Reset the hand", ResetOffset));
+        menu.Section(setup, "Free hand");
+        freeText = menu.Paragraph(setup, "", 0.013f, true, 2);
+        menu.Show(play);
+        menu.Close();
     }
 
-    static string Title(string s) => s == "small cube" ? "Cube" : char.ToUpper(s[0]) + s.Substring(1);
-
-    Settings.Offset Adjusting => adjustFree ? settings.free : settings.prosthetic;
-
-    void Nudge(Vector3 pos, Vector3 rot)
+    void BuildCard()
     {
-        Adjusting.pos += pos;
-        Adjusting.rot += rot;
-        settings.Save();
+        card = new Ui(uiMaterial, false);
+        var page = card.AddPage("");
+        cueMeta = card.Paragraph(page, "", 0.011f, true);
+        cueTitle = card.Paragraph(page, "", 0.028f, false);
+        cueBody = card.Paragraph(page, "", 0.014f, true, 3);
+        cueProgress = card.Progress(page);
+        cueNext = card.Paragraph(page, "", 0.012f, true);
+        cueState = card.Paragraph(page, "", 0.014f, false, 2);
+        card.Primary(page, "Continue", () => SendRecord("continue"));
+        card.Buttons(page, ("Pause", () => SendRecord("pause")), ("Mark bad", () => SendRecord("bad")),
+            ("Stop", () => SendRecord("stop")));
+        card.Show(page);
+        card.root.SetParent(deskRoot, false);
+        card.root.localPosition = new Vector3(0, 0.42f, 0.5f);
+        card.root.localRotation = Quaternion.Euler(-12, 0, 0);
+        card.Close();
     }
+
+    void BuildDock()
+    {
+        dock = new Ui(uiMaterial, false);
+        var page = dock.AddPage("");
+        dock.Buttons(page, ("Menu", ToggleMenu));
+        dock.Show(page);
+        dock.root.SetParent(deskRoot, false);
+        dock.root.localScale = Vector3.one * 0.45f;
+        PlaceDock();
+        dock.root.gameObject.SetActive(true);
+    }
+
+    // At the desk's near corner on the free hand's side, tilted up to be read and touched
+    void PlaceDock()
+    {
+        float x = (FreeIsRight ? 1 : -1) * (meta.desk_half[0] - 0.12f);
+        dock.root.localPosition = new Vector3(x, 0.05f, -meta.desk_centre_y - meta.desk_half[1] + 0.05f);
+        dock.root.localRotation = Quaternion.Euler(50, 0, 0);
+    }
+
+    void BuildGhost()
+    {
+        ghost?.Destroy();
+        ghost = new Ghost(settings.prostheticLeft ? ghostLeft : ghostRight, material, SimView.Hex(0x6b6b75));
+        ghost.Root.SetParent(deskRoot, false);
+        // Upright beside the card on the prosthetic side, the back of the hand towards the user, like looking at
+        // your own raised hand
+        ghost.Root.localPosition = new Vector3((settings.prostheticLeft ? -1 : 1) * 0.33f, 0.3f, 0.5f);
+        ghost.Root.localRotation = Quaternion.Euler(90, 0, 0);
+        ghost.Root.localScale = Vector3.one * 1.2f;
+        ghost.Root.gameObject.SetActive(false);
+    }
+
+    void ToggleMenu()
+    {
+        if (menu.Visible) menu.Close();
+        else menu.Open(head);
+    }
+
+    void SendRecord(string action, bool quick = false) =>
+        link.Send(JsonUtility.ToJson(new RecordMessage { record = new RecordAction { action = action, quick = quick } }));
+
+    void PauseOrContinue() => SendRecord(record != null && record.paused ? "continue" : "pause");
 
     void ResetOffset()
     {
-        Adjusting.pos = Settings.HeldPos;
-        Adjusting.rot = Vector3.zero;
+        settings.prosthetic.pos = Settings.HeldPos;
+        settings.prosthetic.rot = Vector3.zero;
         settings.Save();
     }
 
@@ -259,6 +332,19 @@ public class App : MonoBehaviour
         settings.prostheticLeft = left;
         settings.Save();
         LoadScene();
+        BuildGhost();
+        PlaceDock();
+    }
+
+    void SetPassthrough(bool on)
+    {
+        settings.passthrough = on;
+        settings.Save();
+        if (passthroughCamera != null) passthroughCamera.enabled = on;
+        // Passthrough shows through where the app draws nothing: a clear background with no alpha
+        eyes.backgroundColor = on ? new Color(0, 0, 0, 0) : new Color(Ui.Bg.r, Ui.Bg.g, Ui.Bg.b, 1);
+        room.Floor.SetActive(!on);
+        RenderSettings.fog = !on;
     }
 
     // A change made here goes to the sim and to the laptop, which shares it with its own page
@@ -293,6 +379,23 @@ public class App : MonoBehaviour
         }
         laptopObject = p.@object;
         current.@object = p.@object;
+    }
+
+    // Spawn and clear from the laptop's VR tab. Commands already there when the link comes up are old, skipped
+    void RunCommands(Link.Frame f)
+    {
+        if (f.commands == null) return;
+        int newest = lastCommand;
+        foreach (var c in f.commands)
+        {
+            if (lastCommand >= 0 && c.id > lastCommand)
+            {
+                if (c.kind == "spawn") Spawn(c.arg);
+                else if (c.kind == "clear") ClearDesk();
+            }
+            newest = Math.Max(newest, c.id);
+        }
+        lastCommand = Math.Max(newest, 0);
     }
 
     // Objects
@@ -386,7 +489,7 @@ public class App : MonoBehaviour
             deskStart = settings.deskPos;
             deskYawStart = settings.deskYaw;
         }
-        // Turns about where the grip started and moves with the hand, level: the height is set on the menu
+        // Turns about where the grab started and moves with the hand, level: the height is set on the menu
         float turned = Mathf.DeltaAngle(dragYaw, yaw);
         var moved = Vector3.ProjectOnPlane(cp - dragStart, Vector3.up);
         settings.deskPos = dragStart + moved + Quaternion.Euler(0, turned, 0) * (deskStart - dragStart);
@@ -401,8 +504,9 @@ public class App : MonoBehaviour
         var d = InputDevices.GetDeviceAtXRNode(node);
         p = default;
         q = Quaternion.identity;
-        return d.isValid
-               && d.TryGetFeatureValue(eye ? CommonUsages.centerEyePosition : CommonUsages.devicePosition, out p)
+        if (!d.isValid) return false;
+        if (!eye && d.TryGetFeatureValue(CommonUsages.isTracked, out bool on) && !on) return false;
+        return d.TryGetFeatureValue(eye ? CommonUsages.centerEyePosition : CommonUsages.devicePosition, out p)
                && d.TryGetFeatureValue(eye ? CommonUsages.centerEyeRotation : CommonUsages.deviceRotation, out q);
     }
 
@@ -430,12 +534,13 @@ public class App : MonoBehaviour
         if (Pose(XRNode.Head, out var p, out var q, true)) head.SetPositionAndRotation(p, q);
     }
 
-    // The wrist pose for a hand on its controller: the hand as it holds a controller (fingers forward, palm towards
-    // the controller's middle, thumb up), turned and moved by the setup's offset
+    // The hand as it holds a controller (fingers forward, palm towards the controller's middle, thumb up)
+    static Quaternion Held(bool leftHand) => Quaternion.LookRotation(Vector3.back, leftHand ? Vector3.right : Vector3.left);
+
+    // The wrist pose for a hand on its controller, turned and moved by the setup's offset
     static void HandPose(Vector3 cp, Quaternion cq, bool leftHand, Settings.Offset offset, out Vector3 p, out Quaternion q)
     {
-        var held = Quaternion.LookRotation(Vector3.back, leftHand ? Vector3.right : Vector3.left);
-        q = cq * Quaternion.Euler(offset.rot) * held;
+        q = cq * Quaternion.Euler(offset.rot) * Held(leftHand);
         p = cp + cq * offset.pos;
     }
 
@@ -456,21 +561,73 @@ public class App : MonoBehaviour
         TrackHead();
         if (!settings.deskPlaced && head.position.y > 0.3f) DeskToMe();
 
+        tracked.Update(FreeIsRight);
         bool hasP = Pose(ProstheticNode, out var pp, out var pq);
-        bool hasF = Pose(FreeNode, out var fp, out var fq);
+        Vector3 fp = default;
+        Quaternion fq = Quaternion.identity;
+        bool hasF = !tracked.Tracked && Pose(FreeNode, out fp, out fq);
         controllerModels[0].gameObject.SetActive(hasP && showControllers);
         controllerModels[1].gameObject.SetActive(hasF && showControllers);
         if (hasP) controllerModels[0].SetPositionAndRotation(pp, pq);
         if (hasF) controllerModels[1].SetPositionAndRotation(fp, fq);
+
+        // The free hand: the tracked hand if it's seen, the controller otherwise
+        float grip = 0, trigger = 0;
+        if (tracked.Tracked)
+        {
+            grabber.SetPositionAndRotation(tracked.WristPos, tracked.WristRot);
+            PlaceHand(Sim.Free, tracked.WristPos, tracked.WristRot);
+            grip = tracked.Closure;
+        }
+        else if (hasF)
+        {
+            grabber.SetPositionAndRotation(fp, fq);
+            HandPose(fp, fq, !settings.prostheticLeft, settings.free, out var p, out var q);
+            PlaceHand(Sim.Free, p, q);
+            grip = Axis(FreeNode, CommonUsages.grip);
+            trigger = Axis(FreeNode, CommonUsages.trigger);
+        }
+
+        // The menu, card and dock, by fingertip or by controller ray
+        bool menuButton = hasF && Button(FreeNode, CommonUsages.secondaryButton);
+        if (menuButton && !prevMenuButton) ToggleMenu();
+        prevMenuButton = menuButton;
+        // With the tracked hand: palm turned to the face and the thumb on the middle fingertip. The index pinch there is
+        // the headset's own menu
+        bool menuGesture = tracked.Tracked && tracked.MiddlePinching
+                           && Vector3.Dot(tracked.PalmNormal, (head.position - tracked.WristPos).normalized) > 0.5f;
+        if (menuGesture && !prevMenuGesture) ToggleMenu();
+        prevMenuGesture = menuGesture;
+        Vector3? tip = tracked.Tracked ? tracked.IndexTip : (Vector3?)null;
+        Ray? pointer = hasF ? new Ray(fp, fq * Vector3.forward) : (Ray?)null;
+        bool grabHandle = tracked.Tracked ? tracked.Pinching : grip > GrabOn;
+        float length = 0;
+        bool clicked = false;
+        foreach (var panel in new[] { menu, card, dock })
+        {
+            float l = panel.Interact(tip, pointer, trigger > 0.7f, grabHandle, grabber, out bool c);
+            if (l > 0 && length == 0) length = l;
+            clicked |= c;
+        }
+        if (clicked && hasF) Buzz(FreeNode, 0.25f, 0.03f);
+        bool showRay = hasF && (menu.Visible || length > 0);
+        ray.gameObject.SetActive(showRay);
+        if (showRay)
+        {
+            float shown = length > 0 ? length : 0.6f;
+            ray.SetPositionAndRotation(fp + fq * Vector3.forward * (shown / 2), fq * Quaternion.Euler(90, 0, 0));
+            ray.localScale = new Vector3(0.0015f, shown, 1);
+        }
+        bool busy = length > 0 || menu.Grabbed || card.Grabbed;
+
+        // Placing the prosthetic hand: a fist inside it carries it, its offset from the controller follows
+        bool fist = grip > GrabOn;
+        if (adjusting && hasP && (tracked.Tracked || hasF)) AdjustProsthetic(pp, pq, fist && !busy);
+        else adjustDragging = false;
         if (hasP)
         {
             HandPose(pp, pq, settings.prostheticLeft, settings.prosthetic, out var p, out var q);
             PlaceHand(Sim.Prosthetic, p, q);
-        }
-        if (hasF)
-        {
-            HandPose(fp, fq, !settings.prostheticLeft, settings.free, out var p, out var q);
-            PlaceHand(Sim.Free, p, q);
         }
 
         var frame = link.Latest;
@@ -484,37 +641,15 @@ public class App : MonoBehaviour
         {
             sim.SetInput(Sim.Prosthetic, meta.rest, 0, false, false);
         }
+        record = frame?.record;
 
-        bool menu = Button(FreeNode, CommonUsages.secondaryButton);
-        if (menu && !prevMenu)
-        {
-            if (ui.Visible) ui.Close();
-            else ui.Open(head);
-        }
-        prevMenu = menu;
+        if (movingDesk && (tracked.Tracked || hasF)) DragDesk(grabber.position, grabber.rotation, fist && !busy);
+        FreeHandInput(grip, trigger, busy || movingDesk || adjustDragging);
 
-        float grip = Axis(FreeNode, CommonUsages.grip), trigger = Axis(FreeNode, CommonUsages.trigger);
-        bool pressed = trigger > 0.7f && !prevTrigger;
-        prevTrigger = trigger > 0.7f;
-        bool clicked = false;
-        float length = hasF ? ui.Point(new Ray(fp, fq * Vector3.forward), pressed, out clicked) : 0;
-        if (clicked) Buzz(FreeNode, 0.25f, 0.03f);
-        ray.gameObject.SetActive(ui.Visible && hasF);
-        if (ui.Visible && hasF)
-        {
-            float shown = length > 0 ? length : 0.6f;
-            ray.SetPositionAndRotation(fp + fq * Vector3.forward * (shown / 2), fq);
-            ray.localScale = new Vector3(0.0015f, 0.0015f, shown);
-        }
-
-        if (movingDesk && hasF) DragDesk(fp, fq, grip > GrabOn);
-        FreeHandInput(grip, trigger, movingDesk || length > 0);
-
-        bool viewed = view.Update(sim, readout, parked);
-        if (viewed)
+        if (view.Update(sim, readout, parked))
         {
             int held = (int)readout[9];
-            if (held >= 0 && heldBefore < 0) Buzz(FreeNode, 0.4f, 0.04f);
+            if (held >= 0 && heldBefore < 0 && hasF) Buzz(FreeNode, 0.4f, 0.04f);
             heldBefore = held;
             if ((int)readout[13] != blowups)
             {
@@ -527,41 +662,116 @@ public class App : MonoBehaviour
         if (link.Connected && !wasConnected) sceneSent = -1;
         wasConnected = link.Connected;
         if (!link.Connected) lastCommand = -1;
+        ShowRecording();
         ShowLabels(frame);
     }
 
-    // Grip closes the middle, ring and little fingers, the trigger the index, the thumb comes down while it rests on
-    // the buttons or stick; the grip holds what the hand touches. Pointing at the menu or moving the desk doesn't grab
+    void AdjustProsthetic(Vector3 cp, Quaternion cq, bool fist)
+    {
+        HandPose(cp, cq, settings.prostheticLeft, settings.prosthetic, out var handPos, out var handRot);
+        if (!adjustDragging)
+        {
+            if (!fist || Vector3.Distance(grabber.position, handPos) > AdjustReach) return;
+            adjustDragging = true;
+            adjustOffsetPos = Quaternion.Inverse(grabber.rotation) * (handPos - grabber.position);
+            adjustOffsetRot = Quaternion.Inverse(grabber.rotation) * handRot;
+            return;
+        }
+        if (!fist)
+        {
+            adjustDragging = false;
+            settings.Save();
+            return;
+        }
+        var newPos = grabber.position + grabber.rotation * adjustOffsetPos;
+        var newRot = grabber.rotation * adjustOffsetRot;
+        settings.prosthetic.pos = Quaternion.Inverse(cq) * (newPos - cp);
+        settings.prosthetic.rot = (Quaternion.Inverse(cq) * newRot * Quaternion.Inverse(Held(settings.prostheticLeft))).eulerAngles;
+    }
+
+    // The free hand's fingers: the tracked hand's own angles, or from the controller (grip closes the middle, ring and
+    // little fingers, the trigger the index, the thumb comes down on the buttons). Closing it holds what it touches,
+    // except while it works the menu, moves the desk or places the other hand
     void FreeHandInput(float grip, float trigger, bool busy)
     {
-        var node = FreeNode;
-        bool thumbDown = Button(node, CommonUsages.primaryTouch) || Button(node, CommonUsages.secondaryTouch)
-                         || Button(node, CommonUsages.primary2DAxisTouch);
-        if (busy) grip = trigger = 0;
-        for (int j = 0; j < Sim.Joints; j++)
+        if (tracked.Tracked)
         {
-            int f = fingerOf[j];
-            float amount = f == 1 ? trigger : f == 0 ? (thumbDown ? Mathf.Max(grip, 0.5f) : 0.2f * grip) : grip;
-            freeAngles[j] = Mathf.Lerp(meta.rest[j], meta.fist[j], amount);
+            Array.Copy(tracked.Angles, freeAngles, Sim.Joints);
         }
+        else
+        {
+            var node = FreeNode;
+            bool thumbDown = Button(node, CommonUsages.primaryTouch) || Button(node, CommonUsages.secondaryTouch)
+                             || Button(node, CommonUsages.primary2DAxisTouch);
+            for (int j = 0; j < Sim.Joints; j++)
+            {
+                int f = fingerOf[j];
+                float amount = f == 1 ? trigger : f == 0 ? (thumbDown ? Mathf.Max(grip, 0.5f) : 0.2f * grip) : grip;
+                freeAngles[j] = Mathf.Lerp(meta.rest[j], meta.fist[j], amount);
+            }
+        }
+        if (busy) grip = trigger = 0;
         grabbing = grabbing ? grip > GrabOff : grip > GrabOn;
         sim.SetInput(Sim.Free, freeAngles, Mathf.Max(grip, trigger), false, grabbing);
     }
 
+    // The cue card and ghost hand while the laptop records
+    void ShowRecording()
+    {
+        bool running = record != null && record.running;
+        if (running != card.Visible)
+        {
+            if (running) card.root.gameObject.SetActive(true);
+            else card.Close();
+        }
+        ghost.Root.gameObject.SetActive(running && record.has_target);
+        if (!running) return;
+        if (record.index != cueIndex)
+        {
+            cueIndex = record.index;
+            cueStartedAt = Time.time - record.elapsed;
+        }
+        var lines = (record.text ?? "").Split('\n');
+        cueMeta.text = $"CUE {record.index + 1} / {record.count}" + (record.marked_bad ? "   ·   <color=#ff3b3b>MARKED BAD</color>" : "");
+        cueTitle.text = lines[0];
+        cueBody.text = lines.Length > 1 ? string.Join(" ", lines, 1, lines.Length - 1) : "";
+        cueProgress(record.seconds > 0 ? record.elapsed / record.seconds : 0);
+        cueNext.text = string.IsNullOrEmpty(record.next) ? "" : "Next: " + record.next;
+        cueState.text = record.hum ? "<color=#ffc233>Hum on the band: the cue will be redone. Check the pads, then Continue.</color>"
+            : record.paused ? "<color=#ffc233>Paused. Continue when ready.</color>"
+            : record.seconds <= 0 ? "Continue when ready." : "";
+        if (record.has_target && record.target != null && record.target.Length == Sim.Joints)
+        {
+            float t = Mathf.Clamp01((Time.time - cueStartedAt) / FollowInS);
+            for (int j = 0; j < Sim.Joints; j++) ghostAngles[j] = Mathf.Lerp(meta.rest[j], record.target[j], t);
+            ghost.Pose(ghostAngles);
+        }
+    }
+
     void ShowLabels(Link.Frame frame)
     {
-        linkText.text = !link.Connected ? "Laptop: not connected, hand at rest"
-            : frame != null && frame.driven ? (frame.locked ? "Laptop: control, locked" : "Laptop: control running")
-            : "Laptop: connected, no control running";
-        simText.text = sim.Error ?? $"Grip {readout[0]:0.0} N   ·   sim {sim.Speed:0.0}x real time";
-        massText.text = $"Mass  x{current.mass_scale:0.00}";
-        forceText.text = $"Hand strength  {current.max_force:0} N";
-        heightText.text = $"Height  {settings.deskHeight * 100:0} cm";
-        sideText.text = settings.prostheticLeft ? "Left arm" : "Right arm";
-        adjustText.text = adjustFree ? "Adjusting: free hand" : "Adjusting: prosthetic hand";
-        var o = Adjusting;
-        offsetText.text = $"Wrist {o.pos.z * 100:0} cm forward, {o.pos.y * 100:0} up, {o.pos.x * 100:0} right of the " +
-                          $"controller; tilt {o.rot.x:0}°, turn {o.rot.y:0}°, roll {o.rot.z:0}°";
+        bool driven = frame != null && frame.driven;
+        linkText.text = !link.Connected ? "Laptop not connected, the hand rests"
+            : driven ? (frame.locked ? "Control running, locked" : "Control running")
+            : "Laptop connected, no control running";
+        bool recording = record != null && record.running;
+        Ui.SetChip(menu, recording ? "RECORDING" : link.Connected ? "LAPTOP" : "OFFLINE",
+            recording ? Ui.Bad : link.Connected ? Ui.Good : Ui.Muted);
+        simText.text = sim.Error ?? $"Sim {sim.Speed:0.0}x real time";
+        readouts[0].text = $"{readout[0]:0.0} N";
+        readouts[1].text = $"{readout[7]:0.0} N";
+        massText.text = $"x{current.mass_scale:0.00}";
+        forceText.text = $"{current.max_force:0} N";
+        heightText.text = $"{settings.deskHeight * 100:0} cm";
+        sideText.text = settings.prostheticLeft ? "Left: the controller strapped to the left forearm"
+            : "Right: the controller strapped to the right forearm";
+        freeText.text = tracked.Tracked ? "Tracked from your real hand, nothing to set."
+            : "Not seen. Hold it in view, or hold a controller in it.";
+        recordText.text = record == null ? "Laptop not connected"
+            : recording ? $"Cue {record.index + 1} of {record.count}" + (record.paused ? ", paused" : "")
+            : "Not recording";
+        recordError.text = record != null && !string.IsNullOrEmpty(record.error) ? $"<color=#ff3b3b>{record.error}</color>" : "";
+        sessionButtons[0].text = record != null && record.paused ? "Continue" : "Pause";
     }
 
     void SendReadout()
@@ -573,23 +783,6 @@ public class App : MonoBehaviour
         };
         for (int i = 0; i < 5; i++) r.finger_force[i] = (float)readout[1 + i];
         link.Readout = JsonUtility.ToJson(new ReadoutMessage { readout = r });
-    }
-
-    // Spawn and clear from the laptop's VR tab. Commands already there when the link comes up are old, skipped
-    void RunCommands(Link.Frame f)
-    {
-        if (f.commands == null) return;
-        int newest = lastCommand;
-        foreach (var c in f.commands)
-        {
-            if (lastCommand >= 0 && c.id > lastCommand)
-            {
-                if (c.kind == "spawn") Spawn(c.arg);
-                else if (c.kind == "clear") ClearDesk();
-            }
-            newest = Math.Max(newest, c.id);
-        }
-        lastCommand = Math.Max(newest, 0);
     }
 
     void SendView()
@@ -625,7 +818,7 @@ public class App : MonoBehaviour
         viewOut.parked = parked;
         viewOut.held[0] = (int)readout[8];
         viewOut.held[1] = (int)readout[9];
-        viewOut.menu = ui.Visible;
+        viewOut.menu = menu.Visible;
         link.View = JsonUtility.ToJson(new ViewMessage { view = viewOut });
     }
 

@@ -5,6 +5,7 @@ using UnityEngine;
 public class Room
 {
     readonly Transform desk;
+    public readonly GameObject Floor;
     readonly Transform[] legs = new Transform[4];
     readonly Vector2 half;
     readonly float centreZ;
@@ -18,7 +19,7 @@ public class Room
         RenderSettings.fogDensity = 0.12f;
         RenderSettings.fogColor = Ui.Bg;
 
-        var floor = GameObject.CreatePrimitive(PrimitiveType.Plane);
+        var floor = Floor = GameObject.CreatePrimitive(PrimitiveType.Plane);
         floor.name = "floor";
         Object.Destroy(floor.GetComponent<Collider>());
         floor.transform.localScale = new Vector3(4, 1, 4);

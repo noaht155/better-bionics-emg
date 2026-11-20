@@ -2419,6 +2419,23 @@ levels: r 0.995 to 0.999 per session, mean difference 0.005 to 0.013, a clench l
   numbered commands). `web/scene3d.js` holds the three.js setup the contact page and the VR tab share. Checked:
   scene of 48 geoms reaches the tab, a spawn from the tab lands on the headset's desk, headset sim 6.2 to 6.7x
   real time with rendering, no console errors on any tab.
+- Round 3 (Noah): the free hand is the real hand, tracked by the headset while the other hand holds its
+  controller (Meta's `XR_META_simultaneous_hands_and_controllers`, enabled through a small OpenXR feature,
+  `Multimodal.cs`; checked: left controller and right hand tracked together). Its angles come from
+  `HandAngles.cs`, a port of `hand_angles.py`. Two fixes after Noah tried it: the thumb's angles put the sim thumb
+  off to the side (the sim thumb has no metacarpal turn), so its 4 angles are fitted to the real tip and last joint
+  (`TrackedHand.FitThumb`, `bb_fk_points`); finger spread is noise in a fist, faded out as the knuckle bends.
+  Menu by hand: palm to the face and thumb on the middle fingertip (the index pinch there is the headset's menu),
+  or the Menu button on the desk corner.
+- Passthrough option (ARFoundation camera on Meta's OpenXR) and placing the prosthetic hand by hand: a fist inside
+  it carries it, its controller offset follows.
+- Recording from the headset (protocol F, quick or full): `/ws/quest` takes start, continue, pause, bad, stop and
+  sends the cue state back; settings come from the newest real session. A card over the desk shows the cue and a
+  ghost hand (`Ghost.cs`, MuJoCo kinematics of the same hand) shows the target pose.
+- UI redesign in the web app's style: Inter and JetBrains Mono (OFL, in `Assets/Fonts`), glass panel, numbered
+  sections, gradient accents, touch sliders and toggles. Not yet checked in the headset: thumb fit, menu gesture,
+  recording end to end, text sizes. The PC's USB port doesn't keep up with the headset's draw while the app runs:
+  stop the app when not testing.
 
 ## Open
 
@@ -2487,10 +2504,9 @@ Now: 3D contact
      with setup offsets, the free hand on the normal controls, objects, the desk, the menu and the laptop's VR tab.
      Noah to try in the headset: default hand offsets, menu text size, grabbing with the free hand, the can grasp
      with a model or Simulate running, settings and spawns both ways, sim speed over 1x. Still to do from the old
-     step 4: ghost hand when the desk holds the hand back, a cap on the weld pull, a speed limit on the hand target,
-     passthrough option. Mac needs Android platform-tools for the link.
-  5. Training from VR (Noah, 2026-11-20): pick a protocol in the headset, cues as a 3D hand in first person while
-     the laptop records, then Train in VR runs training on the desktop. Then the live predicted hand as a new
+     step 4: ghost hand when the desk holds the hand back, a cap on the weld pull, a speed limit on the hand target. Mac needs Android platform-tools for the link.
+  5. Training from VR (Noah, 2026-11-20): recording F from the headset built 2026-11-20 (round 3), to try. Still to
+     do: Train in VR runs training on the desktop. Then the live predicted hand as a new
      protocol beside F.
   Desktop app (Noah, 2026-11-20): either a browser page or its own window is fine; a window (pywebview over the
   same pages) can come later without changing the pages.
