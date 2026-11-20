@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Builds bench.c for the Quest, pushes it with MuJoCo and record.py's files, and runs it. Needs build-mujoco.sh and
-# record.py run first, and the Quest on USB with debugging allowed.
+# Builds bench.c for the Quest, pushes it with bbsim, MuJoCo and record.py's files, and runs it. Needs build-bbsim.sh
+# and record.py run first, and the Quest on USB with debugging allowed.
 # Usage: quest-app/native/bench/run.sh [path to Unity's AndroidPlayer folder]
 set -euo pipefail
 
@@ -22,8 +22,8 @@ CC="$(ls "$PLAYER"/NDK/toolchains/llvm/prebuilt/*/bin/aarch64-linux-android32-cl
 DEST=/data/local/tmp/mujoco-bench
 export MSYS_NO_PATHCONV=1
 
-"$CC" -O2 -I"$BUILD/mujoco-src/include" "$HERE/bench.c" -L"$BUILD/mujoco/lib" -lmujoco -lm -o "$BUILD/bench/bench"
+"$CC" -O2 -I"$BUILD/mujoco-src/include" "$HERE/bench.c" -L"$BUILD" -L"$BUILD/mujoco/lib" -lbbsim -lmujoco -lm -o "$BUILD/bench/bench"
 "$ADB" shell mkdir -p "$DEST"
-"$ADB" push "$BUILD/mujoco/lib/libmujoco.so" "$BUILD/bench/bench" "$BUILD/bench/can.xml" "$BUILD/bench/rule.txt" \
+"$ADB" push "$BUILD/mujoco/lib/libmujoco.so" "$BUILD/libbbsim.so" "$BUILD/bench/bench" "$BUILD/bench/can.xml" "$BUILD/bench/rule.txt" \
   "$BUILD/bench/ticks.bin" "$DEST/" > /dev/null
 "$ADB" shell "cd $DEST && chmod 755 bench && LD_LIBRARY_PATH=. ./bench 3"

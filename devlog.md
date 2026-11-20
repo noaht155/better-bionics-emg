@@ -2386,6 +2386,10 @@ levels: r 0.995 to 0.999 per session, mean difference 0.005 to 0.013, a clench l
   haptics' force mode while it keeps coming (0.5 s). `quest_link.py` keeps `adb reverse` on a plugged-in Quest
   (Unity's adb or one on PATH); a second copy of the app only takes the mapping once the first stops answering, and
   `--no-quest` turns it off.
+- `quest-app/native/bbsim.c`: sim.py's World in C (force rule, assist, blow-up recovery), not the C# port planned,
+  since the C force rule already matched Python; the bench now runs through it, so there's one copy.
+  `export_model.py` adds the rule's constants to sim.py's XML as custom numerics, so the XML alone carries the model.
+  On the headset: can at 0.1324 m like Python in 3 of 3 runs, 7.0 to 7.7x real time, no blow-ups.
 
 ## Open
 
