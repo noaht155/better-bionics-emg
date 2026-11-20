@@ -80,50 +80,70 @@ def _quat_z(deg):
     return f"{math.cos(a):.6f} 0 0 {math.sin(a):.6f}"
 
 
-def _palm_vertices():
-    """The outline at the palm's full thickness, and shrunk a little further out, so the edges come out rounded."""
+def _palm_vertices(m=1):
+    """The outline at the palm's full thickness, and shrunk a little further out, so the edges come out rounded. m -1
+    mirrors it into a left hand."""
     pts = []
     centre = np.mean(PALM_OUTLINE, 0)
     for z, shrink in ((10, 0), (-10, 0), (14, 6), (-13, 6)):
         for p in PALM_OUTLINE:
             d = (np.array(p) - centre) / np.linalg.norm(np.array(p) - centre)
-            pts.append((p[0] - d[0] * shrink, p[1] - d[1] * shrink, z))
+            pts.append((m * (p[0] - d[0] * shrink), p[1] - d[1] * shrink, z))
     return " ".join(f"{v / 1000:.4f}" for p in pts for v in p)
 
 
-def _finger(name, base, splay, lengths):
-    joints = [f'<joint name="{name}_mcp_abd" axis="0 0 -1" range="-30 30"/>'
-              f'<joint name="{name}_mcp_flex" axis="1 0 0" range="-20 100"/>',
-              f'<joint name="{name}_pip" axis="1 0 0" range="0 115"/>',
-              f'<joint name="{name}_dip" axis="1 0 0" range="-5 90"/>']
+def _finger(name, base, splay, lengths, prefix="", m=1):
+    """One finger; prefix goes before every name, m -1 mirrors it into a left hand. A mirror isn't a rotation:
+    flexion axes along x stay, the spread axis along z and the splay angle flip, so the same angles mirror the pose."""
+    joints = [f'<joint name="{prefix}{name}_mcp_abd" axis="0 0 {-m}" range="-30 30"/>'
+              f'<joint name="{prefix}{name}_mcp_flex" axis="1 0 0" range="-20 100"/>',
+              f'<joint name="{prefix}{name}_pip" axis="1 0 0" range="0 115"/>',
+              f'<joint name="{prefix}{name}_dip" axis="1 0 0" range="-5 90"/>']
     xml = ""
     for i, (segment, length) in enumerate(zip(("prox", "mid", "dist"), lengths)):
-        pos = _mm(base) if i == 0 else f"0 {lengths[i - 1] / 1000:.4f} 0"
-        quat = f' quat="{_quat_z(-splay)}"' if i == 0 else ""
+        pos = _mm([m * base[0], *base[1:]]) if i == 0 else f"0 {lengths[i - 1] / 1000:.4f} 0"
+        quat = f' quat="{_quat_z(-m * splay)}"' if i == 0 else ""
         radius = FINGER_RADIUS * (1 - (1 - TAPER) * i / 2) / 1000
-        xml += (f'<body name="{name}_{segment}" pos="{pos}"{quat}>{joints[i]}'
-                f'<geom name="{name}_{segment}" class="hand" type="capsule" '
+        xml += (f'<body name="{prefix}{name}_{segment}" pos="{pos}"{quat}>{joints[i]}'
+                f'<geom name="{prefix}{name}_{segment}" class="hand" type="capsule" '
                 f'fromto="0 0 0 0 {length / 1000:.4f} 0" size="{radius:.4f}"/>')
     return xml + "</body>" * 3
 
 
-def _thumb():
+def _thumb(prefix="", m=1):
     # hand.js bends the thumb towards (-1, 0, 1) in the hand frame, taken at the rest pose into the metacarpal's frame
     bend = np.array([-0.5, 0.0, math.sqrt(0.5)])
-    axis = np.array([bend[2], 0.0, -bend[0]])
+    axis = np.array([bend[2], 0.0, -m * bend[0]])
     axis = " ".join(f"{v:.4f}" for v in axis / np.linalg.norm(axis))
     meta, prox, dist = (v / 1000 for v in THUMB_LENGTHS)
     r = FINGER_RADIUS / 1000
-    return (f'<body name="thumb_meta" pos="{_mm(THUMB_BASE)}" quat="{_quat_z(-THUMB_REST_DEG)}">'
-            '<joint name="thumb_cmc_flex" axis="0 0 1" range="-30 80"/>'
-            '<joint name="thumb_cmc_abd" axis="1 0 0" range="-15 80"/>'
-            f'<geom name="thumb_meta" class="hand" type="capsule" fromto="0 0 0 0 {meta:.4f} 0" size="0.011"/>'
-            '<geom name="thumb_thenar" class="hand" type="ellipsoid" pos="-0.008 0.018 0.006" size="0.014 0.024 0.009"/>'
-            f'<body name="thumb_prox" pos="0 {meta:.4f} 0"><joint name="thumb_mcp" axis="{axis}" range="-10 80"/>'
-            f'<geom name="thumb_prox" class="hand" type="capsule" fromto="0 0 0 0 {prox:.4f} 0" size="{r:.4f}"/>'
-            f'<body name="thumb_dist" pos="0 {prox:.4f} 0"><joint name="thumb_ip" axis="{axis}" range="-10 90"/>'
-            f'<geom name="thumb_dist" class="hand" type="capsule" fromto="0 0 0 0 {dist:.4f} 0" '
+    n = prefix
+    return (f'<body name="{n}thumb_meta" pos="{_mm([m * THUMB_BASE[0], *THUMB_BASE[1:]])}" '
+            f'quat="{_quat_z(-m * THUMB_REST_DEG)}">'
+            f'<joint name="{n}thumb_cmc_flex" axis="0 0 {m}" range="-30 80"/>'
+            f'<joint name="{n}thumb_cmc_abd" axis="1 0 0" range="-15 80"/>'
+            f'<geom name="{n}thumb_meta" class="hand" type="capsule" fromto="0 0 0 0 {meta:.4f} 0" size="0.011"/>'
+            f'<geom name="{n}thumb_thenar" class="hand" type="ellipsoid" pos="{-m * 0.008:.3f} 0.018 0.006" '
+            'size="0.014 0.024 0.009"/>'
+            f'<body name="{n}thumb_prox" pos="0 {meta:.4f} 0"><joint name="{n}thumb_mcp" axis="{axis}" range="-10 80"/>'
+            f'<geom name="{n}thumb_prox" class="hand" type="capsule" fromto="0 0 0 0 {prox:.4f} 0" size="{r:.4f}"/>'
+            f'<body name="{n}thumb_dist" pos="0 {prox:.4f} 0"><joint name="{n}thumb_ip" axis="{axis}" range="-10 90"/>'
+            f'<geom name="{n}thumb_dist" class="hand" type="capsule" fromto="0 0 0 0 {dist:.4f} 0" '
             f'size="{r * TAPER:.4f}"/></body></body></body>')
+
+
+def hand_xml(prefix="", mirror=False):
+    """What goes inside a hand's palm body: palm, pad, fingers and thumb, every name starting with prefix. mirror makes
+    it a left hand. The palm mesh is the asset named prefix + "palm" (palm_mesh_xml)."""
+    m = -1 if mirror else 1
+    return (f'<geom name="{prefix}palm" class="hand" type="mesh" mesh="{prefix}palm"/>'
+            f'<geom name="{prefix}palm_pad" class="hand" type="ellipsoid" pos="{-m * 0.024:.3f} 0.035 0.008" '
+            'size="0.013 0.03 0.008"/>'
+            + "".join(_finger(n, *g, prefix, m) for n, g in FINGER_GEOMETRY.items()) + _thumb(prefix, m))
+
+
+def palm_mesh_xml(prefix="", mirror=False):
+    return f'<mesh name="{prefix}palm" vertex="{_palm_vertices(-1 if mirror else 1)}"/>'
 
 
 def model_xml(obj):
@@ -132,7 +152,7 @@ def model_xml(obj):
     return f"""<mujoco model="contact">
 <option timestep="{TIMESTEP}" integrator="implicitfast" gravity="0 0 -{GRAVITY}" cone="elliptic"
 noslip_iterations="{NOSLIP_ITERATIONS}"/>
-<asset><mesh name="palm" vertex="{_palm_vertices()}"/></asset>
+<asset>{palm_mesh_xml()}</asset>
 <default><joint damping="0.02" armature="0.0002"/><default class="hand">
 <geom friction="{HAND_FRICTION} 0.01 0.001" condim="4" density="1100" contype="1" conaffinity="2"/></default></default>
 <worldbody>
@@ -141,9 +161,7 @@ noslip_iterations="{NOSLIP_ITERATIONS}"/>
 priority="1"/>
 <body name="target" mocap="true" pos="0 -0.05 0.25" xyaxes="1 0 0 0 -1 0"/>
 <body name="palm" pos="0 -0.05 0.25" xyaxes="1 0 0 0 -1 0"><freejoint/>
-<geom name="palm" class="hand" type="mesh" mesh="palm"/>
-<geom name="palm_pad" class="hand" type="ellipsoid" pos="-0.024 0.035 0.008" size="0.013 0.03 0.008"/>
-{''.join(_finger(n, *g) for n, g in FINGER_GEOMETRY.items())}{_thumb()}</body>
+{hand_xml()}</body>
 <body name="object" pos="0 -0.12 {half + 0.001:.4f}"><freejoint/>
 <geom name="object" {shape} mass="{mass}" friction="{friction} 0.01 0.001" condim="4" contype="2"
 conaffinity="3"/></body>

@@ -24,6 +24,6 @@ export MSYS_NO_PATHCONV=1
 
 "$CC" -O2 -I"$BUILD/mujoco-src/include" "$HERE/bench.c" -L"$BUILD" -L"$BUILD/mujoco/lib" -lbbsim -lmujoco -lm -o "$BUILD/bench/bench"
 "$ADB" shell mkdir -p "$DEST"
-"$ADB" push "$BUILD/mujoco/lib/libmujoco.so" "$BUILD/libbbsim.so" "$BUILD/bench/bench" "$BUILD/bench/can.xml" "$BUILD/bench/rule.txt" \
+"$ADB" push "$BUILD/mujoco/lib/libmujoco.so" "$BUILD/libbbsim.so" "$BUILD/bench/bench" "$BUILD/bench/scene.xml" "$BUILD/bench/rule.txt" \
   "$BUILD/bench/ticks.bin" "$DEST/" > /dev/null
 "$ADB" shell "cd $DEST && chmod 755 bench && LD_LIBRARY_PATH=. ./bench 3"

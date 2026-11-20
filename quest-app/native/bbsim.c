@@ -1,32 +1,48 @@
-// sim.py's World in C for the Quest app: one hand and one object, the same per-finger force rule, assist and blow-up
-// recovery. The model XML comes from export_model.py, which adds the rule's constants to it as custom numerics, so
-// the XML alone carries everything sim.py would. Coordinates and units as in sim.py (metres, z up, degrees in).
+// sim.py's World in C for the Quest app, with two hands and a pool of objects (export_model.py's scene). Each hand
+// follows its own angles with sim.py's per-finger force rule. The prosthetic hand ("p_") has sim.py's grasp assist;
+// the free hand ("f_") holds whatever it touches while its grab is on, so grabbing with a controller is never
+// fiddly. The rule's constants come in the XML as custom numerics. Coordinates and units as in sim.py.
 #include <math.h>
 #include <stdlib.h>
 #include <string.h>
+#include <stdio.h>
 #include <mujoco/mujoco.h>
 
 #define NJ 20
 #define NF 5
+#define NH 2
+#define MAXOBJ 64
 #define EXPORT __attribute__((visibility("default")))
 
 static const char* FINGERS[NF] = {"thumb", "index", "middle", "ring", "pinky"};
+static const char* PREFIX[NH] = {"p_", "f_"};
+
+typedef struct {
+  int palm, mocap;
+  int act[NJ], qadr[NJ], finger_of_joint[NJ], bends[NJ];
+  double angles[NJ], effort, lock_effort;
+  int locked, was_locked, grab;
+  double finger_force[NF], palm_force, force_on[MAXOBJ];
+  int held;
+  int hold_eq[MAXOBJ];
+} Hand;
 
 typedef struct {
   mjModel* m;
   mjData* d;
-  double kp, kp_press, assist_n, max_mass_scale, gravity, half;
-  double arm[NJ];
-  int qadr[NJ], finger_of_joint[NJ], bends[NJ];
-  // -2 not part of the hand, -1 palm, else the finger
-  int* finger_of_geom;
-  int obj_body, obj_geom, palm, assist;
-  double base_mass, base_inertia[3];
+  double kp, kp_press, assist_n, max_mass_scale, gravity, arm[NJ];
+  Hand hand[NH];
+  int nobj, obj_body[MAXOBJ], obj_geom[MAXOBJ];
+  // Parked objects wait off the desk out of the collisions and held still, so the unused pool costs nothing
+  int parked[MAXOBJ];
+  double park_qpos[MAXOBJ][7];
+  double base_mass[MAXOBJ], base_inertia[MAXOBJ][3];
+  // Per geom: the hand it belongs to (-1 none), its finger (-1 palm), the object it is (-1 none)
+  int *hand_of_geom, *finger_of_geom, *obj_of_geom;
+  int floor_geom;
   double max_force;
-  int assist_on;
-  double finger_force[NF], palm_force, time;
-  int blowups, was_locked;
-  double lock_effort;
+  int assist_on, blowups;
+  double time;
 } World;
 
 static double clip(double x, double lo, double hi) { return x < lo ? lo : x > hi ? hi : x; }
@@ -45,18 +61,53 @@ static const mjtNum* numeric(const mjModel* m, const char* name, int size) {
   return m->numeric_data + m->numeric_adr[id];
 }
 
-static void set_mass(World* w, double scale) {
-  scale = clip(scale, 0.05, w->max_mass_scale);
-  w->m->body_mass[w->obj_body] = w->base_mass * scale;
-  for (int k = 0; k < 3; k++) w->m->body_inertia[3 * w->obj_body + k] = w->base_inertia[k] * scale;
+static void fail(char* err, int errlen, const char* msg) {
+  strncpy(err, msg, errlen - 1);
+  err[errlen - 1] = 0;
 }
 
 EXPORT void bb_free(World* w) {
   if (!w) return;
   mj_deleteData(w->d);
   mj_deleteModel(w->m);
+  free(w->hand_of_geom);
   free(w->finger_of_geom);
+  free(w->obj_of_geom);
   free(w);
+}
+
+static int setup_hand(World* w, int h) {
+  mjModel* m = w->m;
+  Hand* hd = &w->hand[h];
+  char name[64];
+  snprintf(name, sizeof(name), "%spalm", PREFIX[h]);
+  hd->palm = mj_name2id(m, mjOBJ_BODY, name);
+  snprintf(name, sizeof(name), "%starget", PREFIX[h]);
+  int target = mj_name2id(m, mjOBJ_BODY, name);
+  if (hd->palm < 0 || target < 0 || m->body_mocapid[target] < 0) return 0;
+  hd->mocap = m->body_mocapid[target];
+  int j = 0;
+  size_t plen = strlen(PREFIX[h]);
+  for (int a = 0; a < m->nu && j < NJ; a++) {
+    int joint = m->actuator_trnid[2 * a];
+    const char* jn = mj_id2name(m, mjOBJ_JOINT, joint);
+    if (!jn || strncmp(jn, PREFIX[h], plen)) continue;
+    const char* bare = jn + plen;
+    hd->act[j] = a;
+    hd->qadr[j] = m->jnt_qposadr[joint];
+    hd->finger_of_joint[j] = finger_index(bare);
+    // Spreading the fingers stays on the angles, only bending presses
+    hd->bends[j] = !strstr(bare, "abd") || !strcmp(bare, "thumb_cmc_abd");
+    j++;
+  }
+  if (j != NJ) return 0;
+  for (int o = 0; o < w->nobj; o++) {
+    snprintf(name, sizeof(name), "%shold%d", PREFIX[h], o);
+    hd->hold_eq[o] = mj_name2id(m, mjOBJ_EQUALITY, name);
+    if (hd->hold_eq[o] < 0) return 0;
+  }
+  hd->held = -1;
+  return 1;
 }
 
 EXPORT World* bb_create(const char* xml, int len, char* err, int errlen) {
@@ -66,13 +117,12 @@ EXPORT World* bb_create(const char* xml, int len, char* err, int errlen) {
   mjModel* m = mj_loadXML("model.xml", &vfs, err, errlen);
   mj_deleteVFS(&vfs);
   if (!m) return NULL;
-  const char* names[] = {"kp", "kp_press", "assist_n", "max_mass_scale", "gravity", "object_half", "arm"};
-  const mjtNum* v[7];
-  for (int i = 0; i < 7; i++) {
-    v[i] = numeric(m, names[i], i == 6 ? NJ : 1);
-    if (!v[i] || m->nu != NJ) {
-      strncpy(err, "model has no force rule constants, export it with export_model.py", errlen - 1);
-      err[errlen - 1] = 0;
+  const char* names[] = {"kp", "kp_press", "assist_n", "max_mass_scale", "gravity", "arm"};
+  const mjtNum* v[6];
+  for (int i = 0; i < 6; i++) {
+    v[i] = numeric(m, names[i], i == 5 ? NJ : 1);
+    if (!v[i]) {
+      fail(err, errlen, "model has no force rule constants, export it with export_model.py");
       mj_deleteModel(m);
       return NULL;
     }
@@ -85,170 +135,271 @@ EXPORT World* bb_create(const char* xml, int len, char* err, int errlen) {
   w->assist_n = *v[2];
   w->max_mass_scale = *v[3];
   w->gravity = *v[4];
-  w->half = *v[5];
-  for (int j = 0; j < NJ; j++) {
-    int joint = m->actuator_trnid[2 * j];
-    const char* name = mj_id2name(m, mjOBJ_JOINT, joint);
-    w->arm[j] = v[6][j];
-    w->qadr[j] = m->jnt_qposadr[joint];
-    w->finger_of_joint[j] = finger_index(name);
-    // Spreading the fingers stays on the angles, only bending presses
-    w->bends[j] = !strstr(name, "abd") || !strcmp(name, "thumb_cmc_abd");
+  for (int j = 0; j < NJ; j++) w->arm[j] = v[5][j];
+  char name[32];
+  for (w->nobj = 0; w->nobj < MAXOBJ; w->nobj++) {
+    snprintf(name, sizeof(name), "obj%d", w->nobj);
+    int body = mj_name2id(m, mjOBJ_BODY, name);
+    if (body < 0) break;
+    w->obj_body[w->nobj] = body;
+    w->obj_geom[w->nobj] = mj_name2id(m, mjOBJ_GEOM, name);
+    w->base_mass[w->nobj] = m->body_mass[body];
+    w->parked[w->nobj] = 1;
+    m->geom_contype[w->obj_geom[w->nobj]] = m->geom_conaffinity[w->obj_geom[w->nobj]] = 0;
+    memcpy(w->park_qpos[w->nobj], m->qpos0 + m->jnt_qposadr[m->body_jntadr[body]], 7 * sizeof(double));
+    for (int k = 0; k < 3; k++) w->base_inertia[w->nobj][k] = m->body_inertia[3 * body + k];
   }
-  w->obj_body = mj_name2id(m, mjOBJ_BODY, "object");
-  w->obj_geom = mj_name2id(m, mjOBJ_GEOM, "object");
-  w->palm = mj_name2id(m, mjOBJ_BODY, "palm");
-  w->assist = mj_name2id(m, mjOBJ_EQUALITY, "assist");
+  for (int h = 0; h < NH; h++) {
+    if (!setup_hand(w, h)) {
+      fail(err, errlen, "model lacks a hand, its joints or its hold welds");
+      bb_free(w);
+      return NULL;
+    }
+  }
+  w->hand_of_geom = malloc(sizeof(int) * m->ngeom);
   w->finger_of_geom = malloc(sizeof(int) * m->ngeom);
+  w->obj_of_geom = malloc(sizeof(int) * m->ngeom);
   for (int g = 0; g < m->ngeom; g++) {
-    int body = m->geom_bodyid[g];
-    const char* name = mj_id2name(m, mjOBJ_GEOM, g);
-    w->finger_of_geom[g] = (body == 0 || body == w->obj_body) ? -2 : name ? finger_index(name) : -1;
+    w->hand_of_geom[g] = w->finger_of_geom[g] = w->obj_of_geom[g] = -1;
+    for (int o = 0; o < w->nobj; o++)
+      if (w->obj_geom[o] == g) w->obj_of_geom[g] = o;
+    for (int b = m->geom_bodyid[g]; b > 0; b = m->body_parentid[b])
+      for (int h = 0; h < NH; h++)
+        if (b == w->hand[h].palm) w->hand_of_geom[g] = h;
+    const char* gn = mj_id2name(m, mjOBJ_GEOM, g);
+    if (w->hand_of_geom[g] >= 0 && gn) w->finger_of_geom[g] = finger_index(gn + strlen(PREFIX[w->hand_of_geom[g]]));
   }
-  w->base_mass = m->body_mass[w->obj_body];
-  for (int k = 0; k < 3; k++) w->base_inertia[k] = m->body_inertia[3 * w->obj_body + k];
+  w->floor_geom = mj_name2id(m, mjOBJ_GEOM, "floor");
   w->max_force = 15;
-  for (int j = 0; j < NJ; j++) w->d->qpos[w->qadr[j]] = 0;
+  for (int h = 0; h < NH; h++)
+    for (int j = 0; j < NJ; j++) w->d->qpos[w->hand[h].qadr[j]] = 0;
   mj_forward(m, w->d);
   return w;
 }
 
 EXPORT void bb_set_params(World* w, double mass_scale, double max_force, int assist) {
-  set_mass(w, mass_scale);
+  mass_scale = clip(mass_scale, 0.05, w->max_mass_scale);
+  for (int o = 0; o < w->nobj; o++) {
+    w->m->body_mass[w->obj_body[o]] = w->base_mass[o] * mass_scale;
+    for (int k = 0; k < 3; k++) w->m->body_inertia[3 * w->obj_body[o] + k] = w->base_inertia[o][k] * mass_scale;
+  }
   w->max_force = max_force;
   w->assist_on = assist;
-  if (!assist) w->d->eq_active[w->assist] = 0;
+  Hand* p = &w->hand[0];
+  if (!assist && p->held >= 0) {
+    w->d->eq_active[p->hold_eq[p->held]] = 0;
+    p->held = -1;
+  }
 }
 
-EXPORT void bb_hand(World* w, double* pos, double* quat) {
-  memcpy(pos, w->d->mocap_pos, 3 * sizeof(double));
-  memcpy(quat, w->d->mocap_quat, 4 * sizeof(double));
+// The hand's angles (degrees, JOINTS order), effort 0 to 1, lock (holds the effort of the moment it locked) and, for
+// the free hand, grab
+EXPORT void bb_set_input(World* w, int h, const double* angles, double effort, int locked, int grab) {
+  Hand* hd = &w->hand[h];
+  memcpy(hd->angles, angles, sizeof(hd->angles));
+  hd->effort = effort;
+  hd->locked = locked;
+  hd->grab = grab;
 }
 
-// teleport also moves the palm there at once, for a new world taking over the old one's hand
-EXPORT void bb_set_hand(World* w, const double* pos, const double* quat, int teleport) {
+// Where the hand's target is (the palm follows it through the weld); teleport puts the palm there at once
+EXPORT void bb_set_hand(World* w, int h, const double* pos, const double* quat, int teleport) {
+  Hand* hd = &w->hand[h];
   double n = sqrt(quat[0] * quat[0] + quat[1] * quat[1] + quat[2] * quat[2] + quat[3] * quat[3]);
   if (n == 0) return;
-  for (int k = 0; k < 3; k++) w->d->mocap_pos[k] = pos[k];
-  for (int k = 0; k < 4; k++) w->d->mocap_quat[k] = quat[k] / n;
+  for (int k = 0; k < 3; k++) w->d->mocap_pos[3 * hd->mocap + k] = pos[k];
+  for (int k = 0; k < 4; k++) w->d->mocap_quat[4 * hd->mocap + k] = quat[k] / n;
   if (teleport) {
-    memcpy(w->d->qpos, w->d->mocap_pos, 3 * sizeof(double));
-    memcpy(w->d->qpos + 3, w->d->mocap_quat, 4 * sizeof(double));
+    int adr = w->m->jnt_qposadr[w->m->body_jntadr[hd->palm]], dof = w->m->jnt_dofadr[w->m->body_jntadr[hd->palm]];
+    memcpy(w->d->qpos + adr, w->d->mocap_pos + 3 * hd->mocap, 3 * sizeof(double));
+    memcpy(w->d->qpos + adr + 3, w->d->mocap_quat + 4 * hd->mocap, 4 * sizeof(double));
+    memset(w->d->qvel + dof, 0, 6 * sizeof(double));
     mj_forward(w->m, w->d);
   }
 }
 
-EXPORT void bb_place_object(World* w, const double* pos) {
-  int jnt = w->m->body_jntadr[w->obj_body];
-  int adr = w->m->jnt_qposadr[jnt], dof = w->m->jnt_dofadr[jnt];
-  w->d->eq_active[w->assist] = 0;
-  double q[7] = {pos[0], pos[1], pos[2], 1, 0, 0, 0};
-  memcpy(w->d->qpos + adr, q, sizeof(q));
-  memset(w->d->qvel + dof, 0, 6 * sizeof(double));
-  mj_forward(w->m, w->d);
+static void release(World* w, int o) {
+  for (int h = 0; h < NH; h++)
+    if (w->hand[h].held == o) {
+      w->d->eq_active[w->hand[h].hold_eq[o]] = 0;
+      w->hand[h].held = -1;
+    }
 }
 
-EXPORT void bb_reset_object(World* w) {
-  double pos[3] = {0, -0.12, w->half + 0.001};
-  bb_place_object(w, pos);
-}
-
-static double grip_force(const World* w) {
-  double f = w->palm_force;
-  for (int i = 0; i < NF; i++) f += w->finger_force[i];
-  return f;
-}
-
-static double weight(const World* w) { return w->m->body_mass[w->obj_body] * w->gravity; }
-
-static void read_forces(World* w) {
-  mjtNum f6[6];
-  memset(w->finger_force, 0, sizeof(w->finger_force));
-  w->palm_force = 0;
-  for (int i = 0; i < w->d->ncon; i++) {
-    mjContact* c = w->d->contact + i;
-    if (c->geom[0] != w->obj_geom && c->geom[1] != w->obj_geom) continue;
-    int other = c->geom[0] == w->obj_geom ? c->geom[1] : c->geom[0];
-    int finger = w->finger_of_geom[other];
-    if (finger == -2) continue;
-    mj_contactForce(w->m, w->d, i, f6);
-    if (finger < 0) w->palm_force += f6[0];
-    else w->finger_force[finger] += f6[0];
+static void hold_parked(World* w) {
+  for (int o = 0; o < w->nobj; o++) {
+    if (!w->parked[o]) continue;
+    int jnt = w->m->body_jntadr[w->obj_body[o]];
+    memcpy(w->d->qpos + w->m->jnt_qposadr[jnt], w->park_qpos[o], 7 * sizeof(double));
+    memset(w->d->qvel + w->m->jnt_dofadr[jnt], 0, 6 * sizeof(double));
   }
 }
 
-static void weld_here(World* w) {
+// Puts object o at pos with orientation quat (w x y z), still, and lets go of any hold on it. A parked object is
+// out of the collisions and stays where it's put
+EXPORT void bb_place_object(World* w, int o, const double* pos, const double* quat, int parked) {
+  int jnt = w->m->body_jntadr[w->obj_body[o]];
+  int adr = w->m->jnt_qposadr[jnt], dof = w->m->jnt_dofadr[jnt];
+  release(w, o);
+  memcpy(w->d->qpos + adr, pos, 3 * sizeof(double));
+  memcpy(w->d->qpos + adr + 3, quat, 4 * sizeof(double));
+  memset(w->d->qvel + dof, 0, 6 * sizeof(double));
+  memcpy(w->park_qpos[o], w->d->qpos + adr, 7 * sizeof(double));
+  w->parked[o] = parked;
+  w->m->geom_contype[w->obj_geom[o]] = parked ? 0 : 2;
+  w->m->geom_conaffinity[w->obj_geom[o]] = parked ? 0 : 3;
+  mj_forward(w->m, w->d);
+}
+
+EXPORT int bb_nobjects(World* w) { return w->nobj; }
+
+// Moves the floor to height below the desk top; objects resting on it need placing again
+EXPORT void bb_set_floor(World* w, double height) {
+  if (w->floor_geom >= 0) w->m->geom_pos[3 * w->floor_geom + 2] = -height;
+}
+
+static double grip_force(const Hand* hd) {
+  double f = hd->palm_force;
+  for (int i = 0; i < NF; i++) f += hd->finger_force[i];
+  return f;
+}
+
+static void read_forces(World* w) {
+  mjtNum f6[6];
+  for (int h = 0; h < NH; h++) {
+    Hand* hd = &w->hand[h];
+    memset(hd->finger_force, 0, sizeof(hd->finger_force));
+    memset(hd->force_on, 0, sizeof(double) * w->nobj);
+    hd->palm_force = 0;
+  }
+  for (int i = 0; i < w->d->ncon; i++) {
+    mjContact* c = w->d->contact + i;
+    int o = w->obj_of_geom[c->geom[0]], other = c->geom[1];
+    if (o < 0) {
+      o = w->obj_of_geom[c->geom[1]];
+      other = c->geom[0];
+    }
+    if (o < 0) continue;
+    int h = w->hand_of_geom[other];
+    if (h < 0) continue;
+    mj_contactForce(w->m, w->d, i, f6);
+    Hand* hd = &w->hand[h];
+    int finger = w->finger_of_geom[other];
+    if (finger < 0) hd->palm_force += f6[0];
+    else hd->finger_force[finger] += f6[0];
+    hd->force_on[o] += f6[0];
+  }
+}
+
+static int most_touched(const World* w, const Hand* hd) {
+  int best = -1;
+  for (int o = 0; o < w->nobj; o++)
+    if (hd->force_on[o] > 0 && (best < 0 || hd->force_on[o] > hd->force_on[best])) best = o;
+  return best;
+}
+
+// Activates hand h's hold weld on object o at their current relative pose
+static void weld_here(World* w, int h, int o) {
   mjData* d = w->d;
+  Hand* hd = &w->hand[h];
+  int palm = hd->palm, body = w->obj_body[o];
   mjtNum inv[4], rel_pos[3], rel_quat[4], diff[3];
-  mju_negQuat(inv, d->xquat + 4 * w->palm);
-  mju_sub3(diff, d->xpos + 3 * w->obj_body, d->xpos + 3 * w->palm);
+  mju_negQuat(inv, d->xquat + 4 * palm);
+  mju_sub3(diff, d->xpos + 3 * body, d->xpos + 3 * palm);
   mju_rotVecQuat(rel_pos, diff, inv);
-  mju_mulQuat(rel_quat, inv, d->xquat + 4 * w->obj_body);
+  mju_mulQuat(rel_quat, inv, d->xquat + 4 * body);
   // weld data: anchor, relative position, relative orientation, torque scale
-  mjtNum* e = w->m->eq_data + mjNEQDATA * w->assist;
+  mjtNum* e = w->m->eq_data + mjNEQDATA * hd->hold_eq[o];
   mju_zero3(e);
   mju_copy3(e + 3, rel_pos);
   mju_copy4(e + 6, rel_quat);
   e[10] = 1;
-  d->eq_active[w->assist] = 1;
+  d->eq_active[hd->hold_eq[o]] = 1;
+  hd->held = o;
 }
 
-static void update_assist(World* w) {
-  if (!w->assist_on) return;
-  double most = 0;
-  for (int i = 1; i < NF; i++) most = fmax(most, w->finger_force[i]);
-  int holds = w->finger_force[0] >= w->assist_n && most >= w->assist_n &&
-              grip_force(w) * w->m->geom_friction[3 * w->obj_geom] >= weight(w);
-  if (holds && !w->d->eq_active[w->assist]) weld_here(w);
-  else if (!holds && w->d->eq_active[w->assist]) w->d->eq_active[w->assist] = 0;
-}
-
-// Advances dt seconds towards the control layer's angles (degrees, JOINTS order) at effort 0 to 1
-EXPORT void bb_step(World* w, double dt, const double* angles, double effort, int locked) {
-  if (locked) {
-    if (!w->was_locked) w->lock_effort = effort;
-    w->was_locked = 1;
-    effort = w->lock_effort;
-  } else {
-    w->was_locked = 0;
+static void update_holds(World* w) {
+  // Prosthetic hand: sim.py's assist, thumb and another finger pressing hard enough for friction to carry the weight
+  Hand* p = &w->hand[0];
+  if (w->assist_on) {
+    int o = p->held >= 0 ? p->held : most_touched(w, p);
+    int holds = 0;
+    if (o >= 0) {
+      double most = 0;
+      for (int i = 1; i < NF; i++) most = fmax(most, p->finger_force[i]);
+      double weight = w->m->body_mass[w->obj_body[o]] * w->gravity;
+      holds = p->finger_force[0] >= w->assist_n && most >= w->assist_n &&
+              grip_force(p) * w->m->geom_friction[3 * w->obj_geom[o]] >= weight;
+    }
+    if (holds && p->held < 0) weld_here(w, 0, o);
+    else if (!holds && p->held >= 0) {
+      w->d->eq_active[p->hold_eq[p->held]] = 0;
+      p->held = -1;
+    }
   }
+  // Free hand: holds what it touches while the grab is on
+  Hand* f = &w->hand[1];
+  if (f->grab && f->held < 0) {
+    int o = most_touched(w, f);
+    if (o >= 0) weld_here(w, 1, o);
+  } else if (!f->grab && f->held >= 0) {
+    w->d->eq_active[f->hold_eq[f->held]] = 0;
+    f->held = -1;
+  }
+}
+
+static void drive(World* w, Hand* hd) {
+  double effort = hd->effort;
+  if (hd->locked) {
+    if (!hd->was_locked) hd->lock_effort = effort;
+    effort = hd->lock_effort;
+  }
+  hd->was_locked = hd->locked;
   effort = clip(effort, 0, 1);
+  mjData* d = w->d;
+  for (int j = 0; j < NJ; j++) {
+    double target = hd->angles[j] * M_PI / 180, q = d->qpos[hd->qadr[j]];
+    double cap_full = w->max_force * w->arm[j], cap_effort = cap_full * effort;
+    int pressing = hd->finger_force[hd->finger_of_joint[j]] > 0 && hd->bends[j];
+    d->ctrl[hd->act[j]] = pressing ? clip(w->kp_press * (target - q), -cap_full, cap_effort)
+                                   : clip(w->kp * (target - q), -cap_full, cap_full);
+  }
+}
+
+EXPORT void bb_step(World* w, double dt) {
   mjModel* m = w->m;
   mjData* d = w->d;
   long n = lround(dt / m->opt.timestep);
   for (long s = 0; s < (n > 1 ? n : 1); s++) {
-    for (int j = 0; j < NJ; j++) {
-      double target = angles[j] * M_PI / 180, q = d->qpos[w->qadr[j]];
-      double cap_full = w->max_force * w->arm[j], cap_effort = cap_full * effort;
-      int pressing = w->finger_force[w->finger_of_joint[j]] > 0 && w->bends[j];
-      d->ctrl[j] = pressing ? clip(w->kp_press * (target - q), -cap_full, cap_effort)
-                            : clip(w->kp * (target - q), -cap_full, cap_full);
-    }
-    double hand_pos[3], hand_quat[4], before = d->time;
-    bb_hand(w, hand_pos, hand_quat);
+    for (int h = 0; h < NH; h++) drive(w, &w->hand[h]);
+    double before = d->time;
     mj_step(m, d);
+    hold_parked(w);
     if (d->time < before) {
-      // MuJoCo resets everything, its clock too, when it goes unstable: put the hand back and the object on the table
+      // MuJoCo resets everything when it goes unstable, the objects back to where the XML parks them: put the
+      // palms back on their targets and drop the holds
       w->blowups++;
-      bb_set_hand(w, hand_pos, hand_quat, 0);
-      memcpy(d->qpos, hand_pos, sizeof(hand_pos));
-      memcpy(d->qpos + 3, hand_quat, sizeof(hand_quat));
-      bb_reset_object(w);
+      for (int h = 0; h < NH; h++) {
+        Hand* hd = &w->hand[h];
+        hd->held = -1;
+        bb_set_hand(w, h, d->mocap_pos + 3 * hd->mocap, d->mocap_quat + 4 * hd->mocap, 1);
+      }
     }
     read_forces(w);
-    update_assist(w);
+    update_holds(w);
   }
   w->time += dt;
 }
 
 EXPORT int bb_ngeom(World* w) { return w->m->ngeom; }
 
-// role: 0 table, 1 object, 2 hand. finger: as finger_of_geom. size: MuJoCo's geom size
-EXPORT void bb_geom(World* w, int g, int* type, int* role, int* finger, double* size) {
-  int body = w->m->geom_bodyid[g];
+// role: 0 desk or floor, 1 object, 2 hand. hand: 0 prosthetic, 1 free. finger: -1 palm. obj: the object's index
+EXPORT void bb_geom(World* w, int g, int* type, int* role, int* hand, int* finger, int* obj, double* size) {
   *type = w->m->geom_type[g];
-  *role = body == 0 ? 0 : body == w->obj_body ? 1 : 2;
+  *hand = w->hand_of_geom[g];
   *finger = w->finger_of_geom[g];
+  *obj = w->obj_of_geom[g];
+  *role = *obj >= 0 ? 1 : *hand >= 0 ? 2 : 0;
   memcpy(size, w->m->geom_size + 3 * g, 3 * sizeof(double));
 }
 
@@ -269,15 +420,25 @@ EXPORT void bb_poses(World* w, float* pos, float* mat) {
   for (int i = 0; i < 9 * w->m->ngeom; i++) mat[i] = (float)w->d->geom_xmat[i];
 }
 
-// grip force, 5 finger forces, palm force, weight, friction, assisted, object height, time, blow-ups
+// Object o's position and orientation (w x y z)
+EXPORT void bb_object_pose(World* w, int o, double* pos, double* quat) {
+  memcpy(pos, w->d->xpos + 3 * w->obj_body[o], 3 * sizeof(double));
+  memcpy(quat, w->d->xquat + 4 * w->obj_body[o], 4 * sizeof(double));
+}
+
+// Prosthetic grip force, its 5 finger forces and palm force, the free hand's grip force, the object each hand
+// holds (-1 none), the object the prosthetic hand presses on most, its weight and friction, time, blow-ups
 EXPORT void bb_readout(World* w, double* out) {
-  out[0] = grip_force(w);
-  for (int i = 0; i < NF; i++) out[1 + i] = w->finger_force[i];
-  out[6] = w->palm_force;
-  out[7] = weight(w);
-  out[8] = w->m->geom_friction[3 * w->obj_geom];
-  out[9] = w->d->eq_active[w->assist];
-  out[10] = w->d->xpos[3 * w->obj_body + 2];
-  out[11] = w->time;
-  out[12] = w->blowups;
+  Hand *p = &w->hand[0], *f = &w->hand[1];
+  out[0] = grip_force(p);
+  for (int i = 0; i < NF; i++) out[1 + i] = p->finger_force[i];
+  out[6] = p->palm_force;
+  out[7] = grip_force(f);
+  out[8] = p->held;
+  out[9] = f->held;
+  int o = most_touched(w, p);
+  out[10] = o;
+  out[11] = o >= 0 ? w->m->body_mass[w->obj_body[o]] * w->gravity : 0;
+  out[12] = w->time;
+  out[13] = w->blowups;
 }
