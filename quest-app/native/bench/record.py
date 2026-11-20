@@ -13,7 +13,7 @@ import ml  # noqa: E402,F401  puts emg-reading on the path
 import numpy as np  # noqa: E402
 import sim  # noqa: E402
 from sim import pool, scene_xml  # noqa: E402
-from test_sim import SIDE, WRAP, grasp  # noqa: E402
+from test_sim import grasp  # noqa: E402
 
 OUT = Path(__file__).resolve().parents[1] / "build" / "bench"
 
@@ -31,7 +31,7 @@ def record(self, dt, angles, effort, locked=False):
 
 
 sim.World.step = record
-lift = grasp("can", WRAP, SIDE, sim.FINGERS, True, 1.0, (-0.01, 0, 0))
+lift = grasp("can", 1.0)
 w = worlds[-1]
 OUT.mkdir(parents=True, exist_ok=True)
 (OUT / "scene.xml").write_text(scene_xml(prosthetic_left=False))

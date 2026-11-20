@@ -35,6 +35,9 @@ HAPTIC_DEFAULTS = {"haptic_floor": 0, "haptic_strength": 100, "haptic_full_force
 # slippery surface and slow on a rough one. Rate from the surface's friction, linear between these ends; at UPDATE_HZ
 # the fastest is 2 steps up, 2 down
 SURFACE_FRICTION = (0.4, 0.9)
+# Lighter touch is contact noise (a resting thumb grazing the can: 0.06 to 0.08 N) and plays nothing, since any force
+# above 0 starts at the lowest duty
+TOUCH_MIN_N = 0.2
 SURFACE_HZ = (5.0, 1.5)
 
 # Selection patterns, built from steps of 1 / UPDATE_HZ. Contact and release bursts are what DESC feedback uses

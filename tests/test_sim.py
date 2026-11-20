@@ -9,13 +9,11 @@ import ml  # noqa: F401
 
 mujoco = pytest.importorskip("mujoco")
 import sim  # noqa: E402
-from gestures import GESTURES, _pose  # noqa: E402
+from gestures import GESTURES  # noqa: E402
 from hand_angles import JOINTS  # noqa: E402
 
 HAND_JS = Path(__file__).resolve().parents[1] / "emg-reading" / "web" / "hand.js"
-# Thumb opposed, fingers curled more at the middle joint: wraps the can with the hand beside it. The best of 108
-# poses, placements, frictions and stiffnesses tried on 2026-11-19
-WRAP = _pose((10, 60, 20, 20), (40, 80, 48), (40, 80, 48), (40, 80, 48), (40, 80, 48))
+WRAP, SIDE = sim.WRAP, sim.SIDE
 
 
 def test_geometry_matches_hand_js():
@@ -130,41 +128,18 @@ def test_grip_force_follows_effort_without_the_assist():
     assert forces[0] < forces[1] < forces[2]
 
 
-# Hand frames, columns the hand's x (thumb), y (fingers), z (palm) in the world: from above, fingers away from the
-# viewer, and from above tilted back 40 degrees, for a small object on the table
-TOP = np.array([[1, 0, 0], [0, -1, 0], [0, 0, -1]], float)
-TILT = np.radians(-40)
-TOP_TILTED = TOP @ np.array([[1, 0, 0], [0, np.cos(TILT), -np.sin(TILT)], [0, np.sin(TILT), np.cos(TILT)]])
-SIDE = np.array([[0, 1, 0], [0, 0, 1], [1, 0, 0]], float)
-
-
-def grasp_centre(pose, fingers, palm):
-    """Mean of the fingertips (and the palm) in the hand frame with the pose closed in free air."""
-    m = mujoco.MjModel.from_xml_string(sim.ghost_xml(False))
-    d = mujoco.MjData(m)
-    d.qpos[[m.jnt_qposadr[m.actuator_trnid[i, 0]] for i in range(m.nu)]] = np.radians(pose)
-    mujoco.mj_kinematics(m, d)
-    points = [np.array([-0.005, 0.06, 0.012])] if palm else []
-    for f in fingers:
-        g = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_GEOM, f"g_{f}_dist")
-        axis = d.geom_xmat[g].reshape(3, 3)[:, 2] * m.geom_size[g][1]
-        joint = d.xpos[m.geom_bodyid[g]]
-        points.append(max((d.geom_xpos[g] + axis, d.geom_xpos[g] - axis),
-                          key=lambda end: np.linalg.norm(end - joint)))
-    return np.mean(points, 0)
-
-
-def grasp(obj, pose, rot, fingers, palm, effort, offset):
-    """The hand comes down on the object with the grip's contact centre on it, closes and lifts 10 cm. Returns how
-    high the object ended up (m)."""
+def grasp(obj, effort):
+    """The hand starts ready on the object (place_hand), comes down with the grip's contact centre on it, closes and
+    lifts 10 cm. Returns how high the object ended up (m)."""
     w = sim.World({"object": obj})
     half = sim.OBJECTS[obj][3]
-    q = np.zeros(4)
-    mujoco.mju_mat2Quat(q, rot.flatten())
-    base = np.array([0, -0.12, half]) - rot @ grasp_centre(pose, fingers, palm) + rot @ np.array(offset)
-    back = -rot[:, 2] * 0.02
-    w.set_hand(base + back, q, teleport=True)
-    rest, grip = np.array(GESTURES["open"][1]), np.array(pose)
+    w.place_hand("object")
+    assert w.touch() == (0.0, 0.0)
+    for _ in range(30):
+        w.step(0.02, GESTURES["open"][1], 0.0)
+    assert w.touch()[0] < 0.2
+    base, q, back = w.grasp_target()
+    rest, grip = np.array(GESTURES["open"][1]), np.array(sim.GRASPS[obj][1])
     for k in range(200):
         t = k * 0.02
         approach = min(t / 0.3, 1)
@@ -175,15 +150,18 @@ def grasp(obj, pose, rot, fingers, palm, effort, offset):
     return w.readout()["object_height"] - half
 
 
-@pytest.mark.parametrize("obj, grip, rot, fingers, palm, offset", [
-    ("ball", WRAP, SIDE, sim.FINGERS, True, (0, 0.01, 0)),
-    ("block", GESTURES["tripod"][1], TOP, ["thumb", "index", "middle"], False, (0, 0, 0.01)),
-    ("pen", GESTURES["pinch"][1], TOP, ["thumb", "index"], False, (0, -0.01, 0)),
-    ("small cube", GESTURES["tripod"][1], TOP_TILTED, ["thumb", "index", "middle"], False, (0, 0, 0)),
-])
-def test_other_objects_hold_from_medium_effort(obj, grip, rot, fingers, palm, offset):
+@pytest.mark.parametrize("obj", ["ball", "block", "pen", "small cube"])
+def test_other_objects_hold_from_medium_effort(obj):
     for effort in (0.6, 1.0):
-        assert grasp(obj, grip, rot, fingers, palm, effort, offset) > 0.05, (obj, effort)
+        assert grasp(obj, effort) > 0.05, (obj, effort)
+
+
+def test_hand_goes_back_to_its_start():
+    w = sim.World()
+    w.place_hand("object")
+    w.place_hand("start")
+    pos, quat = w.hand_pose()
+    assert pos == pytest.approx(sim.HAND_START) and quat == pytest.approx(sim.HAND_QUAT)
 
 
 def test_mass_is_capped():

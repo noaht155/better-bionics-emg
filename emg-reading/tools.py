@@ -31,8 +31,8 @@ from cursor import DEFAULTS as CURSOR_DEFAULTS, LEVEL_SCALE as CURSOR_LEVEL_SCAL
 from esp32_link import Esp32, Esp32Error, self_test
 from gestures import GESTURE_SET, GESTURES, LIBRARY
 from session import DATA_DIR, load_session, segments
-from haptics import (HAPTIC_DEFAULTS, OUTPUTS, UPDATE_HZ, channel_levels, effort, output_duties, pattern, scaled_duty,
-                     surface_hz)
+from haptics import (HAPTIC_DEFAULTS, OUTPUTS, TOUCH_MIN_N, UPDATE_HZ, channel_levels, effort, output_duties, pattern,
+                     scaled_duty, surface_hz)
 
 # The ml package sits next to emg-reading/ in the repo
 REPO = Path(__file__).resolve().parent.parent
@@ -528,6 +528,7 @@ class Haptics(Tool):
                     self.state.update(floor=floor, strength=settings["haptic_strength"])
                     step = self._pattern_step(self._cue) if self._cue else None
                     force, friction = self.touch()
+                    force = force if force >= TOUCH_MIN_N else 0.0
                     # A new touch starts on a pulse, so the contact is felt at once
                     phase = (phase + surface_hz(friction) * dt) % 1.0 if force > 0 else 0.0
                     level_ = min(force / settings["haptic_full_force"], 1.0)
@@ -846,6 +847,11 @@ class Contact(Tool):
         with self._lock:
             if self.world is not None:
                 self.world.reset_object()
+
+    def place_hand(self, where):
+        with self._lock:
+            if self.world is not None:
+                self.world.place_hand(where)
 
     def scene(self):
         with self._lock:

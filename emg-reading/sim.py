@@ -38,6 +38,7 @@ from pathlib import Path
 import mujoco
 import numpy as np
 
+from gestures import GESTURES, _pose
 from hand_angles import JOINTS
 
 # Knuckle positions (mm, hand frame: x towards the thumb, y wrist to fingers, z out of the palm), splay of each finger
@@ -97,6 +98,30 @@ PARK_X, PARK_Y, PARK_STEP = 2.0, 2.0, 0.25
 # The PC's hand starts above the desk, palm down, fingers away from the viewer; its free hand waits off to the side
 HAND_START, HAND_QUAT = (0.0, -0.05, 0.25), (0.0, 1.0, 0.0, 0.0)
 FREE_HAND_AWAY = (-1.5, 2.0, 0.0)
+
+# How each object is grasped (the tests lift them so), for placing the hand ready on it. Hand frames, columns the
+# hand's x (thumb), y (fingers), z (palm) in the world: beside it thumb up, from above fingers away from the viewer,
+# and from above tilted back 40 degrees for a small object
+SIDE = np.array([[0, 1, 0], [0, 0, 1], [1, 0, 0]], float)
+TOP = np.array([[1, 0, 0], [0, -1, 0], [0, 0, -1]], float)
+_TILT = np.radians(-40)
+TOP_TILTED = TOP @ np.array([[1, 0, 0], [0, np.cos(_TILT), -np.sin(_TILT)], [0, np.sin(_TILT), np.cos(_TILT)]])
+# Thumb opposed, fingers curled more at the middle joint: wraps the can with the hand beside it. The best of 108
+# poses, placements, frictions and stiffnesses tried on 2026-11-19
+WRAP = _pose((10, 60, 20, 20), (40, 80, 48), (40, 80, 48), (40, 80, 48), (40, 80, 48))
+# object: hand frame, closed pose, the parts that close on it, whether the palm does, and a shift of the grip's
+# centre on the object (m, hand frame)
+GRASPS = {
+    "can": (SIDE, WRAP, FINGERS, True, (-0.01, 0, 0)),
+    "ball": (SIDE, WRAP, FINGERS, True, (0, 0.01, 0)),
+    "block": (TOP, GESTURES["tripod"][1], ["thumb", "index", "middle"], False, (0, 0, 0.01)),
+    "pen": (TOP, GESTURES["pinch"][1], ["thumb", "index"], False, (0, -0.01, 0)),
+    "small cube": (TOP_TILTED, GESTURES["tripod"][1], ["thumb", "index", "middle"], False, (0, 0, 0)),
+}
+# The ready hand waits this far back from the grasp along its palm, and beside an object this much higher too: lower
+# down, the open hand beside the ball rested on the desk (1.3 N at 3 cm, 0.2 at 4, none at 5)
+READY_GAP_M = 0.02
+READY_LIFT_M = 0.05
 
 
 def _mm(v):
@@ -195,6 +220,22 @@ def _arms():
     arms["thumb_mcp"] = sum(THUMB_LENGTHS[1:]) / 2 / 1000
     arms["thumb_ip"] = THUMB_LENGTHS[2] / 2 / 1000
     return np.array([arms[j] for j in JOINTS])
+
+
+def grasp_centre(pose, fingers, palm):
+    """Mean of the fingertips (and the palm) in the hand frame with the pose closed in free air."""
+    m = mujoco.MjModel.from_xml_string(ghost_xml(False))
+    d = mujoco.MjData(m)
+    d.qpos[[m.jnt_qposadr[m.actuator_trnid[i, 0]] for i in range(m.nu)]] = np.radians(pose)
+    mujoco.mj_kinematics(m, d)
+    points = [np.array([-0.005, 0.06, 0.012])] if palm else []
+    for f in fingers:
+        g = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_GEOM, f"g_{f}_dist")
+        axis = d.geom_xmat[g].reshape(3, 3)[:, 2] * m.geom_size[g][1]
+        joint = d.xpos[m.geom_bodyid[g]]
+        points.append(max((d.geom_xpos[g] + axis, d.geom_xpos[g] - axis),
+                          key=lambda end: np.linalg.norm(end - joint)))
+    return np.mean(points, 0)
 
 
 def constants():
@@ -380,6 +421,26 @@ class World:
     def set_hand(self, pos, quat, teleport=False):
         """Moves the hand's target; the palm follows through its weld, or is put there at once with teleport."""
         self._lib.bb_set_hand(self._w, 0, _doubles(pos), _doubles(quat), int(teleport))
+
+    def grasp_target(self):
+        """Where the hand grasps the object as it lies now (GRASPS): position, orientation (w x y z) and the step
+        back to the ready pose (READY_GAP_M, READY_LIFT_M)."""
+        rot, pose, fingers, palm, offset = GRASPS[self.object]
+        pos, quat = _doubles([0] * 3), _doubles([0] * 4)
+        self._lib.bb_object_pose(self._w, self._index, pos, quat)
+        q = np.zeros(4)
+        mujoco.mju_mat2Quat(q, rot.flatten())
+        base = np.array(pos) - rot @ grasp_centre(pose, fingers, palm) + rot @ np.array(offset)
+        back = -rot[:, 2] * READY_GAP_M + [0, 0, READY_LIFT_M if rot is SIDE else 0.0]
+        return base, q, back
+
+    def place_hand(self, where):
+        """Puts the hand at its start ("start") or ready to grasp the object, a little back from it ("object")."""
+        if where == "start":
+            self.set_hand(HAND_START, HAND_QUAT, teleport=True)
+        else:
+            base, q, back = self.grasp_target()
+            self.set_hand(base + back, q, teleport=True)
 
     def joint_angles(self):
         """The hand's joint angles now (degrees, JOINTS order)."""

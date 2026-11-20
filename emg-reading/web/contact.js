@@ -173,7 +173,7 @@ canvas.addEventListener("pointerdown", (e) => {
   canvas.setPointerCapture(e.pointerId);
   const start = { x: e.clientX, y: e.clientY };
   if (e.button === 2) {
-    cx.drag = { kind: "view", ...start };
+    if (cx.hand) cx.drag = { kind: "hand", ...start };
     return;
   }
   raycaster.setFromCamera(pointer(e), camera);
@@ -182,8 +182,8 @@ canvas.addEventListener("pointerdown", (e) => {
     // Slides the object at the height it was picked up at
     const height = hit.object.position.z;
     cx.drag = { kind: "object", plane: new THREE.Plane(Z, -height), offset: hit.object.position.clone().sub(hit.point).setZ(0), last: 0 };
-  } else if (cx.hand) {
-    cx.drag = { kind: "hand", ...start };
+  } else {
+    cx.drag = { kind: "view", ...start };
   }
 });
 canvas.addEventListener("pointermove", (e) => {
@@ -206,7 +206,7 @@ canvas.addEventListener("pointermove", (e) => {
     view.yaw -= dx * VIEW_DEG_PER_PX;
     view.pitch = Math.min(85, Math.max(5, view.pitch + dy * VIEW_DEG_PER_PX));
     placeCamera();
-  } else {
+  } else if (cx.hand) {
     turnHand(dx, dy);
   }
 });
@@ -280,6 +280,16 @@ async function showContactPage(on) {
 $("ctl-contact-open").addEventListener("click", () => showContactPage(true));
 $("ctl-contact-back").addEventListener("click", () => showContactPage(false));
 $("ctl-contact-reset").addEventListener("click", () => postShowing("/api/contact/reset", null, "ctl-contact-error"));
+// The server moves the hand, so the page takes its pose again from the next frame
+for (const [id, where] of [["ctl-contact-hand-ready", "object"], ["ctl-contact-hand-start", "start"]]) {
+  $(id).addEventListener("click", async () => {
+    if (await postShowing("/api/contact/hand", { where }, "ctl-contact-error")) {
+      cx.hand = null;
+      cx.handMoved = false;
+    }
+    canvas.focus();
+  });
+}
 $("ctl-contact-object").addEventListener("change", (e) => {
   postShowing("/api/contact/params", { object: e.target.value }, "ctl-contact-error");
 });

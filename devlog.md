@@ -2467,6 +2467,11 @@ levels: r 0.995 to 0.999 per session, mean difference 0.005 to 0.013, a clench l
   load with their `haptics` choice ignored.
 - Haptics stopped on "no reply to S,0,..." when the ESP32 missed one reply at start (it answered fine a minute later,
   nothing changed in the link or firmware). The loop now reconnects every second until stopped instead of ending.
+- 3D contact page (Noah): "Ready on the object" puts the open hand 2 cm back from the grasp the tests lift each
+  object with (`sim.GRASPS`, moved from the tests), 5 cm higher beside an object (lower, the open hand beside the
+  ball rested on the desk: 1.3 N at 3 cm); "Reset hand" puts it back at its start. Left drag on empty space turns
+  the view now and right drag turns the hand (it was the other way round). Touch under 0.2 N plays nothing: the
+  resting thumb grazing the can (0.06 to 0.08 N) started the motors at the lowest duty.
 
 ## Open
 

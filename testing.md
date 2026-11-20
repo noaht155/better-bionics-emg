@@ -221,7 +221,8 @@ Skips without mujoco. Runs bbsim.c (built on first use) on the Quest app's scene
 | `test_pure_physics_holds_from_light_effort_on` | Without the assist the hand lifts the can at effort 0.2, 0.6 and 1.0 (the no-slip pass and hand friction) and drops it at 0.05 |
 | `test_heavier_object_needs_more_effort` | The can lifts at effort 0.2, one 3 times as heavy slips out at 0.2 and lifts at full effort |
 | `test_grip_force_follows_effort_without_the_assist` | Without the assist grip force on the can rises from effort 0.2 to 0.6 to 1.0 |
-| `test_other_objects_hold_from_medium_effort` | Placed as a person would (contact centre of the grip on the object, small objects from above with the hand tilted), the ball (wrap), block (tripod), pen (pinch) and small cube (tripod) lift at effort 0.6 and 1.0 without the assist |
+| `test_other_objects_hold_from_medium_effort` | From the ready pose of "Ready on the object" (`sim.GRASPS`: ball wrap from the side, block tripod, pen pinch and small cube tripod from above), not touching anything with the hand open, the hand comes onto the object, closes and lifts it at effort 0.6 and 1.0 without the assist |
+| `test_hand_goes_back_to_its_start` | Reset hand puts the hand target back at its start pose |
 | `test_mass_is_capped` | The mass setting stops at `MAX_MASS_SCALE`, above which the simulation blew up |
 | `test_contact_runs_on_the_control_layer_and_gives_the_touch_to_the_haptics` | The app's simulation thread follows the control layer's angles, sends frames that match the scene, rebuilds for another object, and gives the haptics no force once stopped |
 

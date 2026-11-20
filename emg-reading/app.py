@@ -237,6 +237,11 @@ class ControlParams(BaseModel):
     haptic_pulse_off: int = Field(HAPTIC_DEFAULTS["haptic_pulse_off"], ge=0, le=100)
 
 
+class HandPlace(BaseModel):
+    """The contact hand back to its start, or ready to grasp the object (sim.World.place_hand)."""
+    where: Literal["start", "object"]
+
+
 class ContactParams(BaseModel):
     """The contact simulation's settings, see sim.py."""
     object: str | None = None
@@ -989,6 +994,11 @@ def make_app(recorder, band, camera, tools, lan=True, serving=False):
     @app.post("/api/contact/reset")
     def contact_reset():
         tools.contact.reset_object()
+        return {"ok": True}
+
+    @app.post("/api/contact/hand")
+    def contact_hand(place: HandPlace):
+        tools.contact.place_hand(place.where)
         return {"ok": True}
 
     @app.post("/api/control/params")
