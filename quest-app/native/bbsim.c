@@ -442,3 +442,91 @@ EXPORT void bb_readout(World* w, double* out) {
   out[12] = w->time;
   out[13] = w->blowups;
 }
+
+// A hand on its own for showing poses (the recording cue's target): no physics, only where its parts are at given
+// angles. The XML is export_model.py's ghost hand, its motors in JOINTS order
+typedef struct {
+  mjModel* m;
+  mjData* d;
+  int qadr[NJ];
+  // Bodies at the 21 landmarks (MediaPipe order, the wrist is the palm) and each finger's last geom for its tip
+  int body[21], tip_geom[NF];
+} Fk;
+
+EXPORT Fk* bb_fk_create(const char* xml, int len, char* err, int errlen) {
+  mjVFS vfs;
+  mj_defaultVFS(&vfs);
+  mj_addBufferVFS(&vfs, "model.xml", xml, len);
+  mjModel* m = mj_loadXML("model.xml", &vfs, err, errlen);
+  mj_deleteVFS(&vfs);
+  if (!m) return NULL;
+  if (m->nu != NJ) {
+    fail(err, errlen, "ghost hand needs its 20 motors");
+    mj_deleteModel(m);
+    return NULL;
+  }
+  Fk* fk = calloc(1, sizeof(Fk));
+  fk->m = m;
+  fk->d = mj_makeData(m);
+  for (int j = 0; j < NJ; j++) fk->qadr[j] = m->jnt_qposadr[m->actuator_trnid[2 * j]];
+  static const char* SEG[2][3] = {{"meta", "prox", "dist"}, {"prox", "mid", "dist"}};
+  char name[40];
+  fk->body[0] = 1;
+  for (int f = 0; f < NF; f++) {
+    for (int s = 0; s < 3; s++) {
+      snprintf(name, sizeof name, "g_%s_%s", FINGERS[f], SEG[f > 0][s]);
+      fk->body[1 + 4 * f + s] = mj_name2id(m, mjOBJ_BODY, name);
+    }
+    fk->tip_geom[f] = mj_name2id(m, mjOBJ_GEOM, name);
+  }
+  return fk;
+}
+
+EXPORT void bb_fk_free(Fk* fk) {
+  if (!fk) return;
+  mj_deleteData(fk->d);
+  mj_deleteModel(fk->m);
+  free(fk);
+}
+
+EXPORT int bb_fk_ngeom(Fk* fk) { return fk->m->ngeom; }
+
+EXPORT void bb_fk_geom(Fk* fk, int g, int* type, int* finger, double* size) {
+  *type = fk->m->geom_type[g];
+  const char* gn = mj_id2name(fk->m, mjOBJ_GEOM, g);
+  *finger = gn && strlen(gn) > 2 ? finger_index(gn + 2) : -1;
+  memcpy(size, fk->m->geom_size + 3 * g, 3 * sizeof(double));
+}
+
+EXPORT int bb_fk_mesh(Fk* fk, int g, float* vert, int* face, int* nface) {
+  int mesh = fk->m->geom_dataid[g];
+  if (fk->m->geom_type[g] != mjGEOM_MESH || mesh < 0) return 0;
+  int nv = fk->m->mesh_vertnum[mesh], nf = fk->m->mesh_facenum[mesh];
+  *nface = nf;
+  if (vert) memcpy(vert, fk->m->mesh_vert + 3 * fk->m->mesh_vertadr[mesh], 3 * nv * sizeof(float));
+  if (face) memcpy(face, fk->m->mesh_face + 3 * fk->m->mesh_faceadr[mesh], 3 * nf * sizeof(int));
+  return nv;
+}
+
+// Geom positions and orientations (row major) in the palm's frame at these angles (degrees, JOINTS order)
+EXPORT void bb_fk(Fk* fk, const double* angles, float* pos, float* mat) {
+  for (int j = 0; j < NJ; j++) fk->d->qpos[fk->qadr[j]] = angles[j] * M_PI / 180;
+  mj_kinematics(fk->m, fk->d);
+  for (int i = 0; i < 3 * fk->m->ngeom; i++) pos[i] = (float)fk->d->geom_xpos[i];
+  for (int i = 0; i < 9 * fk->m->ngeom; i++) mat[i] = (float)fk->d->geom_xmat[i];
+}
+
+// The 21 landmarks (MediaPipe order, m) in the palm's frame at these angles: joint centres, and the fingertips at the
+// far end of each last segment, whose capsule starts at its body's origin
+EXPORT void bb_fk_points(Fk* fk, const double* angles, float* out) {
+  for (int j = 0; j < NJ; j++) fk->d->qpos[fk->qadr[j]] = angles[j] * M_PI / 180;
+  mj_kinematics(fk->m, fk->d);
+  for (int f = 0; f < NF; f++) {
+    for (int s = 0; s < 3; s++)
+      for (int k = 0; k < 3; k++) out[3 * (1 + 4 * f + s) + k] = (float)fk->d->xpos[3 * fk->body[1 + 4 * f + s] + k];
+    int g = fk->tip_geom[f], b = fk->body[3 + 4 * f];
+    for (int k = 0; k < 3; k++)
+      out[3 * (4 + 4 * f) + k] = (float)(2 * fk->d->geom_xpos[3 * g + k] - fk->d->xpos[3 * b + k]);
+  }
+  for (int k = 0; k < 3; k++) out[k] = (float)fk->d->xpos[3 * fk->body[0] + k];
+}

@@ -82,6 +82,14 @@ conaffinity="3" priority="1"/>
 <custom>{constants()}</custom></mujoco>"""
 
 
+def ghost_xml(left):
+    """One hand on its own, the prosthetic side's, for showing a cue's target pose (bbsim's bb_fk)."""
+    motors = "".join(f'<motor joint="g_{j}"/>' for j in JOINTS)
+    return (f'<mujoco model="ghost"><default><default class="hand"><geom contype="0" conaffinity="0"/></default>'
+            f'</default><asset>{sim.palm_mesh_xml("g_", left)}</asset><worldbody><body name="g_palm">'
+            f'{sim.hand_xml("g_", left)}</body></worldbody><actuator>{motors}</actuator></mujoco>')
+
+
 def meta():
     return dict(sim.SIM_DEFAULTS, objects=list(sim.OBJECTS), pool=pool(),
                 half=[v[3] for v in sim.OBJECTS.values()], joints=list(JOINTS),
@@ -96,6 +104,8 @@ def main(out=OUT):
         old.unlink()
     (out / "scene_left.xml").write_text(scene_xml(True))
     (out / "scene_right.xml").write_text(scene_xml(False))
+    (out / "ghost_left.xml").write_text(ghost_xml(True))
+    (out / "ghost_right.xml").write_text(ghost_xml(False))
     (out / "scene.json").write_text(json.dumps(meta()))
 
 
