@@ -557,6 +557,18 @@ def test_rules_lock_freezes_the_hand_until_unlocked():
     assert run(c, ("point", 0.0, 4)) == ["unlock"] and not c.locked
 
 
+def test_rules_lock_while_relaxed_stops_picks_until_unlocked():
+    c = rules()
+    c.set_rules({"relaxed": [{"trigger": "point", "how": "held", "value": 0.2, "action": "point"},
+                             {"trigger": "key", "how": "repeated", "value": 2, "action": "lock"}],
+                 "holding": []})
+    assert run(c, ("key", 0.0, 3), ("rest", 0.0, 4), ("key", 0.0, 3), ("rest", 0.0, 16)) == ["lock"] and c.locked
+    # The pose's sign picks nothing while locked
+    assert run(c, ("point", 0.0, 8), ("rest", 0.0, 4)) == [] and c.state == "idle"
+    assert run(c, ("key", 0.0, 3), ("rest", 0.0, 4), ("key", 0.0, 3), ("rest", 0.0, 16)) == ["unlock"]
+    assert run(c, ("point", 0.0, 8)) == ["start"] and c.grip == "point"
+
+
 def test_simulated_model_drives_the_control_layer():
     import time
     import tools

@@ -2479,6 +2479,8 @@ levels: r 0.995 to 0.999 per session, mean difference 0.005 to 0.013, a clench l
   effort, so the object pushed the fingers open unless the clench was held. The control layer now outputs
   `grip_effort`, the highest effort since the grip started (0 once released), and the sim and the headset squeeze
   with that while a grip is held. Squeezing harder raises it; only release or open loosens the hand.
+- Lock while relaxed (Noah): protocol-f-default had a lock rule in the relaxed list, but lock only acted while
+  holding, so it did nothing. Lock now works in either list: relaxed and locked, no sign picks a grip until unlock.
 
 ## Open
 

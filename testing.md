@@ -200,6 +200,7 @@ These decide when the recorder marks a cue bad and redoes it.
 | `test_rules_pose_while_holding_switches_at_the_same_closure` | A pose rule in the holding list switches to that grip and keeps how far the hand is closed |
 | `test_rules_higher_in_the_list_wins` | Two rules firing on the same step: the one higher in the list picks, whatever the trigger names |
 | `test_rules_lock_freezes_the_hand_until_unlocked` | A lock rule while holding freezes the hand: squeezing, open, a pose and the release pattern change nothing until the lock trigger fires again or an unlock rule does; squeezing closes again after |
+| `test_rules_lock_while_relaxed_stops_picks_until_unlocked` | A lock rule in the relaxed list locks the relaxed hand: a pose's sign picks nothing until the same pattern unlocks it, then it picks again |
 | `test_simulated_model_drives_the_control_layer` | Simulate on the Control tab: the page's class, certainty and effort reach the control layer at the model step without a band or model, an unknown class is refused, Stop ends it |
 | `test_counted_clenches_for_haptic_ticks` | Trigger and rules mode flag each short clench counted towards a pattern once, for the selection haptics' tick |
 | `test_selection_haptics_follow_control_events` | In selections mode the Control tab only cues the confirmed pick with its grip, nothing for each counted clench; effort mode cues nothing |

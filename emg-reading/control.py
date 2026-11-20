@@ -36,8 +36,9 @@ to relaxed, close and open move the hand for as long as their trigger stays on (
 while relaxed. Only the list of the current state runs, so a trigger can have a held rule in each, and the higher
 rule in a list wins when two fire on one step. Held 0 s acts on the first step the trigger is on. While holding, effort above hold_level also
 closes the hand as in trigger mode. A clench during which a rule's class is on belongs to
-that class, not to the clench count. Lock (Noah, 2026-10-20) freezes the hand while holding: nothing closes, opens,
-switches or releases it, and only the lock rules (lock again to undo) and unlock rules of the holding list run.
+that class, not to the clench count. Lock (Noah, 2026-10-20) freezes the hand: while holding nothing closes, opens,
+switches or releases it, and while relaxed (Noah, 2026-11-20) nothing picks a grip; only the lock rules (lock again
+to undo) and unlock rules of the list the hand is in run.
 """
 import math
 
@@ -424,7 +425,7 @@ class Controller:
         for r in events:
             if r["action"] == "release" and self.state == "active":
                 self.state, self.grip, self.closure, event = "idle", None, 0.0, "release"
-            elif r["action"] in ("lock", "unlock") and self.state == "active":
+            elif r["action"] in ("lock", "unlock"):
                 self.locked = r["action"] == "lock" and not self.locked
                 event = "lock" if self.locked else "unlock"
             elif r["action"] not in RULE_ACTIONS and r["action"] in self.poses:
