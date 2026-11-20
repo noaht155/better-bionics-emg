@@ -213,7 +213,7 @@ Skips without mujoco. Runs bbsim.c (built on first use) on the Quest app's scene
 |---|---|
 | `test_geometry_matches_hand_js` | The simulated hand's knuckles, splay and segment lengths are the ones `web/hand.js` draws |
 | `test_motors_in_joint_order` | The prosthetic hand's 20 motors are in `JOINTS` order, so the control layer's angles reach the right joints |
-| `test_hand_reaches_the_pose_in_free_air` | With nothing to touch the hand reaches the fist within 5 degrees (the thumb doesn't block the fingers) and grip force is 0 |
+| `test_hand_reaches_the_pose_in_free_air` | With nothing to touch the hand reaches the fist within 12 degrees (the thumb doesn't block the fingers, the palm stops the pinky and index a little short) and grip force is 0 |
 | `test_scene_and_poses_line_up` | The page's scene and pose lists have one entry per geom, with desk, hand and object, and the palm mesh has its hull |
 | `test_assist_lifts_and_grip_force_follows_effort` | With the assist the hand wraps the can and lifts it 10 cm at effort 0.3 and 1.0, and grip force at full effort is over 1.5 times that at 0.3 |
 | `test_touch_reads_the_surface_pressed_on` | The open hand pressed on the desk reads force at the desk's friction (0.6); the lifted can, clear of the desk, reads the can's |

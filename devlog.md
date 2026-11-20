@@ -2456,6 +2456,10 @@ levels: r 0.995 to 0.999 per session, mean difference 0.005 to 0.013, a clench l
 - Hum after moving the band into the new shell (details in `hardware-status.md`): 300 to 3400 uV on every channel
   for over 10 minutes, filtered rest still 6 to 13 uV. Motors, pressing the ref pads and the ch 5 pad changed
   nothing; moving the arm around brought it to 16 to 66 uV (ch 5 246). Let the band bed in before judging hum.
+- Fingertips sank into the palm in a fist (Noah): the hand had no self collision. The four fingers now collide with
+  the palm, its pad and the thumb's base (contact bits in `sim.hand_xml`), the thumb and finger against finger still
+  pass. Fist overlap 12 mm before, under 1 mm now; the pinky stops 6 degrees and the index 9 short of the fist pose.
+  Grasp tests unchanged. Same on the headset after a rebuild.
 
 ## Open
 

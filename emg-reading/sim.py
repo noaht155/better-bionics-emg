@@ -17,9 +17,11 @@ drops it.
 
 The hand is web/hand.js's geometry (a right hand, the mirror convention of the drawn hands) with the same joint
 definitions as hand_angles.py. The page moves the hand through a mocap body the palm is welded to, so the hand
-stops at the table instead of passing through it. Coordinates in metres, z up. The hand doesn't
-collide with itself (contype and conaffinity): fingers pass each other as real ones slide past, and the thumb of the
-fist pose would otherwise stop the index from curling.
+stops at the table instead of passing through it. Coordinates in metres, z up. The hand only collides with itself
+where the four fingers meet the palm or the thumb's base (contype bit 4 on those, conaffinity bit 4 on the
+fingers), so a fist doesn't sink its fingertips into the palm (Noah, 2026-11-20); fingers pass each other as real
+ones slide past, and the thumb passes everything, since it would otherwise stop the index from curling in the fist
+pose.
 
 One sim for the PC and the Quest app: this module is the model (geometry, constants, objects, scene_xml) and
 quest-app/native/bbsim.c the rule, run on the headset and here through ctypes. World builds bbsim for this computer
@@ -131,7 +133,7 @@ def _finger(name, base, splay, lengths, prefix="", m=1):
         quat = f' quat="{_quat_z(-m * splay)}"' if i == 0 else ""
         radius = FINGER_RADIUS * (1 - (1 - TAPER) * i / 2) / 1000
         xml += (f'<body name="{prefix}{name}_{segment}" pos="{pos}"{quat}>{joints[i]}'
-                f'<geom name="{prefix}{name}_{segment}" class="hand" type="capsule" '
+                f'<geom name="{prefix}{name}_{segment}" class="hand" conaffinity="6" type="capsule" '
                 f'fromto="0 0 0 0 {length / 1000:.4f} 0" size="{radius:.4f}"/>')
     return xml + "</body>" * 3
 
@@ -149,7 +151,7 @@ def _thumb(prefix="", m=1):
             f'<joint name="{n}thumb_cmc_flex" axis="0 0 {m}" range="-30 80"/>'
             f'<joint name="{n}thumb_cmc_abd" axis="1 0 0" range="-15 80"/>'
             f'<geom name="{n}thumb_meta" class="hand" type="capsule" fromto="0 0 0 0 {meta:.4f} 0" size="0.011"/>'
-            f'<geom name="{n}thumb_thenar" class="hand" type="ellipsoid" pos="{-m * 0.008:.3f} 0.018 0.006" '
+            f'<geom name="{n}thumb_thenar" class="hand" contype="5" type="ellipsoid" pos="{-m * 0.008:.3f} 0.018 0.006" '
             'size="0.014 0.024 0.009"/>'
             f'<body name="{n}thumb_prox" pos="0 {meta:.4f} 0"><joint name="{n}thumb_mcp" axis="{axis}" range="-10 80"/>'
             f'<geom name="{n}thumb_prox" class="hand" type="capsule" fromto="0 0 0 0 {prox:.4f} 0" size="{r:.4f}"/>'
@@ -162,8 +164,8 @@ def hand_xml(prefix="", mirror=False):
     """What goes inside a hand's palm body: palm, pad, fingers and thumb, every name starting with prefix. mirror makes
     it a left hand. The palm mesh is the asset named prefix + "palm" (palm_mesh_xml)."""
     m = -1 if mirror else 1
-    return (f'<geom name="{prefix}palm" class="hand" type="mesh" mesh="{prefix}palm"/>'
-            f'<geom name="{prefix}palm_pad" class="hand" type="ellipsoid" pos="{-m * 0.024:.3f} 0.035 0.008" '
+    return (f'<geom name="{prefix}palm" class="hand" contype="5" type="mesh" mesh="{prefix}palm"/>'
+            f'<geom name="{prefix}palm_pad" class="hand" contype="5" type="ellipsoid" pos="{-m * 0.024:.3f} 0.035 0.008" '
             'size="0.013 0.03 0.008"/>'
             + "".join(_finger(n, *g, prefix, m) for n, g in FINGER_GEOMETRY.items()) + _thumb(prefix, m))
 
