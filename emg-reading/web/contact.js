@@ -30,14 +30,31 @@ const PRESSED = color("--effort");
 
 const placeCamera = () => orbit(camera, view);
 
+// The one colour rule (sim.SURFACE_FRICTION): a friction's colour lies between the surfaces' colours at their
+// frictions, so a thing between two surfaces shows between their colours
+function frictionColor(friction) {
+  const stops = Object.entries(config.surfaces?.friction || {}).sort((a, b) => a[1] - b[1]);
+  if (!stops.length) return color("--raised");
+  if (friction <= stops[0][1]) return color(`--surface-${stops[0][0]}`);
+  for (let i = 1; i < stops.length; i++) {
+    const [name, f] = stops[i];
+    if (friction <= f) {
+      const [lowName, low] = stops[i - 1];
+      return color(`--surface-${lowName}`).clone().lerp(color(`--surface-${name}`), (friction - low) / (f - low));
+    }
+  }
+  return color(`--surface-${stops[stops.length - 1][0]}`);
+}
+
 function buildScene(scene) {
   bodies.clear();
   cx.meshes = scene.geoms.map((g) => {
     const geo = geometryFor(g);
     if (!geo) return null;
-    // Objects and the rail's sections in their surface's colour, the rail's posts like the desk
+    // Objects and the rail in their friction's colour; the desk and the rail's posts stay neutral, they are where
+    // things stand rather than what is tested
     const coloured = g.role === "object" || (g.role === "rail" && g.type === "cylinder");
-    const base = color(coloured ? `--surface-${g.surface}` : g.role === "hand" ? "--hand-solid" : "--raised");
+    const base = coloured ? frictionColor(g.friction) : color(g.role === "hand" ? "--hand-solid" : "--raised");
     const mesh = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ color: base, roughness: 0.65 }));
     mesh.castShadow = g.role !== "table";
     mesh.receiveShadow = true;
@@ -91,7 +108,7 @@ function applyFrame(f) {
     const force = finger >= 0 ? r.finger_force[finger] : palm ? r.palm_force : 0;
     mesh.material.color.lerpColors(HAND, PRESSED, Math.min(force / TINT_FULL_N, 1));
   });
-  followTestTouch(f.test, f.test_at);
+  followTestTouch(f.test, f.test_at, f.params?.rail);
   // The test touch moves the hand, the keys take it from wherever it ends up
   if (f.test) cx.hand = null;
   if (!cx.hand) {

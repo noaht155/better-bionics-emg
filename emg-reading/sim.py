@@ -77,18 +77,29 @@ OBJECTS = {
     "small cube": ('type="box" size="0.01 0.01 0.01"', 0.01, 0.7, 0.01),
     "pen": ('type="capsule" size="0.0045 0.065" euler="0 90 0"', 0.012, 0.5, 0.0045),
 }
-# Surfaces the haptics tell apart (each has its pulses in haptics.SURFACE_DEFAULTS) and what each object, the desk
-# and the floor are, carried in the scene as each geom's user value (its index in SURFACES)
+# Surfaces the haptics tell apart and the friction each one stands for. Friction is the one rule (Noah, 2026-11-23):
+# a thing's colour and pulse rate both come from its friction on this scale, in between two surfaces for frictions
+# in between (haptics.friction_rate, the page's colours). Its surface, carried in the scene as each geom's user value
+# (its index in SURFACES), is the nearest one
 SURFACES = ("slippery", "smooth", "normal", "rough")
-SURFACE_OF = {"can": "smooth", "ball": "rough", "block": "normal", "small cube": "normal", "pen": "slippery",
-              "desk": "normal", "floor": "rough"}
-# The surface rail (Noah, 2026-11-23): a bar fixed over the far side of the desk, one section per surface from
-# slippery on the user's right to rough on the left, to grip and slide the hand along to compare them. Each section
-# has its own friction, which wins over the hand's like the desk's. Radius, section half length, height of its axis
-# over the desk top, its y (m)
-RAIL_FRICTION = {"slippery": 0.15, "smooth": 0.35, "normal": 0.7, "rough": 1.0}
+SURFACE_FRICTION = {"slippery": 0.15, "smooth": 0.35, "normal": 0.7, "rough": 1.0}
+DESK_FRICTION, FLOOR_FRICTION, POST_FRICTION = 0.6, 0.8, 0.7
+
+
+def surface_at(friction):
+    return min(SURFACES, key=lambda s: abs(SURFACE_FRICTION[s] - friction))
+
+
+SURFACE_OF = {**{k: surface_at(v[2]) for k, v in OBJECTS.items()},
+              "desk": surface_at(DESK_FRICTION), "floor": surface_at(FLOOR_FRICTION)}
+# The surface rail (Noah, 2026-11-23): a bar fixed over the far side of the desk, slippery on the user's right to
+# rough on the left, to grip and slide the hand along to compare them. "steps": one section per surface at its
+# friction; "gradient": RAIL_PIECES pieces per section, the friction straight between the sections' middles, so
+# what lies between can be felt. Its friction wins over the hand's like the desk's. Radius, section half length,
+# height of its axis over the desk top, its y (m)
 RAIL_RADIUS, RAIL_HALF, RAIL_HEIGHT, RAIL_Y = 0.015, 0.05, 0.12, -0.38
-SIM_DEFAULTS = {"object": "can", "mass_scale": 1.0, "max_force": 15.0, "assist": False}
+RAIL_PIECES = 5
+SIM_DEFAULTS = {"object": "can", "mass_scale": 1.0, "max_force": 15.0, "assist": False, "rail": "steps"}
 # Assist: thumb and another finger each press at least this hard
 ASSIST_N = 1.0
 FINGERS = ["thumb", "index", "middle", "ring", "pinky"]
@@ -260,7 +271,21 @@ def _surface(thing):
     return SURFACES.index(SURFACE_OF[thing])
 
 
-def scene_xml(prosthetic_left=True):
+def rail_geoms(kind="steps"):
+    """The rail's sections ("steps") or pieces ("gradient") as (x, half length, friction)."""
+    if kind == "steps":
+        return [((2 * i - len(SURFACES) + 1) * RAIL_HALF, RAIL_HALF, SURFACE_FRICTION[s])
+                for i, s in enumerate(SURFACES)]
+    half = RAIL_HALF / RAIL_PIECES
+    out = []
+    for k in range(len(SURFACES) * RAIL_PIECES):
+        section = (k + 0.5) / RAIL_PIECES - 0.5
+        friction = float(np.interp(section, range(len(SURFACES)), [SURFACE_FRICTION[s] for s in SURFACES]))
+        out.append(((2 * k + 1) * half - len(SURFACES) * RAIL_HALF, half, round(friction, 4)))
+    return out
+
+
+def scene_xml(prosthetic_left=True, rail_kind="steps"):
     """Both hands, the desk over the floor and the object pool parked on the floor away from the desk, so showing an
     object only moves it. Names: the prosthetic hand's start with "p_", the free hand's with "f_", objects are obj0,
     obj1, ... The desk top is at z 0 and the user sits on its +y side, so +x is the user's left."""
@@ -281,16 +306,16 @@ def scene_xml(prosthetic_left=True):
         welds += "".join(f'<weld name="{p}hold{i}" body1="{p}palm" body2="obj{i}" active="false"/>' for p in HANDS)
     motors = "".join(f'<motor name="{p}{j}" joint="{p}{j}"/>' for p in HANDS for j in JOINTS)
     rail = ""
-    for i, surface in enumerate(SURFACES):
-        x = (2 * i - len(SURFACES) + 1) * RAIL_HALF
-        rail += (f'<geom name="rail{i}" type="cylinder" size="{RAIL_RADIUS} {RAIL_HALF}" pos="{x} {RAIL_Y} '
-                 f'{RAIL_HEIGHT}" euler="0 90 0" friction="{RAIL_FRICTION[surface]} 0.01 0.001" contype="2" '
-                 f'conaffinity="3" priority="1" user="{i}"/>')
+    for i, (x, half, friction) in enumerate(rail_geoms(rail_kind)):
+        rail += (f'<geom name="rail{i}" type="cylinder" size="{RAIL_RADIUS} {half}" pos="{x} {RAIL_Y} '
+                 f'{RAIL_HEIGHT}" euler="0 90 0" friction="{friction} 0.01 0.001" contype="2" '
+                 f'conaffinity="3" priority="1" user="{SURFACES.index(surface_at(friction))}"/>')
     for side in (-1, 1):
         x = side * (len(SURFACES) * RAIL_HALF + RAIL_RADIUS)
         rail += (f'<geom name="rail_post{(side + 1) // 2}" type="box" size="{RAIL_RADIUS} {RAIL_RADIUS} '
                  f'{(RAIL_HEIGHT + RAIL_RADIUS) / 2}" pos="{x} {RAIL_Y} {(RAIL_HEIGHT + RAIL_RADIUS) / 2}" '
-                 f'friction="0.7 0.01 0.001" contype="2" conaffinity="3" priority="1" user="{_surface("desk")}"/>')
+                 f'friction="{POST_FRICTION} 0.01 0.001" contype="2" conaffinity="3" priority="1" '
+                 f'user="{SURFACES.index(surface_at(POST_FRICTION))}"/>')
     meshes = "".join(palm_mesh_xml(p, mirror[p]) for p in HANDS)
     hx, hy, hz = DESK_HALF
     return f"""<mujoco model="contact">
@@ -301,9 +326,9 @@ noslip_iterations="{NOSLIP_ITERATIONS}"><flag nativeccd="disable"/></option>
 <default><joint damping="0.02" armature="0.0002"/><default class="hand">
 <geom friction="{HAND_FRICTION} 0.01 0.001" condim="4" density="1100" contype="1" conaffinity="2"/></default></default>
 <worldbody>
-<geom name="desk" type="box" size="{hx} {hy} {hz}" pos="0 {DESK_CENTRE_Y} {-hz}" friction="0.6 0.01 0.001"
+<geom name="desk" type="box" size="{hx} {hy} {hz}" pos="0 {DESK_CENTRE_Y} {-hz}" friction="{DESK_FRICTION} 0.01 0.001"
 contype="2" conaffinity="3" priority="1" user="{_surface("desk")}"/>
-<geom name="floor" type="plane" size="0 0 1" pos="0 0 {-DESK_HEIGHT}" friction="0.8 0.01 0.001" contype="2"
+<geom name="floor" type="plane" size="0 0 1" pos="0 0 {-DESK_HEIGHT}" friction="{FLOOR_FRICTION} 0.01 0.001" contype="2"
 conaffinity="3" priority="1" user="{_surface("floor")}"/>
 {rail}{bodies}</worldbody>
 <equality>{welds}</equality>
@@ -430,7 +455,7 @@ class World:
     def __init__(self, params=None):
         self.params = dict(SIM_DEFAULTS, **(params or {}))
         lib = _load()
-        xml = scene_xml(prosthetic_left=False)
+        xml = scene_xml(prosthetic_left=False, rail_kind=self.params["rail"])
         self.model = mujoco.MjModel.from_xml_string(xml)
         err = ctypes.create_string_buffer(1000)
         self._w = lib.bb_create(xml.encode(), len(xml.encode()), err, len(err))
@@ -555,6 +580,12 @@ class World:
         r = self._readout()
         return float(r[14]), SURFACES[int(r[16])] if r[16] >= 0 else None
 
+    def touch_friction(self):
+        """Friction of what the hand presses on, weighted by force (each surface's own), None while it touches
+        nothing."""
+        r = self._readout()
+        return float(r[15]) if r[14] > 0 else None
+
     def weight(self):
         scale = min(max(float(self.params["mass_scale"]), 0.05), MAX_MASS_SCALE)
         return OBJECTS[self.object][1] * scale * GRAVITY
@@ -574,7 +605,8 @@ class World:
                     "hand" if name.startswith("p_") else "object")
             entry = {"name": name.removeprefix("p_") if role == "hand" else role, "type": kind, "role": role,
                      "size": m.geom_size[g].round(5).tolist(),
-                     "surface": None if role == "hand" else SURFACES[int(m.geom_user[g, 0])]}
+                     "surface": None if role == "hand" else SURFACES[int(m.geom_user[g, 0])],
+                     "friction": None if role == "hand" else round(float(m.geom_friction[g, 0]), 4)}
             if kind == "mesh":
                 mesh = m.geom_dataid[g]
                 v0, nv = m.mesh_vertadr[mesh], m.mesh_vertnum[mesh]

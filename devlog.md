@@ -2549,6 +2549,13 @@ levels: r 0.995 to 0.999 per session, mean difference 0.005 to 0.013, a clench l
   the wrong section 35 to 55 % of the time (fingers drag behind), WRAP 0 to 6 %, at 8 to 13 N. The rough end stops
   2 cm short of the post: gripping the section's middle, the palm pressed on the post and read the desk.
 - Recordings can be deleted (a Delete under Use, a second click confirms).
+- Friction is the one rule (Noah): `sim.SURFACE_FRICTION` (slippery 0.15, smooth 0.35, normal 0.7, rough 1.0) sets
+  each thing's colour on the page and its pulse rate (`haptics.friction_rate`, from the force weighted friction
+  bbsim already reports), straight between two surfaces for frictions in between. Its surface name is the nearest:
+  pen (0.5) is now smooth (was slippery), ball (0.8) normal (was rough), floor normal. The desk and posts stay
+  neutral grey. Gradient is now a real rail (`rail: "gradient"`, 20 pieces, friction straight between the sections'
+  middles), not a blended rate on the step rail; sliding along it, the touched friction climbs from under 0.3 to
+  over 0.8. The Quest still colours by surface name and only has the step rail.
 - Rail grip from the side (Noah: from above the thumb sat on top, the rail pinched under the fingertips): palm
   towards the rail from the user's side, fingers up and over the top, thumb under (`sim.RAIL_ROT`, `rail_pose`).
   Thumb ends 1.8 cm under the rail's centre, fingertips 1.5 cm over it on the far side. Every section reads right

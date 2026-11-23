@@ -1020,7 +1020,9 @@ $("ctl-tries-csv").addEventListener("click", () => { window.location.href = "/ap
 
 // Test touch (app /api/contact/test-touch): the 3D hand grips the rail at a section number (0 slippery to 3 rough,
 // fractions between) at a pressure
-ctl.test = { on: false, pressure: 0.5, pos: 2, slide: false, gradient: false };
+ctl.test = { on: false, pressure: 0.5, pos: 2, slide: false };
+// The rail's kind from the contact frames (sim.rail_geoms): "steps" or "gradient"
+ctl.rail = "steps";
 // Shift and an arrow slide this far per key repeat (about 30 a second)
 const SLIDE_STEP = 0.02;
 
@@ -1030,8 +1032,9 @@ function showTestTouch(at) {
   const where = at ?? t.pos;
   const surface = names[Math.min(names.length - 1, Math.max(0, Math.round(where)))] || "";
   $("ctl-contact-test").classList.toggle("active", t.on);
-  $("ctl-contact-gradient").classList.toggle("active", t.gradient);
-  $("ctl-contact-test-state").innerHTML = t.on ? `<span class="${surface}">${t.gradient ? `${where.toFixed(2)} along` : surface} at ${Math.round(100 * t.pressure)} %</span>` : "";
+  const gradient = ctl.rail === "gradient";
+  $("ctl-contact-gradient").classList.toggle("active", gradient);
+  $("ctl-contact-test-state").innerHTML = t.on ? `<span class="${surface}">${gradient ? `${where.toFixed(2)} along` : surface} at ${Math.round(100 * t.pressure)} %</span>` : "";
 }
 
 // One request at a time, then the newest state if it changed meanwhile: two in flight can arrive the wrong way round
@@ -1061,14 +1064,22 @@ function rub() {
   sendTestTouch();
 }
 $("ctl-contact-rub").addEventListener("click", rub);
-$("ctl-contact-gradient").addEventListener("click", () => {
-  ctl.test.gradient = !ctl.test.gradient;
-  if (ctl.test.on) sendTestTouch();
-  else showTestTouch();
-});
+// Swaps the rail for one whose friction runs smoothly from section to section, or back to steps
+function toggleGradient() {
+  ctl.rail = ctl.rail === "gradient" ? "steps" : "gradient";
+  ctl.railSent = performance.now();
+  postShowing("/api/contact/params", { rail: ctl.rail }, "ctl-contact-error");
+  showTestTouch();
+}
+$("ctl-contact-gradient").addEventListener("click", toggleGradient);
 
-// From each contact frame: the page turned it off another way (a Ready or Reset hand button), or where the hand is
-function followTestTouch(on, at) {
+// From each contact frame: the page turned it off another way (a Ready or Reset hand button), where the hand is, and
+// the rail's kind
+function followTestTouch(on, at, rail) {
+  if (rail && rail !== ctl.rail && performance.now() - (ctl.railSent || 0) > 1000) {
+    ctl.rail = rail;
+    showTestTouch();
+  }
   // A frame made before the server took the last change still says off
   if (ctl.test.on && !on && performance.now() - (ctl.testSent || 0) > 1000) {
     ctl.test.on = false;
@@ -1089,7 +1100,8 @@ document.addEventListener("keydown", (e) => {
     e.preventDefault();
     return rub();
   } else if (key === "g") {
-    t.gradient = !t.gradient;
+    e.preventDefault();
+    return toggleGradient();
   } else if (!t.on || !e.key.startsWith("Arrow")) {
     return;
   } else if (e.key === "ArrowUp" || e.key === "ArrowDown") {
@@ -1146,7 +1158,7 @@ function drawContactHaptics(h) {
       : h?.error || "Haptics not running: Simulate with an ESP32 link (or Start on Grip control)."}</p>`
     : `<div class="contact-force"><b>${touch?.surface ? `${touch.force.toFixed(1)} N` : "none"}</b>
         <span>${touch?.surface ? `${touch.surface}${ctl.test.on ? ", test touch" : ""}` : "touch"}</span></div>
-      <div class="contact-force"><b>${touch?.surface ? `${touch.hz} Hz` : "n/a"}</b><span>pulses${ctl.test.on && ctl.test.gradient ? ", blended" : ""}</span></div>
+      <div class="contact-force"><b>${touch?.surface ? `${touch.hz} Hz` : "n/a"}</b><span>pulses${touch?.friction != null ? `, friction ${touch.friction.toFixed(2)}` : ""}</span></div>
       <div class="contact-force"><b>${duty} %</b><span>motor duty now</span></div>
       ${h.error ? `<p class="error">${h.error}</p>` : ""}`;
 }

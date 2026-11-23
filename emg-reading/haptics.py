@@ -74,10 +74,16 @@ def scaled_duty(level_, floor):
     return int(round(floor + (100 - floor) * level_)) if level_ > 0 else 0
 
 
-def blended_rate(settings, section):
-    """Pulse rate at a section number along the rail (sim.rail_section), straight between the surfaces' own rates."""
+# The friction each surface stands for, the same as sim.SURFACE_FRICTION (kept here so the haptics don't need
+# mujoco; a test checks they match)
+SURFACE_FRICTION = {"slippery": 0.15, "smooth": 0.35, "normal": 0.7, "rough": 1.0}
+
+
+def friction_rate(settings, friction):
+    """Pulse rate for a friction: the surfaces' rates at their frictions, straight in between."""
     names = list(SURFACE_DEFAULTS)
-    return float(np.interp(section, range(len(names)), [surface_profile(settings, n)["hz"] for n in names]))
+    return float(np.interp(friction, [SURFACE_FRICTION[n] for n in names],
+                           [surface_profile(settings, n)["hz"] for n in names]))
 
 
 def surface_profile(settings, surface):

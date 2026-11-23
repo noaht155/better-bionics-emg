@@ -32,7 +32,7 @@ from cursor import DEFAULTS as CURSOR_DEFAULTS, LEVEL_SCALE as CURSOR_LEVEL_SCAL
 from esp32_link import Esp32, Esp32Error, self_test
 from gestures import GESTURE_SET, GESTURES, LIBRARY
 from session import DATA_DIR, load_session, segments
-from haptics import (HAPTIC_DEFAULTS, blended_rate, OUTPUTS, TOUCH_MIN_N, UPDATE_HZ, channel_levels, effort, output_duties, pattern,
+from haptics import (HAPTIC_DEFAULTS, friction_rate, OUTPUTS, TOUCH_MIN_N, UPDATE_HZ, channel_levels, effort, output_duties, pattern,
                      scaled_duty, surface_profile)
 
 # The ml package sits next to emg-reading/ in the repo
@@ -456,8 +456,9 @@ class Haptics(Tool):
         self._settings = HAPTIC_DEFAULTS
         # Force on everything the simulated hand touches (N) and the surface it presses on most (Contact.touch)
         self.touch = lambda: (0.0, None)
-        # Section number along the rail to blend the surfaces' rates at (Contact.blend), None for the touched surface's
-        self.blend = lambda: None
+        # Friction of what the simulated hand presses on (Contact.touch_friction), None without one: the pulse rate
+        # follows it, else the touched surface's rate
+        self.friction = lambda: None
 
     def start(self, port, wifi, session=None, settings=None):
         """settings: the Control tab's parameters, combined mode, read on every update so a change applies straight
@@ -543,15 +544,16 @@ class Haptics(Tool):
                     step = self._pattern_step(self._cue) if self._cue else None
                     force, surface = self.touch()
                     force = force if force >= TOUCH_MIN_N else 0.0
-                    blend = self.blend()
-                    hz = (blended_rate(settings, blend) if blend is not None
+                    friction = self.friction() if force > 0 else None
+                    hz = (friction_rate(settings, friction) if friction is not None
                           else surface_profile(settings, surface)["hz"])
                     # A new touch starts on a pulse, so the contact is felt at once
                     phase = (phase + hz * dt) % 1.0 if force > 0 else 0.0
                     level_ = min(force / settings["haptic_full_force"], 1.0) if phase < 0.5 else 0.0
                     duties, lost = step or [scaled_duty(level_, floor)] * len(OUTPUTS), no_loss
                     self.state["touch"] = {"force": round(force, 2), "surface": surface if force > 0 else None,
-                                           "hz": round(hz, 2)}
+                                           "hz": round(hz, 2),
+                                           "friction": None if friction is None else round(friction, 3)}
                 else:
                     raw, filtered = self.recorder.window(self.recorder.env_len)
                     if raw.shape[1] == self.recorder.env_len:
@@ -853,6 +855,15 @@ class Contact(Tool):
                 import sim
                 self.params = dict(sim.SIM_DEFAULTS, **(self.params or {}), **params)
                 return
+            if params.get("rail", self.world.params["rail"]) != self.world.params["rail"]:
+                # Another rail is another model: a new world, the hand starting over
+                import sim
+                self.world = sim.World(dict(self.world.params, **params))
+                self.params = self.world.params
+                self._test_pos = None
+                self.version += 1
+                self.state["object"] = self.world.object
+                return
             rebuilt = params.get("object", self.world.object) != self.world.object
             self.world.set_params(params)
             if rebuilt:
@@ -963,10 +974,14 @@ class Contact(Tool):
         import sim
         return round(float(sim.rail_section(self._test_pos)) * (len(sim.SURFACES) - 1) / TEST_RAIL_END, 3)
 
-    def blend(self):
-        """For the haptics: where the test touch's hand is along the rail while it blends the surfaces."""
-        test = self.test
-        return self._test_at() if test is not None and test.get("gradient") else None
+    def touch_friction(self):
+        """Friction of what the hand presses on (sim.World.touch_friction), from the Quest app while it sends."""
+        quest = self.quest_readout()
+        if quest is not None:
+            friction = quest.get("touch_friction")
+            return float(friction) if friction and quest.get("touch_force", 0) > 0 else None
+        world = self.world
+        return world.touch_friction() if world is not None and self.state["running"] else None
 
     def _test_step(self, dt):
         """Moves the hand for the test touch: open onto the rail at its pos, then wrapped round it with the pressure
@@ -1484,7 +1499,7 @@ class Tools:
         self.control = Control(recorder, self.haptics)
         self.contact = Contact(self.predictor, self.control)
         self.haptics.touch = self.contact.touch
-        self.haptics.blend = self.contact.blend
+        self.haptics.friction = self.contact.touch_friction
         self.cursor = CursorTask(recorder)
         self.trainer = Trainer(self.predictor)
         self.network = NetworkJob()

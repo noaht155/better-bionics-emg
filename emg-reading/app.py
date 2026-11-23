@@ -276,6 +276,7 @@ class ContactParams(BaseModel):
     mass_scale: float | None = Field(None, ge=0.05, le=3)
     max_force: float | None = Field(None, ge=1, le=60)
     assist: bool | None = None
+    rail: Literal["steps", "gradient"] | None = None
 
 
 class VrSpawn(BaseModel):
@@ -328,13 +329,11 @@ class Rule(BaseModel):
 
 class TestTouch(BaseModel):
     """3D contact's test touch while on: the hand grips the rail at pos (a section number, sim.rail_pose) with the
-    pressure as its effort. slide: move there gripping, else lift over. gradient: the pulse rate blends between the
-    surfaces by where the hand is."""
+    pressure as its effort. slide: move there gripping, else back off and over."""
     on: bool
     pressure: float = Field(0.0, ge=0, le=1)
     pos: float = Field(2.0, ge=0, le=3)
     slide: bool = False
-    gradient: bool = False
 
 
 class HapticPlay(BaseModel):
@@ -646,7 +645,7 @@ def make_app(recorder, band, camera, tools, lan=True, serving=False):
             import sim
         except ImportError:
             return None
-        return {"names": list(sim.SURFACES), "of": sim.SURFACE_OF}
+        return {"names": list(sim.SURFACES), "of": sim.SURFACE_OF, "friction": sim.SURFACE_FRICTION}
 
     @app.get("/api/config")
     def config():

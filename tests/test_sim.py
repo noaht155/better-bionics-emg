@@ -235,8 +235,7 @@ def test_test_touch_grips_the_rail_section_with_the_pressure():
     control = SimpleNamespace(state={})
     contact = tools.Contact(predictor, control)
     contact.start()
-    test = lambda pos, pressure=0.5, slide=False, gradient=False: dict(pressure=pressure, pos=pos, slide=slide,
-                                                                      gradient=gradient)
+    test = lambda pos, pressure=0.5, slide=False: dict(pressure=pressure, pos=pos, slide=slide)
     try:
         forces = []
         for pressure in (0.1, 1.0):
@@ -247,11 +246,10 @@ def test_test_touch_grips_the_rail_section_with_the_pressure():
             assert surface == "smooth"
             forces.append(force)
         assert forces[1] > 1.5 * forces[0]
-        assert contact.blend() is None
         contact.set_test(test(3))
         time.sleep(1.5)
         assert contact.touch()[1] == "rough" and contact.frame()["test_at"] == pytest.approx(3, abs=0.01)
-        contact.set_test(test(0, slide=True, gradient=True))
+        contact.set_test(test(0, slide=True))
         seen = []
         for _ in range(70):
             time.sleep(0.1)
@@ -261,9 +259,48 @@ def test_test_touch_grips_the_rail_section_with_the_pressure():
         # It can flicker between two surfaces right at a border
         assert seen[0] == "rough" and seen[-1] == "slippery" and set(seen) == set(sim.SURFACES)
         assert contact.world.blowups == 0
-        assert contact.blend() == pytest.approx(0, abs=0.01)
+        assert contact.frame()["test_at"] == pytest.approx(0, abs=0.01)
         contact.set_test(None)
-        assert not contact.frame()["test"] and contact.blend() is None
+        assert not contact.frame()["test"]
+    finally:
+        contact.stop()
+        contact.join(2)
+
+
+def test_friction_is_the_one_rule_and_the_gradient_rail_runs_smoothly():
+    """Every surface comes from friction: objects, desk and rail sections are the surface nearest their friction, the
+    haptics use the same scale. The gradient rail's friction climbs piece by piece from slippery to rough, through
+    each section's own friction at its middle, and sliding along it the touched friction climbs with it."""
+    import time
+    from types import SimpleNamespace
+    import haptics
+    import tools
+    assert haptics.SURFACE_FRICTION == sim.SURFACE_FRICTION
+    for name, (_, _, friction, _) in sim.OBJECTS.items():
+        assert sim.SURFACE_OF[name] == sim.surface_at(friction)
+    steps = sim.rail_geoms("steps")
+    assert [f for _, _, f in steps] == [sim.SURFACE_FRICTION[s] for s in sim.SURFACES]
+    pieces = sim.rail_geoms("gradient")
+    frictions = [f for _, _, f in pieces]
+    assert frictions == sorted(frictions) and len(set(frictions)) > 2 * len(sim.SURFACES)
+    assert sum(2 * h for _, h, _ in pieces) == pytest.approx(sum(2 * h for _, h, _ in steps))
+    contact = tools.Contact(SimpleNamespace(state={"running": False}), SimpleNamespace(state={}))
+    contact.start()
+    try:
+        version = contact.version
+        contact.set_params({"rail": "gradient"})
+        assert contact.version == version + 1 and contact.world.params["rail"] == "gradient"
+        assert sum(g["role"] == "rail" and g["type"] == "cylinder" for g in contact.scene()["geoms"]) == len(pieces)
+        contact.set_test(dict(pressure=0.5, pos=0, slide=False))
+        time.sleep(1.5)
+        contact.set_test(dict(pressure=0.5, pos=3, slide=True))
+        seen = []
+        for _ in range(60):
+            time.sleep(0.1)
+            friction = contact.touch_friction()
+            if friction is not None:
+                seen.append(friction)
+        assert seen[0] < 0.3 and seen[-1] > 0.8 and contact.world.blowups == 0
     finally:
         contact.stop()
         contact.join(2)
