@@ -2524,7 +2524,9 @@ levels: r 0.995 to 0.999 per session, mean difference 0.005 to 0.013, a clench l
   per channel 205, 349, 186, 450, 68, 470, 331, 295 uV (median about 310). The rest cues of the 2026-11-20 session
   (the bad one, no haptics in it either): 48, 134, 65, 323, 69, 344, 81, 76 (median 79); 11-16: median 40; 11-06:
   32. So the hum is worse with the motors off than in the bad session: the motors running don't explain it on their
-  own. Not yet known what was still plugged in (ESP32, driver board).
+  own. Not yet known what was still plugged in (ESP32, driver board). Just before, with the motors plugged in, it
+  was in the thousands (Noah, not saved). Rest-cue medians rise from 32 (11-06) and 40 (11-16) to 79 (11-20) and
+  about 310 now; the perfboard went in on 11-17.
 - bbsim: a finger on the rail now presses with the effort cap as on an object (`rail_force`); before, the rail grip
   ran at full force whatever the effort. The Quest needs the rebuild for it.
 - The 3D contact page has the same in a Haptics section: what the motors play now (force, surface, from the hand or
