@@ -69,6 +69,7 @@ function showSurfaces() {
   for (const s of Object.keys(ctl.params.surfaces || {})) {
     if ($(`ctl-surface-${s}`)) showParams(SURFACE_PARAMS, `ctl-surface-${s}-`, ctl.params.surfaces[s]);
   }
+  showContactSurface();
 }
 // A rule's haptic as settings (haptics.haptic_settings). The smart settings (times, length, speed) set the ms, the
 // advanced ones show them; times play in steps of config.haptic_codes.step_ms
@@ -883,6 +884,7 @@ function drawControl(c, p) {
     buildParams($("ctl-params"), ADVANCED_PARAMS, "ctl-", () => ctl.params, editedParams);
     buildParams($("ctl-haptic-params"), HAPTIC_PARAMS, "ctl-", () => ctl.params, editedParams);
     buildSurfaces();
+    buildContactSurface();
     showControlParams();
   }
   if (!ctl.rules && c.rules) {
@@ -940,29 +942,38 @@ async function loadSurfaceTries() {
   } catch {
     return;
   }
-  $("ctl-tries").innerHTML = "<tr><th>When</th><th>Surface</th><th>Hz</th><th>Between</th><th>Strength</th><th>Note</th><th></th></tr>"
-    + surfaceTries.map((t, i) => `<tr><td>${t.at.slice(5, 16)}</td><td>${t.surface}</td><td>${t.settings.hz}</td>
+  $("ctl-tries").innerHTML = triesTable(surfaceTries.map((t, i) => [t, i]));
+  showContactTries();
+}
+
+function triesTable(rows) {
+  return "<tr><th>When</th><th>Surface</th><th>Hz</th><th>Between</th><th>Strength</th><th>Note</th><th></th></tr>"
+    + rows.map(([t, i]) => `<tr><td>${t.at.slice(5, 16)}</td><td>${t.surface}</td><td>${t.settings.hz}</td>
       <td>${t.settings.off} %</td><td>${t.settings.strength} %</td><td>${tryText(t.note)}</td>
       <td><button data-use="${i}">Use</button></td></tr>`).join("");
 }
 
-$("ctl-surface-params").addEventListener("click", async (e) => {
-  const s = e.target.dataset.record;
+async function recordSurface(s, noteId, errorId) {
   if (!s || !ctl.params?.surfaces?.[s]) return;
-  const body = { surface: s, settings: ctl.params.surfaces[s], profile: ctl.profile, note: $("ctl-try-note").value };
-  if (await postShowing("/api/surface-tries", body, "ctl-try-error")) {
-    $("ctl-try-note").value = "";
+  const body = { surface: s, settings: ctl.params.surfaces[s], profile: ctl.profile, note: $(noteId).value };
+  if (await postShowing("/api/surface-tries", body, errorId)) {
+    $(noteId).value = "";
     loadSurfaceTries();
   }
-});
+}
 
-$("ctl-tries").addEventListener("click", (e) => {
+$("ctl-surface-params").addEventListener("click", (e) => recordSurface(e.target.dataset.record, "ctl-try-note", "ctl-try-error"));
+$("ctl-contact-record").addEventListener("click", () => recordSurface($("ctl-contact-surface").value, "ctl-contact-note", "ctl-contact-try-error"));
+
+function useTry(e) {
   const t = surfaceTries[e.target.dataset.use];
   if (!t || !ctl.params?.surfaces) return;
   ctl.params.surfaces[t.surface] = { ...t.settings };
   showSurfaces();
   editedParams();
-});
+}
+$("ctl-tries").addEventListener("click", useTry);
+$("ctl-contact-tries").addEventListener("click", useTry);
 
 loadSurfaceTries();
 
@@ -973,19 +984,24 @@ ctl.test = { on: false, pressure: 0.5, surface: "normal" };
 
 function showTestTouch() {
   const t = ctl.test;
-  $("ctl-test-touch").classList.toggle("active", t.on);
-  $("ctl-test-touch-state").innerHTML = t.on ? `<span class="${t.surface}">${t.surface} at ${Math.round(100 * t.pressure)} %</span>` : "";
+  const text = t.on ? `<span class="${t.surface}">${t.surface} at ${Math.round(100 * t.pressure)} %</span>` : "";
+  for (const id of ["ctl-test-touch", "ctl-contact-test"]) $(id).classList.toggle("active", t.on);
+  $("ctl-test-touch-state").innerHTML = text;
+  $("ctl-contact-test-state").innerHTML = text;
 }
 
 async function sendTestTouch() {
-  if (!(await postShowing("/api/haptics/test-touch", ctl.test, "ctl-try-error"))) ctl.test.on = false;
+  const errorId = $("ctl-contact-page").hidden ? "ctl-try-error" : "ctl-contact-try-error";
+  if (!(await postShowing("/api/haptics/test-touch", ctl.test, errorId))) ctl.test.on = false;
   showTestTouch();
 }
 
-$("ctl-test-touch").addEventListener("click", () => {
+const toggleTestTouch = () => {
   ctl.test.on = !ctl.test.on;
   sendTestTouch();
-});
+};
+$("ctl-test-touch").addEventListener("click", toggleTestTouch);
+$("ctl-contact-test").addEventListener("click", toggleTestTouch);
 
 document.addEventListener("keydown", (e) => {
   if (currentTab !== "control" || e.target.closest("input, select, textarea") || e.ctrlKey || e.metaKey || e.altKey) return;
@@ -1004,3 +1020,48 @@ document.addEventListener("keydown", (e) => {
   e.preventDefault();
   sendTestTouch();
 });
+
+// The 3D contact page's haptics: what the motors play, and the settings of the surface being felt to tune and record
+function buildContactSurface() {
+  const names = Object.keys(ctl.params.surfaces || {});
+  $("ctl-contact-surface").innerHTML = names.map((s) => `<option>${s}</option>`).join("");
+  $("ctl-contact-surface").value = "normal";
+  buildParams($("ctl-contact-surface-params"), SURFACE_PARAMS, "ctl-csurf-", () => ctl.params.surfaces[$("ctl-contact-surface").value], () => {
+    showSurfaces();
+    editedParams();
+  });
+  showContactSurface();
+}
+
+function showContactSurface() {
+  const s = $("ctl-contact-surface").value;
+  if (ctl.params?.surfaces?.[s]) showParams(SURFACE_PARAMS, "ctl-csurf-", ctl.params.surfaces[s]);
+  showContactTries();
+}
+
+function showContactTries() {
+  const s = $("ctl-contact-surface").value;
+  $("ctl-contact-tries").innerHTML = triesTable(surfaceTries.map((t, i) => [t, i]).filter(([t]) => t.surface === s).slice(0, 5));
+}
+
+$("ctl-contact-surface").addEventListener("change", showContactSurface);
+
+function drawContactHaptics(h) {
+  if ($("ctl-contact-page").hidden || !ctl.params) return;
+  const on = !!(h?.running && h.mode === "combined");
+  const touch = on ? h.touch : null;
+  // The settings follow what is felt; a surface picked by hand stays until another one is felt
+  if (touch?.surface && touch.surface !== ctl.felt) {
+    $("ctl-contact-surface").value = touch.surface;
+    showContactSurface();
+  }
+  ctl.felt = touch?.surface || ctl.felt;
+  const duty = on ? Math.max(...(h.duties || [0])) : 0;
+  $("ctl-contact-haptics").innerHTML = !on
+    ? `<p class="muted">${h?.running ? "The haptics run in effort mode (System > Haptics), not with the 3D contact."
+      : h?.error || "Haptics not running: Start or Simulate on Grip control with an ESP32 link."}</p>`
+    : `<div class="contact-force"><b>${touch?.surface ? `${touch.force.toFixed(1)} N` : "none"}</b>
+        <span>${touch?.surface ? `${touch.surface}, ${touch.test ? "test touch" : "the hand"}` : "touch"}</span></div>
+      <div class="contact-force"><b>${duty} %</b><span>motor duty now</span></div>
+      ${h.error ? `<p class="error">${h.error}</p>` : ""}`;
+}

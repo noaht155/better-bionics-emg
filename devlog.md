@@ -2516,6 +2516,9 @@ levels: r 0.995 to 0.999 per session, mean difference 0.005 to 0.013, a clench l
 - Test touch (Noah): T on the Control tab plays a press on the motors in place of 3D contact's, up and down set
   the pressure in 10 % steps of the full force, left and right the surface. Needs Start or Simulate with an ESP32
   link, nothing else (no band, no grasp), so a surface's settings can be tuned and recorded in one place.
+- The 3D contact page has the same in a Haptics section: what the motors play now (force, surface, from the hand or
+  the test touch, duty), the test touch, the settings of the surface being felt (they follow it), Record with a note
+  and that surface's last five tries.
 
 ## Open
 

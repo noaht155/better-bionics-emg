@@ -556,11 +556,24 @@
           pinch. Then close it with the arm.</p>
         <h2>Grip</h2>
         <div id="ctl-contact-readout" class="contact-readout"></div>
+        <h2>Haptics</h2>
+        <div id="ctl-contact-haptics" class="contact-readout"></div>
+        <div class="controls"><button id="ctl-contact-test">Test touch</button>
+          <p id="ctl-contact-test-state" class="surface-key"></p></div>
+        <p class="muted">Test touch plays a press in place of the hand's, no band or grasp needed. T: on and off, up
+          and down: pressure, left and right: surface. The settings below follow the surface being felt; they are the
+          same as under Surfaces on Grip control.</p>
+        <div class="row narrow"><label>Surface <select id="ctl-contact-surface"></select></label></div>
+        <div id="ctl-contact-surface-params"></div>
+        <div class="row"><label>Note <input id="ctl-contact-note" placeholder="how it felt"></label></div>
+        <div class="controls"><button id="ctl-contact-record">Record</button></div>
+        <p id="ctl-contact-try-error" class="error"></p>
+        <div class="table-scroll"><table id="ctl-contact-tries"></table></div>
         <h2>Keys</h2>
         <p class="muted">W S, A D: move the hand away and back, left and right. Q E: down and up. Right drag: turn
           the hand. Z X: roll it. Shift: slower. Drag the object to slide it over the table. Drag anywhere else: turn
           the view, wheel: zoom. With the simulated model, number keys pick a class and space is full effort. T, arrows:
-          test touch (Surfaces on the Control page).</p>
+          test touch.</p>
       </div>
     </div>
   </section>

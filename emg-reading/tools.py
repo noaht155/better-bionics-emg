@@ -543,6 +543,8 @@ class Haptics(Tool):
                     if phase >= 0.5:
                         level_ *= profile["off"] / 100
                     duties, lost = step or [scaled_duty(level_, floor)] * len(OUTPUTS), no_loss
+                    self.state["touch"] = {"force": round(force, 2), "surface": surface if force > 0 else None,
+                                           "test": test is not None}
                 else:
                     raw, filtered = self.recorder.window(self.recorder.env_len)
                     if raw.shape[1] == self.recorder.env_len:

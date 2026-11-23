@@ -1045,6 +1045,7 @@ function drawTools() {
   drawPredictor(t.predictor);
   drawNetwork(jobs.network, t.predictor, jobs.trainer);
   drawControl(t.control, t.predictor);
+  drawContactHaptics(t.haptics);
   drawCursor(t.cursor);
   drawSync(t.sync);
   drawBackup(t.backup);

@@ -165,6 +165,7 @@ def test_control_haptics_layer_patterns_over_the_contact(monkeypatch):
             time.sleep(0.2)
             h.cue("start", "fist")
         time.sleep(seconds)
+        assert h.state["touch"]["test"] == (test is not None)
         h.stop()
         h.join(3)
         firsts = [d[0] for d in sent]
