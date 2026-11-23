@@ -2539,6 +2539,9 @@ levels: r 0.995 to 0.999 per session, mean difference 0.005 to 0.013, a clench l
   4.8 to 5.1. Grip holds about 40 uV on all three days. So on those sessions the hum is mostly gone after the
   filter except on the worst channel (ch 5), and the rest floor is up about 30 % across the whole band, not only
   at 60 Hz. Hum in the thousands (motors plugged in, today) is beyond any filter: the fix is at the source.
+- Surfaces differ only by pulse rate (Noah): each surface keeps its Hz, the force sets the duty while on, off in
+  between. Between pulses % and Strength % are gone; old profiles and tries keep them in their files, the CSV
+  leaves them blank for new tries.
 - Bouncing pad wires spoil the signal (Noah): taping the leads to the arm took the hum from about 310 to 56 uV
   (median over channels, raw 60 Hz), then back up to about 230 within a minute as they moved (ch 3 worst, up to
   601). Filtered rest after taping: about 9 uV, ch 3 23 (good days 5 to 9). The leads need fixing in place before

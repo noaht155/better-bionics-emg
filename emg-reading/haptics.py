@@ -6,8 +6,8 @@ A channel whose pad loses contact is set to 0% until it recovers. Ctrl+C to stop
 
 The Control tab runs its own mode (tools.Haptics, combined): the control layer's discrete events play a short
 pattern (pattern()), so the user feels which grip was picked, a release or a lock without looking at the hand, and
-in between the outputs follow the 3D contact: the force the simulated hand presses with, pulsing as the surface's
-profile says (SURFACE_DEFAULTS, surface_profile).
+in between the outputs follow the 3D contact: the force the simulated hand presses with, pulsing on and off at the
+surface's rate (SURFACE_DEFAULTS, surface_profile).
 
     python haptics.py [--synthetic] [--port COM3] [--wifi [IP]] [--rest 8 --max 80 [--no-car]]
 """
@@ -29,10 +29,9 @@ PRINT_EVERY_S = 0.5
 # Each surface's pulses (sim.SURFACES, Noah, 2026-11-20): rate (Hz, fast for slippery, slow for rough), the duty
 # between pulses as % of the force's (0 on and off, 100 no pulses) and strength as % of the force's duty. At UPDATE_HZ
 # a pulse is at least one step up and one down, so 10 Hz is the most
-SURFACE_DEFAULTS = {"slippery": {"hz": 6.0, "off": 60, "strength": 80},
-                    "smooth": {"hz": 4.0, "off": 70, "strength": 90},
-                    "normal": {"hz": 3.0, "off": 50, "strength": 100},
-                    "rough": {"hz": 1.5, "off": 0, "strength": 100}}
+# Surfaces differ only in how fast they pulse (Noah, 2026-11-23): the force sets the duty while on, off in between.
+# Varying the duty between pulses and a per-surface strength as well made them harder to tell apart and to tune
+SURFACE_DEFAULTS = {"slippery": {"hz": 6.0}, "smooth": {"hz": 4.0}, "normal": {"hz": 3.0}, "rough": {"hz": 1.5}}
 # The Control tab's haptics settings (combined mode, tools.Haptics). floor: lowest duty above 0, 0 until the motors'
 # start duty is measured. strength: duty of the selection patterns. full force: force (N) of the simulated hand on
 # what it touches at full duty. surfaces: SURFACE_DEFAULTS

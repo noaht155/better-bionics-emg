@@ -44,11 +44,9 @@ const HAPTIC_PARAMS = [
   { key: "haptic_strength", label: "Pattern strength", min: 10, max: 100, step: 5, help: "duty of the selection patterns" },
   { key: "haptic_full_force", label: "Full force N", min: 2, max: 100, step: 1, help: "force of the hand in 3D contact on what it touches that runs the motors at full duty" },
 ];
-// Each surface's pulses (haptics.SURFACE_DEFAULTS), the help only under the first
+// Each surface's pulse rate (haptics.SURFACE_DEFAULTS), the help only under the first
 const SURFACE_PARAMS = [
-  { key: "hz", label: "Pulses Hz", min: 0.5, max: 8, step: 0.5, help: "pulses per second: fast for slippery, slow for rough" },
-  { key: "off", label: "Between pulses %", min: 0, max: 100, step: 5, help: "duty between pulses as % of the force's: 0 is on and off, 100 no pulses" },
-  { key: "strength", label: "Strength %", min: 10, max: 100, step: 5, help: "the force's duty is scaled by this" },
+  { key: "hz", label: "Pulses Hz", min: 0.5, max: 8, step: 0.5, help: "pulses per second, on at the force's duty and off in between: fast for slippery, slow for rough" },
 ];
 
 function buildSurfaces() {
@@ -965,9 +963,9 @@ async function loadSurfaceTries() {
 }
 
 function triesTable(rows) {
-  return "<tr><th>When</th><th>Surface</th><th>Hz</th><th>Between</th><th>Strength</th><th>Note</th><th></th></tr>"
+  return "<tr><th>When</th><th>Surface</th><th>Hz</th><th>Note</th><th></th></tr>"
     + rows.map(([t, i]) => `<tr><td>${t.at.slice(5, 16)}</td><td>${t.surface}</td><td>${t.settings.hz}</td>
-      <td>${t.settings.off} %</td><td>${t.settings.strength} %</td><td>${tryText(t.note)}</td>
+      <td>${tryText(t.note)}</td>
       <td><button data-use="${i}">Use</button></td></tr>`).join("");
 }
 
@@ -986,7 +984,7 @@ $("ctl-contact-record").addEventListener("click", () => recordSurface($("ctl-con
 function useTry(e) {
   const t = surfaceTries[e.target.dataset.use];
   if (!t || !ctl.params?.surfaces) return;
-  ctl.params.surfaces[t.surface] = { ...t.settings };
+  ctl.params.surfaces[t.surface] = { hz: t.settings.hz };
   showSurfaces();
   editedParams();
 }

@@ -131,7 +131,7 @@ def test_control_haptics_layer_patterns_over_the_contact(monkeypatch):
     rates = [SURFACE_DEFAULTS[s]["hz"] for s in ("slippery", "smooth", "normal", "rough")]
     assert rates == sorted(rates, reverse=True)
     assert surface_profile({}, None) == SURFACE_DEFAULTS["normal"]
-    assert surface_profile({"surfaces": {"rough": {"hz": 1, "off": 0, "strength": 50}}}, "rough")["strength"] == 50
+    assert surface_profile({"surfaces": {"rough": {"hz": 1}}}, "rough")["hz"] == 1
     sent, fail = [], []
 
     class FakeEsp:
@@ -175,7 +175,7 @@ def test_control_haptics_layer_patterns_over_the_contact(monkeypatch):
     assert set(firsts) == {0}
     full = HAPTIC_DEFAULTS["haptic_full_force"]
     firsts, _ = run((full / 2, "normal"))
-    assert firsts[0] == 50 and set(firsts) == {25, 50}
+    assert firsts[0] == 50 and set(firsts) == {0, 50}
     _, fast = run((full / 2, "slippery"))
     _, slow = run((full / 2, "rough"))
     assert fast > slow

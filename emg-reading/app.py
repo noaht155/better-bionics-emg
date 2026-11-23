@@ -244,10 +244,9 @@ class ControlParams(BaseModel):
 
 
 class SurfaceProfile(BaseModel):
-    """One surface's pulses, see haptics.SURFACE_DEFAULTS."""
+    """One surface's pulse rate, see haptics.SURFACE_DEFAULTS. Profiles and tries saved before 2026-11-23 also have
+    off and strength, which are dropped."""
     hz: float = Field(ge=0.5, le=10)
-    off: int = Field(ge=0, le=100)
-    strength: int = Field(ge=10, le=100)
 
 
 class SurfaceTry(BaseModel):
@@ -1139,12 +1138,13 @@ def make_app(recorder, band, camera, tools, lan=True, serving=False):
         """The recorded surface settings as a spreadsheet, oldest first."""
         out = io.StringIO()
         writer = csv.writer(out)
+        # Tries before 2026-11-23 also varied the duty between pulses and the strength
         writer.writerow(["at", "surface", "hz", "between_pulses_pct", "strength_pct", "lowest_duty_pct",
                          "full_force_n", "profile", "note"])
         for t in reversed(surface_tries()):
             s = t["settings"]
-            writer.writerow([t["at"], t["surface"], s["hz"], s["off"], s["strength"], t["floor"], t["full_force"],
-                             t["profile"] or "", t["note"]])
+            writer.writerow([t["at"], t["surface"], s["hz"], s.get("off", ""), s.get("strength", ""), t["floor"],
+                             t["full_force"], t["profile"] or "", t["note"]])
         return Response(out.getvalue(), media_type="text/csv",
                         headers={"Content-Disposition": 'attachment; filename="surface-tries.csv"'})
 

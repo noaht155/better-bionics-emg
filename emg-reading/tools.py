@@ -436,8 +436,8 @@ class Haptics(Tool):
     effort (System > Haptics: each output follows its channels' effort) and, started from the Control tab, combined
     (Noah, 2026-11-20): the selection patterns of the control layer's events (cue()) play over everything while they
     run; otherwise, while the simulated hand touches something, every output vibrates at a duty that follows the
-    force on it, pulsing as the profile of the surface it presses on most says (haptics.surface_profile): rate,
-    strength, and how far the duty drops between pulses. A lost ESP32 is reconnected every second until stopped."""
+    force on it, pulsing on and off at the rate of the surface it presses on most (haptics.surface_profile). A lost
+    ESP32 is reconnected every second until stopped."""
 
     def __init__(self, recorder, esp_lock):
         super().__init__()
@@ -536,9 +536,7 @@ class Haptics(Tool):
                     profile = surface_profile(settings, surface)
                     # A new touch starts on a pulse, so the contact is felt at once
                     phase = (phase + profile["hz"] * dt) % 1.0 if force > 0 else 0.0
-                    level_ = min(force / settings["haptic_full_force"], 1.0) * profile["strength"] / 100
-                    if phase >= 0.5:
-                        level_ *= profile["off"] / 100
+                    level_ = min(force / settings["haptic_full_force"], 1.0) if phase < 0.5 else 0.0
                     duties, lost = step or [scaled_duty(level_, floor)] * len(OUTPUTS), no_loss
                     self.state["touch"] = {"force": round(force, 2), "surface": surface if force > 0 else None}
                 else:
