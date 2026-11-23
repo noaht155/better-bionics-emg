@@ -965,3 +965,5 @@ $("ctl-tries").addEventListener("click", (e) => {
 });
 
 loadSurfaceTries();
+
+$("ctl-tries-csv").addEventListener("click", () => { window.location.href = "/api/surface-tries.csv"; });

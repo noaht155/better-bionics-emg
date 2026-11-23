@@ -13,7 +13,9 @@ import argparse
 import asyncio
 import contextlib
 import copy
+import csv
 import importlib.util
+import io
 import json
 import socket
 import sys
@@ -1116,6 +1118,20 @@ def make_app(recorder, band, camera, tools, lan=True, serving=False):
         if not SURFACE_LOG.exists():
             return []
         return [json.loads(line) for line in reversed(SURFACE_LOG.read_text().splitlines()) if line]
+
+    @app.get("/api/surface-tries.csv")
+    def surface_tries_csv():
+        """The recorded surface settings as a spreadsheet, oldest first."""
+        out = io.StringIO()
+        writer = csv.writer(out)
+        writer.writerow(["at", "surface", "hz", "between_pulses_pct", "strength_pct", "lowest_duty_pct",
+                         "full_force_n", "profile", "note"])
+        for t in reversed(surface_tries()):
+            s = t["settings"]
+            writer.writerow([t["at"], t["surface"], s["hz"], s["off"], s["strength"], t["floor"], t["full_force"],
+                             t["profile"] or "", t["note"]])
+        return Response(out.getvalue(), media_type="text/csv",
+                        headers={"Content-Disposition": 'attachment; filename="surface-tries.csv"'})
 
     @app.post("/api/surface-tries")
     def add_surface_try(entry: SurfaceTry):
