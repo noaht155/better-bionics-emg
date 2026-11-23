@@ -294,8 +294,16 @@ const SIM_PARAMS = [
 ];
 ctl.sim = { label: null, sure: 1, effort: 0, moving: false };
 ctl.clench = false;
-buildParams($("ctl-sim-params"), SIM_PARAMS, "ctl-sim-", () => ctl.sim, sendSim);
-showParams(SIM_PARAMS, "ctl-sim-", ctl.sim);
+buildParams($("ctl-sim-params"), SIM_PARAMS, "ctl-sim-", () => ctl.sim, () => { showSimParams(); sendSim(); });
+// The 3D contact page has the effort, the pressure on what the hand holds
+const CONTACT_SIM_PARAMS = SIM_PARAMS.slice(0, 1);
+buildParams($("ctl-contact-sim-params"), CONTACT_SIM_PARAMS, "ctl-csim-", () => ctl.sim, () => { showSimParams(); sendSim(); });
+showSimParams();
+
+function showSimParams() {
+  showParams(SIM_PARAMS, "ctl-sim-", ctl.sim);
+  showParams(CONTACT_SIM_PARAMS, "ctl-csim-", ctl.sim);
+}
 
 function sendSim() {
   post("/api/control/sim", { ...ctl.sim, effort: ctl.clench ? 1 : ctl.sim.effort }).catch((err) => { $("ctl-error").textContent = err.message; });
@@ -311,17 +319,20 @@ function pickSim(label) {
   sendSim();
 }
 
-$("ctl-simulate").addEventListener("click", async () => {
-  $("ctl-haptics").textContent = "";
+async function simulate(errorId, noteId) {
+  $(noteId).textContent = "";
   if (!(await sendControlSetup())) return;
   const classes = selectedModel()?.classes || config.gesture_set;
-  const r = await postShowing("/api/control/simulate", { classes, ...linkBody() }, "ctl-error");
+  const r = await postShowing("/api/control/simulate", { classes, ...linkBody() }, errorId);
   if (r) {
-    $("ctl-haptics").textContent = r.haptics || "";
+    $(noteId).textContent = r.haptics || "";
     ctl.sim.label = null;
     sendSim();
   }
-});
+}
+$("ctl-simulate").addEventListener("click", () => simulate("ctl-error", "ctl-haptics"));
+$("ctl-contact-simulate").addEventListener("click", () => simulate("ctl-contact-error", "ctl-contact-run"));
+$("ctl-contact-stop").addEventListener("click", () => post("/api/model/stop").catch(() => {}));
 
 $("ctl-sim-classes").addEventListener("click", (e) => {
   const button = e.target.closest("button[data-class]");
@@ -333,6 +344,10 @@ document.addEventListener("keydown", (e) => {
   if (e.key === " ") {
     e.preventDefault();
     if (!ctl.clench) { ctl.clench = true; sendSim(); }
+  } else if (e.key === "r" || e.key === "f") {
+    ctl.sim.effort = Math.round(Math.min(1, Math.max(0, ctl.sim.effort + (e.key === "r" ? 0.1 : -0.1))) * 10) / 10;
+    showSimParams();
+    sendSim();
   } else if (/^[0-9]$/.test(e.key)) {
     const button = $("ctl-sim-classes").querySelectorAll("button")[Number(e.key)];
     if (button) pickSim(button.dataset.class || null);
@@ -345,6 +360,9 @@ document.addEventListener("keyup", (e) => {
 function drawSim(p) {
   const on = !!(p.running && p.simulated);
   $("ctl-sim").hidden = !on;
+  $("ctl-contact-sim-params").hidden = !on;
+  $("ctl-contact-simulate").disabled = !!p.running;
+  $("ctl-contact-stop").disabled = !p.running;
   if (!on) return;
   const classes = p.classes.filter((c) => c !== "rest");
   const key = classes.join(",");
@@ -1059,7 +1077,7 @@ function drawContactHaptics(h) {
   const duty = on ? Math.max(...(h.duties || [0])) : 0;
   $("ctl-contact-haptics").innerHTML = !on
     ? `<p class="muted">${h?.running ? "The haptics run in effort mode (System > Haptics), not with the 3D contact."
-      : h?.error || "Haptics not running: Start or Simulate on Grip control with an ESP32 link."}</p>`
+      : h?.error || "Haptics not running: Simulate with an ESP32 link (or Start on Grip control)."}</p>`
     : `<div class="contact-force"><b>${touch?.surface ? `${touch.force.toFixed(1)} N` : "none"}</b>
         <span>${touch?.surface ? `${touch.surface}, ${touch.test ? "test touch" : "the hand"}` : "touch"}</span></div>
       <div class="contact-force"><b>${duty} %</b><span>motor duty now</span></div>

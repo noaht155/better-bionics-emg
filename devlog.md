@@ -2519,6 +2519,8 @@ levels: r 0.995 to 0.999 per session, mean difference 0.005 to 0.013, a clench l
 - The 3D contact page has the same in a Haptics section: what the motors play now (force, surface, from the hand or
   the test touch, duty), the test touch, the settings of the surface being felt (they follow it), Record with a note
   and that surface's last five tries.
+- The 3D contact page is the home for testing this (Noah): Simulate and Stop under the view, the simulated effort
+  slider, R and F for effort in 10 % steps, and every key laid out under the view; Haptics is the first section.
 
 ## Open
 

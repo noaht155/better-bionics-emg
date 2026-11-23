@@ -109,7 +109,7 @@ function showReadout(r, control, quest) {
       ${r.assisted ? "The assist holds the object." : ""}</p>`;
   $("ctl-contact-status").textContent = control
     ? `${control.grip ?? "relaxed"}${control.locked ? ", locked" : ""}, effort ${control.effort?.toFixed(2)}`
-    : "No model runs: start one, or Simulate, on Grip control to move the fingers.";
+    : "No model runs: Simulate below, or start a model on Grip control, to move the fingers.";
   if (quest) {
     $("ctl-contact-status").textContent +=
       ` Quest on USB: its grip force (${quest.grip_force.toFixed(1)} N) drives the motors.`;
