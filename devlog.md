@@ -2527,6 +2527,18 @@ levels: r 0.995 to 0.999 per session, mean difference 0.005 to 0.013, a clench l
   own. Not yet known what was still plugged in (ESP32, driver board). Just before, with the motors plugged in, it
   was in the thousands (Noah, not saved). Rest-cue medians rise from 32 (11-06) and 40 (11-16) to 79 (11-20) and
   about 310 now; the perfboard went in on 11-17.
+- Hum filters on real hum (`diagnostics/robust/spatial_hum.py`; 11-05 only had synthetic hum and 16 to 21 uV real):
+  sessions `104008` (raw 60 Hz up to 376 uV) and `165135` (up to 483 uV), cost on `141651`. Filtered rest level, uV
+  (median over channels), 104008 / 165135 / clean 141651: live 8.4 / 10.5 / 12.7; per channel canceller then notch
+  8.2 / 10.6 / 13.7 (halves the narrow 60 Hz line, 0.5 against 1.2 to 2.8 uV, rest level the same). New idea, hum
+  removed along the channels' shared direction then notched: 5.8 to 6.6 / 8.0 to 9.4 / 9.0 to 11.7 but it takes 12
+  to 25 % of the EMG power away from the lines (live 8 %), and alone it leaves 8 to 34 uV of 60 Hz: the hum's
+  share between channels changes too fast to be one shared pattern. Nothing beats the live filter; not adopted.
+- What the filter leaves at those levels: rest after the live filter on 11-20, by band, against 11-02 and 11-16:
+  40 to 55 Hz 4.8 against 3.5, 55 to 65 Hz 3.7 against 1.9 to 2.9 (ch 5 8.8 against 1.5), 65 to 100 Hz 6.5 against
+  4.8 to 5.1. Grip holds about 40 uV on all three days. So on those sessions the hum is mostly gone after the
+  filter except on the worst channel (ch 5), and the rest floor is up about 30 % across the whole band, not only
+  at 60 Hz. Hum in the thousands (motors plugged in, today) is beyond any filter: the fix is at the source.
 - bbsim: a finger on the rail now presses with the effort cap as on an object (`rail_force`); before, the rail grip
   ran at full force whatever the effort. The Quest needs the rebuild for it.
 - The 3D contact page has the same in a Haptics section: what the motors play now (force, surface, from the hand or
