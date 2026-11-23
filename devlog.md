@@ -2492,6 +2492,15 @@ levels: r 0.995 to 0.999 per session, mean difference 0.005 to 0.013, a clench l
   bbsim reports the surface the hand presses on most (readout 16, `ReadoutSize` 17 in the app) and the headset sends
   it as `touch_surface`. Replaces the rate from friction.
 
+## 2026-11-23: recording surface settings
+
+- Surface tries (Noah): each surface on the Control tab has a Record button that keeps its settings as they are
+  now (rate, between pulses, strength, plus the lowest duty and full force they play under) with a note, one line in
+  `data/surface-tries.jsonl`. The table under Surfaces lists them and Use puts one back. A 20 Hz trace of every
+  haptics update was tried first and dropped: Noah only needs the settings that felt right, per surface.
+- Placing the prosthetic hand in VR with the other hand and passthrough already exist (Quest Setup page: Adjust by
+  hand, Passthrough); Noah will try them before anything changes there.
+
 ## Open
 
 Perfboard: replace the motors on positions 3 and 4 and buzz-test them (the rest checked 2026-11-18).
@@ -2578,7 +2587,8 @@ Now: haptics
   back on, set `OUTPUTS_INVERTED` to false. Still to measure: lowest duty that starts a motor (the haptics floor),
   how many levels can be told apart (then set effort mode's lowest duty on the Control tab), and EMG spectra with the motors off and on to see if they show up.
 - Control haptics on the motors: tune the four surface profiles until slippery, smooth, normal and rough feel
-  different, then on the headset (rebuild with `build.sh`).
+  different, then on the headset (rebuild with `build.sh`). Record the ones that feel right with the surface's
+  Record button.
 - Quest: the APK built today has the shared sim and the mass fix but not the palm collision or surfaces; rebuild and install
   with `quest-app/build.sh` and try the touch haptics and the grip squeeze in the headset.
 - Motor pickup: run `diagnostics/motor_pickup.py` with the motor band below the pads, relaxed and with a steady

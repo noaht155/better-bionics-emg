@@ -58,6 +58,8 @@ WEB_DIR = Path(__file__).with_name("web")
 PRESET_FILE = gesture_model.MODEL_DIR.parent / "control_presets.json"
 # Saved mappings (rule lists) of the Control tab, apart from the profiles (presets) that also carry one
 MAPPING_FILE = gesture_model.MODEL_DIR.parent / "control_mappings.json"
+# Surface settings kept from the Control tab while trying them on the motors, one line each (Noah, 2026-11-23)
+SURFACE_LOG = DATA_DIR / "surface-tries.jsonl"
 SEND_HZ = 20
 # The 3D contact page: frames sent per second, and how high above the desk the hand and object can go
 CONTACT_HZ = 30
@@ -244,6 +246,13 @@ class SurfaceProfile(BaseModel):
     hz: float = Field(ge=0.5, le=10)
     off: int = Field(ge=0, le=100)
     strength: int = Field(ge=10, le=100)
+
+
+class SurfaceTry(BaseModel):
+    surface: Literal["slippery", "smooth", "normal", "rough"]
+    settings: SurfaceProfile
+    profile: str | None = None
+    note: str = Field("", max_length=500)
 
 
 class HandPlace(BaseModel):
@@ -1099,6 +1108,24 @@ def make_app(recorder, band, camera, tools, lan=True, serving=False):
         if presets.pop(name, None) is None:
             refuse("no saved preset with that name")
         PRESET_FILE.write_text(json.dumps(presets, indent=2) + "\n")
+        return {"ok": True}
+
+    @app.get("/api/surface-tries")
+    def surface_tries():
+        """Newest first."""
+        if not SURFACE_LOG.exists():
+            return []
+        return [json.loads(line) for line in reversed(SURFACE_LOG.read_text().splitlines()) if line]
+
+    @app.post("/api/surface-tries")
+    def add_surface_try(entry: SurfaceTry):
+        """The surface's settings as they are now, with the haptics settings they play under."""
+        p = tools.control.params
+        line = dict(at=time.strftime("%Y-%m-%d %H:%M:%S"), **entry.model_dump(),
+                    floor=p["haptic_floor"], full_force=p["haptic_full_force"])
+        SURFACE_LOG.parent.mkdir(parents=True, exist_ok=True)
+        with SURFACE_LOG.open("a") as f:
+            f.write(json.dumps(line) + "\n")
         return {"ok": True}
 
     @app.post("/api/cursor/start")

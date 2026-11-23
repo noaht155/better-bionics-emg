@@ -56,7 +56,8 @@ function buildSurfaces() {
   const names = Object.keys(ctl.params.surfaces || {});
   $("ctl-surface-params").innerHTML = names.map((s) => {
     const things = Object.keys(of).filter((k) => of[k] === s).join(", ");
-    return `<p class="ctl-surface"><b>${s}</b>${things ? ` <span class="muted">${things}</span>` : ""}</p><div id="ctl-surface-${s}"></div>`;
+    return `<p class="ctl-surface"><b>${s}</b>${things ? ` <span class="muted">${things}</span>` : ""}
+      <button data-record="${s}">Record</button></p><div id="ctl-surface-${s}"></div>`;
   }).join("");
   names.forEach((s, i) => {
     const defs = i === 0 ? SURFACE_PARAMS : SURFACE_PARAMS.map((d) => ({ ...d, help: "" }));
@@ -928,3 +929,39 @@ function drawControl(c, p) {
   drawTrace();
   drawProbs({ ...p, running, label: c.grip, threshold: ctl.params.threshold }, "ctl-probs");
 }
+
+// Recorded surface settings (app.SURFACE_LOG), newest first
+const tryText = (s) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+let surfaceTries = [];
+
+async function loadSurfaceTries() {
+  try {
+    surfaceTries = await (await fetch("/api/surface-tries")).json();
+  } catch {
+    return;
+  }
+  $("ctl-tries").innerHTML = "<tr><th>When</th><th>Surface</th><th>Hz</th><th>Between</th><th>Strength</th><th>Note</th><th></th></tr>"
+    + surfaceTries.map((t, i) => `<tr><td>${t.at.slice(5, 16)}</td><td>${t.surface}</td><td>${t.settings.hz}</td>
+      <td>${t.settings.off} %</td><td>${t.settings.strength} %</td><td>${tryText(t.note)}</td>
+      <td><button data-use="${i}">Use</button></td></tr>`).join("");
+}
+
+$("ctl-surface-params").addEventListener("click", async (e) => {
+  const s = e.target.dataset.record;
+  if (!s || !ctl.params?.surfaces?.[s]) return;
+  const body = { surface: s, settings: ctl.params.surfaces[s], profile: ctl.profile, note: $("ctl-try-note").value };
+  if (await postShowing("/api/surface-tries", body, "ctl-try-error")) {
+    $("ctl-try-note").value = "";
+    loadSurfaceTries();
+  }
+});
+
+$("ctl-tries").addEventListener("click", (e) => {
+  const t = surfaceTries[e.target.dataset.use];
+  if (!t || !ctl.params?.surfaces) return;
+  ctl.params.surfaces[t.surface] = { ...t.settings };
+  showSurfaces();
+  editedParams();
+});
+
+loadSurfaceTries();
