@@ -445,6 +445,9 @@ class Haptics(Tool):
         self._settings = HAPTIC_DEFAULTS
         # Force on everything the simulated hand touches (N) and the surface it presses on most (Contact.touch)
         self.touch = lambda: (0.0, None)
+        # (pressure 0 to 1 of the full force, surface) set from the Control tab's keys, played in place of touch()
+        # so the surface settings can be felt without the band or a grasp in 3D contact
+        self.test_touch = None
 
     def start(self, port, wifi, session=None, settings=None):
         """settings: the Control tab's parameters, combined mode, read on every update so a change applies straight
@@ -470,6 +473,7 @@ class Haptics(Tool):
             raise ValueError("the ESP32 is busy with the output test")
         self._stop.clear()
         self._cue = None
+        self.test_touch = None
         self._settings = settings or HAPTIC_DEFAULTS
         try:
             self._launch(self._run, port, wifi, ranges, car, source, settings)
@@ -528,7 +532,9 @@ class Haptics(Tool):
                     floor = settings["haptic_floor"]
                     self.state.update(floor=floor, strength=settings["haptic_strength"])
                     step = self._pattern_step(self._cue) if self._cue else None
-                    force, surface = self.touch()
+                    test = self.test_touch
+                    force, surface = ((test[0] * settings["haptic_full_force"], test[1]) if test is not None
+                                      else self.touch())
                     force = force if force >= TOUCH_MIN_N else 0.0
                     profile = surface_profile(settings, surface)
                     # A new touch starts on a pulse, so the contact is felt at once

@@ -506,6 +506,11 @@
         <div id="ctl-surface-params"></div>
         <p class="muted">Record keeps a surface's settings as they are now, with the note, so the ones that felt
           right can be found again. Use puts one back on its surface.</p>
+        <p class="muted">Test touch plays a press on the motors in place of 3D contact's, so a surface can be felt
+          without the band or a grasp, while Start or Simulate runs with an ESP32 link. Keys on this tab: T on and
+          off, up and down: pressure in 10 % steps of the full force, left and right: surface.</p>
+        <div class="controls"><button id="ctl-test-touch">Test touch</button>
+          <p id="ctl-test-touch-state" class="surface-key"></p></div>
         <div class="row"><label>Note <input id="ctl-try-note" placeholder="how it felt"></label></div>
         <p id="ctl-try-error" class="error"></p>
         <div class="table-scroll"><table id="ctl-tries"></table></div>
@@ -554,7 +559,8 @@
         <h2>Keys</h2>
         <p class="muted">W S, A D: move the hand away and back, left and right. Q E: down and up. Right drag: turn
           the hand. Z X: roll it. Shift: slower. Drag the object to slide it over the table. Drag anywhere else: turn
-          the view, wheel: zoom. With the simulated model, number keys pick a class and space is full effort.</p>
+          the view, wheel: zoom. With the simulated model, number keys pick a class and space is full effort. T, arrows:
+          test touch (Surfaces on the Control page).</p>
       </div>
     </div>
   </section>

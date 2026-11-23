@@ -967,3 +967,40 @@ $("ctl-tries").addEventListener("click", (e) => {
 loadSurfaceTries();
 
 $("ctl-tries-csv").addEventListener("click", () => { window.location.href = "/api/surface-tries.csv"; });
+
+// Test touch (app /api/haptics/test-touch): a press on the motors from the keys, in place of 3D contact's
+ctl.test = { on: false, pressure: 0.5, surface: "normal" };
+
+function showTestTouch() {
+  const t = ctl.test;
+  $("ctl-test-touch").classList.toggle("active", t.on);
+  $("ctl-test-touch-state").innerHTML = t.on ? `<span class="${t.surface}">${t.surface} at ${Math.round(100 * t.pressure)} %</span>` : "";
+}
+
+async function sendTestTouch() {
+  if (!(await postShowing("/api/haptics/test-touch", ctl.test, "ctl-try-error"))) ctl.test.on = false;
+  showTestTouch();
+}
+
+$("ctl-test-touch").addEventListener("click", () => {
+  ctl.test.on = !ctl.test.on;
+  sendTestTouch();
+});
+
+document.addEventListener("keydown", (e) => {
+  if (currentTab !== "control" || e.target.closest("input, select, textarea") || e.ctrlKey || e.metaKey || e.altKey) return;
+  const t = ctl.test;
+  const names = config.surfaces?.names || [];
+  if (e.key.toLowerCase() === "t") {
+    t.on = !t.on;
+  } else if (!t.on || !e.key.startsWith("Arrow")) {
+    return;
+  } else if (e.key === "ArrowUp" || e.key === "ArrowDown") {
+    t.pressure = Math.round(Math.min(1, Math.max(0, t.pressure + (e.key === "ArrowUp" ? 0.1 : -0.1))) * 10) / 10;
+  } else if (names.length) {
+    const i = names.indexOf(t.surface) + (e.key === "ArrowRight" ? 1 : -1);
+    t.surface = names[(i + names.length) % names.length];
+  }
+  e.preventDefault();
+  sendTestTouch();
+});

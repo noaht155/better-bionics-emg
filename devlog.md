@@ -2513,6 +2513,9 @@ levels: r 0.995 to 0.999 per session, mean difference 0.005 to 0.013, a clench l
   built. Open Unity Hub, then `quest-app/build.sh`.
 - Placing the prosthetic hand in VR with the other hand and passthrough already exist (Quest Setup page: Adjust by
   hand, Passthrough); Noah will try them before anything changes there.
+- Test touch (Noah): T on the Control tab plays a press on the motors in place of 3D contact's, up and down set
+  the pressure in 10 % steps of the full force, left and right the surface. Needs Start or Simulate with an ESP32
+  link, nothing else (no band, no grasp), so a surface's settings can be tuned and recorded in one place.
 
 ## Open
 

@@ -318,6 +318,13 @@ class Rule(BaseModel):
     haptic: dict | str = "auto"
 
 
+class TestTouch(BaseModel):
+    """A touch played on the motors in place of 3D contact's while on: pressure as a share of the full force."""
+    on: bool
+    pressure: float = Field(0.0, ge=0, le=1)
+    surface: Literal["slippery", "smooth", "normal", "rough"] = "normal"
+
+
 class HapticPlay(BaseModel):
     """A rule's haptic settings, played once on the motors from the mapping page."""
     haptic: dict
@@ -960,6 +967,15 @@ def make_app(recorder, band, camera, tools, lan=True, serving=False):
             return {"ok": True, "haptics": f"haptics not started: {e}"}
         tools.haptics.state["with_model"] = True
         return {"ok": True, "haptics": "haptics starting, see the Haptics tab"}
+
+    @app.post("/api/haptics/test-touch")
+    def haptics_test_touch(touch: TestTouch):
+        """Only while the haptics run with the control layer."""
+        h = tools.haptics.state
+        if touch.on and not (h.get("running") and h.get("mode") == "combined"):
+            refuse("start or simulate with an ESP32 link first")
+        tools.haptics.test_touch = (touch.pressure, touch.surface) if touch.on else None
+        return {"ok": True}
 
     @app.post("/api/control/sim")
     def control_sim(inputs: SimInputs):
