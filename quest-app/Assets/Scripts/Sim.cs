@@ -17,7 +17,7 @@ public class Sim
 
     public class Geom
     {
-        public int type, role, hand, finger, obj;
+        public int type, role, hand, finger, obj, surface;
         public double[] size = new double[3];
         public float[] vert;
         public int[] face;
@@ -135,6 +135,7 @@ public class Sim
         {
             var geom = geoms[g] = new Geom();
             Native.bb_geom(world, g, out geom.type, out geom.role, out geom.hand, out geom.finger, out geom.obj, geom.size);
+            geom.surface = Native.bb_geom_surface(world, g);
             int nv = Native.bb_mesh(world, g, null, null, out int nf);
             if (nv > 0)
             {

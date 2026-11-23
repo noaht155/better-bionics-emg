@@ -50,9 +50,38 @@ def test_scene_and_poses_line_up():
     w = sim.World({"object": "ball"})
     scene, poses = w.scene(), w.poses()
     assert len(scene["geoms"]) == len(poses["pos"]) == len(poses["mat"])
-    assert {g["role"] for g in scene["geoms"]} == {"table", "hand", "object"}
+    assert {g["role"] for g in scene["geoms"]} == {"table", "rail", "hand", "object"}
+    assert [g["surface"] for g in scene["geoms"] if g["role"] == "rail" and g["type"] == "cylinder"] == list(sim.SURFACES)
+    assert next(g for g in scene["geoms"] if g["role"] == "object")["surface"] == sim.SURFACE_OF["ball"]
     palm = next(g for g in scene["geoms"] if g["type"] == "mesh")
     assert len(palm["vertices"]) > 10 and len(palm["faces"]) > 10
+
+
+def test_sliding_along_the_rail_reads_each_surface():
+    """The hand wrapped round the fixed rail from above and slid along it reads its sections' surfaces in order,
+    slippery to rough, without blowing up; Ready on the rail closes on its slippery end."""
+    w = sim.World()
+    q = np.zeros(4)
+    mujoco.mju_mat2Quat(q, sim.TOP.flatten())
+    centre = sim.grasp_centre(WRAP, sim.FINGERS, True)
+    at = lambda x: np.array([x, sim.RAIL_Y, sim.RAIL_HEIGHT]) - sim.TOP @ centre
+    w.set_hand(at(-0.15) + [0, 0, 0.03], q, teleport=True)
+    for k in range(80):
+        w.set_hand(at(-0.15), q)
+        w.step(0.02, GESTURES["open"][1] if k < 30 else WRAP, 0.3)
+    seen = []
+    for i in range(150):
+        w.set_hand(at(-0.15 + 0.3 * i / 149), q)
+        w.step(0.02, WRAP, 0.3)
+        force, surface = w.touch()
+        if force > 1 and (not seen or seen[-1] != surface):
+            seen.append(surface)
+    assert seen == list(sim.SURFACES) and w.blowups == 0
+    w.place_hand("rail")
+    for k in range(90):
+        w.step(0.02, GESTURES["open"][1] if k < 30 else WRAP, 0.4)
+    force, surface = w.touch()
+    assert force > 1 and surface == "slippery"
 
 
 def lift(effort, assist, mass_scale=1.0):

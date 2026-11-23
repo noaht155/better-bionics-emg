@@ -216,7 +216,8 @@ Skips without mujoco. Runs bbsim.c (built on first use) on the Quest app's scene
 | `test_geometry_matches_hand_js` | The simulated hand's knuckles, splay and segment lengths are the ones `web/hand.js` draws |
 | `test_motors_in_joint_order` | The prosthetic hand's 20 motors are in `JOINTS` order, so the control layer's angles reach the right joints |
 | `test_hand_reaches_the_pose_in_free_air` | With nothing to touch the hand reaches the fist within 12 degrees (the thumb doesn't block the fingers, the palm stops the pinky and index a little short) and grip force is 0 |
-| `test_scene_and_poses_line_up` | The page's scene and pose lists have one entry per geom, with desk, hand and object, and the palm mesh has its hull |
+| `test_scene_and_poses_line_up` | The page's scene and pose lists have one entry per geom, with desk, rail, hand and object, the rail's sections and the object carry their surface, and the palm mesh has its hull |
+| `test_sliding_along_the_rail_reads_each_surface` | The hand wrapped round the fixed rail and slid along it reads slippery, smooth, normal and rough in order without blowing up; Ready on the rail grips its slippery end |
 | `test_assist_lifts_and_grip_force_follows_effort` | With the assist the hand wraps the can and lifts it 10 cm at effort 0.3 and 1.0, and grip force at full effort is over 1.5 times that at 0.3 |
 | `test_touch_reads_the_surface_pressed_on` | The open hand pressed on the desk reads force on the desk's surface (normal); the lifted can, clear of the desk, reads the can's (smooth); every object has a known surface |
 | `test_grip_too_light_for_the_weight_drops_it` | The same grip on a can 3 times as heavy doesn't lift it: grip force x friction under the weight lets go, and the dropped can doesn't blow the sim up |

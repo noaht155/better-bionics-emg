@@ -536,8 +536,15 @@
         <div class="row narrow"><label>Object <select id="ctl-contact-object"></select></label></div>
         <div id="ctl-contact-params"></div>
         <div class="controls"><button id="ctl-contact-reset">Back on the table</button></div>
+        <h2>Surfaces</h2>
+        <p class="surface-key"><span class="slippery">slippery</span><span class="smooth">smooth</span>
+          <span class="normal">normal</span><span class="rough">rough</span></p>
+        <p class="muted">Objects show the colour of their surface. The rail on the far side of the desk is fixed and
+          has one section of each, slippery to rough (on the Quest slippery is on your right): grip it and slide the
+          hand along to compare them. Ready on the rail puts the open hand over its slippery end. Which surface each object is: <code>sim.SURFACE_OF</code>.</p>
         <h2>Hand</h2>
         <div class="controls"><button id="ctl-contact-hand-ready">Ready on the object</button>
+          <button id="ctl-contact-hand-rail">Ready on the rail</button>
           <button id="ctl-contact-hand-start">Reset hand</button></div>
         <p class="muted">Ready on the object puts the open hand 2 cm short of the object, turned for its grasp: the can
           and ball from the side, the block and small cube from above with three fingers, the pen from above with a

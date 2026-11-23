@@ -35,7 +35,9 @@ function buildScene(scene) {
   cx.meshes = scene.geoms.map((g) => {
     const geo = geometryFor(g);
     if (!geo) return null;
-    const base = color(g.role === "table" ? "--raised" : g.role === "object" ? "--sim-object" : "--hand-solid");
+    // Objects and the rail's sections in their surface's colour, the rail's posts like the desk
+    const coloured = g.role === "object" || (g.role === "rail" && g.type === "cylinder");
+    const base = color(coloured ? `--surface-${g.surface}` : g.role === "hand" ? "--hand-solid" : "--raised");
     const mesh = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ color: base, roughness: 0.65 }));
     mesh.castShadow = g.role !== "table";
     mesh.receiveShadow = true;
@@ -281,7 +283,7 @@ $("ctl-contact-open").addEventListener("click", () => showContactPage(true));
 $("ctl-contact-back").addEventListener("click", () => showContactPage(false));
 $("ctl-contact-reset").addEventListener("click", () => postShowing("/api/contact/reset", null, "ctl-contact-error"));
 // The server moves the hand, so the page takes its pose again from the next frame
-for (const [id, where] of [["ctl-contact-hand-ready", "object"], ["ctl-contact-hand-start", "start"]]) {
+for (const [id, where] of [["ctl-contact-hand-ready", "object"], ["ctl-contact-hand-rail", "rail"], ["ctl-contact-hand-start", "start"]]) {
   $(id).addEventListener("click", async () => {
     if (await postShowing("/api/contact/hand", { where }, "ctl-contact-error")) {
       cx.hand = null;

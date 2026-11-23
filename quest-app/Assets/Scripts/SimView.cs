@@ -9,13 +9,15 @@ public class SimView
     // A finger pressing this hard shows fully in the effort colour (contact.js TINT_FULL_N)
     const float TintFullN = 10;
     public static readonly Color ProstheticColor = Hex(0xd4d4d8), FreeColor = Hex(0x8e8e96),
-        PressColor = Hex(0xc93ee6), ObjectColor = Hex(0x71717a), HeldColor = Hex(0xff7a3d);
+        PressColor = Hex(0xc93ee6), HeldColor = Hex(0xff7a3d), PostColor = Hex(0x151517);
+    // Objects and the rail's sections by surface (sim.SURFACES order), the web app's --surface-* tokens
+    public static readonly Color[] SurfaceColors = { Hex(0x7cc4e8), Hex(0x8fd3a8), Hex(0xd8c27a), Hex(0xc8794f) };
 
     readonly Transform root;
     readonly Material material;
     readonly List<Transform> parts = new List<Transform>();
     readonly List<(Renderer r, int finger)> pressing = new List<(Renderer, int)>();
-    readonly Dictionary<int, Renderer> objectRenderers = new Dictionary<int, Renderer>();
+    readonly Dictionary<int, (Renderer r, Color color)> objectRenderers = new Dictionary<int, (Renderer, Color)>();
     int version = -1;
     float[] pos = new float[0], mat = new float[0];
     double[] objects = new double[0];
@@ -118,8 +120,15 @@ public class SimView
 
     Transform Make(Sim.Geom g)
     {
-        var color = g.role == 1 ? ObjectColor : g.hand == Sim.Prosthetic ? ProstheticColor : FreeColor;
-        return MakePart(g, Paint(material, color, g.role == 1 ? 0.3f : 0.55f));
+        return MakePart(g, Paint(material, ColorOf(g), g.role == 1 ? 0.3f : 0.55f));
+    }
+
+    // The rail's sections are cylinders, its posts boxes
+    static Color ColorOf(Sim.Geom g)
+    {
+        if (g.role == 1 || (g.role == 3 && g.type == 5))
+            return g.surface >= 0 && g.surface < SurfaceColors.Length ? SurfaceColors[g.surface] : PostColor;
+        return g.role == 3 ? PostColor : g.hand == Sim.Prosthetic ? ProstheticColor : FreeColor;
     }
 
     // One geom as a mesh with this material. MuJoCo geom types: 2 sphere, 3 capsule, 4 ellipsoid, 5 cylinder, 6 box,
@@ -226,7 +235,7 @@ public class SimView
                 part.SetParent(root, false);
                 var r = part.GetComponent<Renderer>();
                 if (g.hand == Sim.Prosthetic) pressing.Add((r, g.finger));
-                if (g.role == 1) objectRenderers[g.obj] = r;
+                if (g.role == 1) objectRenderers[g.obj] = (r, ColorOf(g));
             }
             parts.Add(part);
         }
@@ -257,9 +266,9 @@ public class SimView
         }
         foreach (var kv in objectRenderers)
         {
-            kv.Value.enabled = kv.Key >= parked.Length || !parked[kv.Key];
+            kv.Value.r.enabled = kv.Key >= parked.Length || !parked[kv.Key];
             bool held = (int)readout[8] == kv.Key || (int)readout[9] == kv.Key;
-            kv.Value.sharedMaterial.color = held ? Color.Lerp(ObjectColor, HeldColor, 0.35f) : ObjectColor;
+            kv.Value.r.sharedMaterial.color = held ? Color.Lerp(kv.Value.color, HeldColor, 0.35f) : kv.Value.color;
         }
         return true;
     }

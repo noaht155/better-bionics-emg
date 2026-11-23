@@ -11,7 +11,9 @@ const OBJECT_NAMES = { can: "Can", ball: "Ball", block: "Block", "small cube": "
 
 const canvas = $("vr-canvas");
 const { world, camera, bodies, resize, render } = createView(canvas, 0.8);
-const HAND = color("--hand-solid"), FREE = color("--sim-free-hand"), OBJECT = color("--sim-object");
+const HAND = color("--hand-solid"), FREE = color("--sim-free-hand");
+// Objects and the rail's sections in their surface's colour; a headset built before surfaces were sent has none
+const surfaceColor = (g) => color(g.surface ? `--surface-${g.surface}` : "--sim-object");
 const PRESSED = color("--effort"), HELD = color("--accent-orange");
 const vr = { open: false, ws: null, meshes: [], params: {}, lastView: 0, mode: "eyes", turning: null };
 // Behind the user's seat, looking over the desk
@@ -32,7 +34,8 @@ function buildScene(scene) {
       base = color("--panel");
     } else {
       geo = geometryFor(g);
-      base = g.role === "static" ? color("--raised") : g.role === "object" ? OBJECT : g.hand === 0 ? HAND : FREE;
+      base = g.role === "object" || (g.role === "rail" && g.type === "cylinder") ? surfaceColor(g)
+        : g.role === "static" || g.role === "rail" ? color("--raised") : g.hand === 0 ? HAND : FREE;
     }
     if (!geo) return null;
     const mesh = new THREE.Mesh(geo, material(base));
@@ -44,7 +47,7 @@ function buildScene(scene) {
     }
     mesh.castShadow = g.role !== "static";
     mesh.receiveShadow = true;
-    mesh.userData = { role: g.role, hand: g.hand, finger: g.finger, obj: g.obj };
+    mesh.userData = { role: g.role, hand: g.hand, finger: g.finger, obj: g.obj, base };
     bodies.add(mesh);
     return mesh;
   });
@@ -55,10 +58,10 @@ function applyView(v, readout) {
   vr.meshes.forEach((mesh, i) => {
     if (!mesh) return;
     placeMesh(mesh, v.pos.slice(3 * i, 3 * i + 3), v.mat.slice(9 * i, 9 * i + 9));
-    const { role, hand, finger, obj } = mesh.userData;
+    const { role, hand, finger, obj, base } = mesh.userData;
     if (role === "object") {
       mesh.visible = !v.parked[obj];
-      mesh.material.color.copy(v.held.includes(obj) ? OBJECT.clone().lerp(HELD, 0.35) : OBJECT);
+      mesh.material.color.copy(v.held.includes(obj) ? base.clone().lerp(HELD, 0.35) : base);
     } else if (role === "hand" && hand === 0 && readout) {
       const force = finger >= 0 ? readout.finger_force[finger] : readout.palm_force;
       mesh.material.color.lerpColors(HAND, PRESSED, Math.min(force / TINT_FULL_N, 1));

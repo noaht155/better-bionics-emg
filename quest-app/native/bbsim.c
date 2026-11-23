@@ -436,14 +436,21 @@ EXPORT void bb_step(World* w, double dt) {
 
 EXPORT int bb_ngeom(World* w) { return w->m->ngeom; }
 
-// role: 0 desk or floor, 1 object, 2 hand. hand: 0 prosthetic, 1 free. finger: -1 palm. obj: the object's index
+// role: 0 desk or floor, 1 object, 2 hand, 3 the surface rail. hand: 0 prosthetic, 1 free. finger: -1 palm. obj:
+// the object's index
 EXPORT void bb_geom(World* w, int g, int* type, int* role, int* hand, int* finger, int* obj, double* size) {
   *type = w->m->geom_type[g];
   *hand = w->hand_of_geom[g];
   *finger = w->finger_of_geom[g];
   *obj = w->obj_of_geom[g];
-  *role = *obj >= 0 ? 1 : *hand >= 0 ? 2 : 0;
+  const char* name = mj_id2name(w->m, mjOBJ_GEOM, g);
+  *role = *obj >= 0 ? 1 : *hand >= 0 ? 2 : name && !strncmp(name, "rail", 4) ? 3 : 0;
   memcpy(size, w->m->geom_size + 3 * g, 3 * sizeof(double));
+}
+
+// A geom's kind of surface (its user value, sim.SURFACES), -1 for none
+EXPORT int bb_geom_surface(World* w, int g) {
+  return w->m->nuser_geom > 0 ? (int)w->m->geom_user[g * w->m->nuser_geom] : -1;
 }
 
 // Vertex and face counts of a mesh geom, 0 for the rest; with buffers, also copies them out

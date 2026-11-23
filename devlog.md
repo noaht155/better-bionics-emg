@@ -2498,6 +2498,19 @@ levels: r 0.995 to 0.999 per session, mean difference 0.005 to 0.013, a clench l
   now (rate, between pulses, strength, plus the lowest duty and full force they play under) with a note, one line in
   `data/surface-tries.jsonl`. The table under Surfaces lists them and Use puts one back. A 20 Hz trace of every
   haptics update was tried first and dropped: Noah only needs the settings that felt right, per surface.
+- Export CSV under the surface tries table (`/api/surface-tries.csv`, oldest first).
+- Surface rail (Noah): a fixed bar on the far side of the desk (`sim.RAIL_*`), four 10 cm sections slippery,
+  smooth, normal, rough with friction 0.15, 0.35, 0.7, 1.0 (priority over the hand's, like the desk), 12 cm over
+  the desk, 3 cm thick, slippery at -x (the Quest user's right). Grip it and slide along it to compare the
+  surfaces. Gripped from above in WRAP at effort 0.2 to 0.5 and slid 30 cm in 3 s, the touch reads each section in
+  order, about 7 to 9 N, no blowups. The grip presses about 3 cm to +x of `grasp_centre`, so Ready on the rail sits
+  3 cm into the slippery end. Static geoms, so bbsim needed no change for the physics; `bb_geom` gives role 3 for
+  `rail*` geoms and the new `bb_geom_surface` gives each geom's surface so the Quest can colour them.
+- Surface colours: objects and the rail's sections show their surface, cool to warm (`--surface-*` tokens, the
+  same in `SimView.SurfaceColors`), with a key on the contact page. The VR tab falls back to grey for a headset
+  built before this.
+- Quest build not checked: Unity's batch build stopped at the licence check (Hub not signed in), the Android bbsim
+  built. Open Unity Hub, then `quest-app/build.sh`.
 - Placing the prosthetic hand in VR with the other hand and passthrough already exist (Quest Setup page: Adjust by
   hand, Passthrough); Noah will try them before anything changes there.
 
@@ -2588,7 +2601,7 @@ Now: haptics
   how many levels can be told apart (then set effort mode's lowest duty on the Control tab), and EMG spectra with the motors off and on to see if they show up.
 - Control haptics on the motors: tune the four surface profiles until slippery, smooth, normal and rough feel
   different, then on the headset (rebuild with `build.sh`). Record the ones that feel right with the surface's
-  Record button.
+  Record button. The rail on the desk has all four side by side.
 - Quest: the APK built today has the shared sim and the mass fix but not the palm collision or surfaces; rebuild and install
   with `quest-app/build.sh` and try the touch haptics and the grip squeeze in the headset.
 - Motor pickup: run `diagnostics/motor_pickup.py` with the motor band below the pads, relaxed and with a steady

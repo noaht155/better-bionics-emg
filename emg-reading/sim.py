@@ -82,6 +82,12 @@ OBJECTS = {
 SURFACES = ("slippery", "smooth", "normal", "rough")
 SURFACE_OF = {"can": "smooth", "ball": "rough", "block": "normal", "small cube": "normal", "pen": "slippery",
               "desk": "normal", "floor": "rough"}
+# The surface rail (Noah, 2026-11-23): a bar fixed over the far side of the desk, one section per surface from
+# slippery on the user's right to rough on the left, to grip and slide the hand along to compare them. Each section
+# has its own friction, which wins over the hand's like the desk's. Radius, section half length, height of its axis
+# over the desk top, its y (m)
+RAIL_FRICTION = {"slippery": 0.15, "smooth": 0.35, "normal": 0.7, "rough": 1.0}
+RAIL_RADIUS, RAIL_HALF, RAIL_HEIGHT, RAIL_Y = 0.015, 0.05, 0.12, -0.38
 SIM_DEFAULTS = {"object": "can", "mass_scale": 1.0, "max_force": 15.0, "assist": False}
 # Assist: thumb and another finger each press at least this hard
 ASSIST_N = 1.0
@@ -274,6 +280,17 @@ def scene_xml(prosthetic_left=True):
                    f'user="{_surface(kind)}"/></body>\n')
         welds += "".join(f'<weld name="{p}hold{i}" body1="{p}palm" body2="obj{i}" active="false"/>' for p in HANDS)
     motors = "".join(f'<motor name="{p}{j}" joint="{p}{j}"/>' for p in HANDS for j in JOINTS)
+    rail = ""
+    for i, surface in enumerate(SURFACES):
+        x = (2 * i - len(SURFACES) + 1) * RAIL_HALF
+        rail += (f'<geom name="rail{i}" type="cylinder" size="{RAIL_RADIUS} {RAIL_HALF}" pos="{x} {RAIL_Y} '
+                 f'{RAIL_HEIGHT}" euler="0 90 0" friction="{RAIL_FRICTION[surface]} 0.01 0.001" contype="2" '
+                 f'conaffinity="3" priority="1" user="{i}"/>')
+    for side in (-1, 1):
+        x = side * (len(SURFACES) * RAIL_HALF + RAIL_RADIUS)
+        rail += (f'<geom name="rail_post{(side + 1) // 2}" type="box" size="{RAIL_RADIUS} {RAIL_RADIUS} '
+                 f'{(RAIL_HEIGHT + RAIL_RADIUS) / 2}" pos="{x} {RAIL_Y} {(RAIL_HEIGHT + RAIL_RADIUS) / 2}" '
+                 f'friction="0.7 0.01 0.001" contype="2" conaffinity="3" priority="1" user="{_surface("desk")}"/>')
     meshes = "".join(palm_mesh_xml(p, mirror[p]) for p in HANDS)
     hx, hy, hz = DESK_HALF
     return f"""<mujoco model="contact">
@@ -288,7 +305,7 @@ noslip_iterations="{NOSLIP_ITERATIONS}"><flag nativeccd="disable"/></option>
 contype="2" conaffinity="3" priority="1" user="{_surface("desk")}"/>
 <geom name="floor" type="plane" size="0 0 1" pos="0 0 {-DESK_HEIGHT}" friction="0.8 0.01 0.001" contype="2"
 conaffinity="3" priority="1" user="{_surface("floor")}"/>
-{bodies}</worldbody>
+{rail}{bodies}</worldbody>
 <equality>{welds}</equality>
 <actuator>{motors}</actuator>
 <custom>{constants()}</custom></mujoco>"""
@@ -415,7 +432,8 @@ class World:
                 b = m.body_parentid[b]
             if b == palm:
                 hand.append(g)
-        self._shown = [mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_GEOM, "desk"), *hand, geom]
+        rail = [g for g in range(m.ngeom) if (mujoco.mj_id2name(m, mujoco.mjtObj.mjOBJ_GEOM, g) or "").startswith("rail")]
+        self._shown = [mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_GEOM, "desk"), *rail, *hand, geom]
 
     def set_params(self, params):
         self.params.update(params)
@@ -446,9 +464,18 @@ class World:
         return base, q, back
 
     def place_hand(self, where):
-        """Puts the hand at its start ("start") or ready to grasp the object, a little back from it ("object")."""
+        """Puts the hand at its start ("start"), or open just above the slippery end of the rail ("rail"), or ready to
+        grasp the object, a little back from it ("object")."""
         if where == "start":
             self.set_hand(HAND_START, HAND_QUAT, teleport=True)
+        elif where == "rail":
+            q = np.zeros(4)
+            mujoco.mju_mat2Quat(q, TOP.flatten())
+            # The wrapped fingers press about 3 cm to the +x side of the grasp centre: at the section's middle they
+            # read the next one (2026-11-23)
+            x = (1 - len(SURFACES)) * RAIL_HALF - 0.03
+            centre = np.array([x, RAIL_Y, RAIL_HEIGHT + READY_GAP_M]) - TOP @ grasp_centre(WRAP, FINGERS, True)
+            self.set_hand(centre, q, teleport=True)
         else:
             base, q, back = self.grasp_target()
             self.set_hand(base + back, q, teleport=True)
@@ -510,15 +537,18 @@ class World:
         return OBJECTS[self.object][2]
 
     def scene(self):
-        """The shown geoms, for the page to build: type, size, body role and, for meshes, vertices and faces."""
+        """The shown geoms, for the page to build: type, size, body role, surface (SURFACES, None on the hand) and,
+        for meshes, vertices and faces."""
         m = self.model
         geoms = []
         for g in self._shown:
             kind = mujoco.mjtGeom(m.geom_type[g]).name.removeprefix("mjGEOM_").lower()
             name = mujoco.mj_id2name(m, mujoco.mjtObj.mjOBJ_GEOM, g)
-            role = "table" if name == "desk" else "hand" if name.startswith("p_") else "object"
+            role = ("table" if name == "desk" else "rail" if name.startswith("rail") else
+                    "hand" if name.startswith("p_") else "object")
             entry = {"name": name.removeprefix("p_") if role == "hand" else role, "type": kind, "role": role,
-                     "size": m.geom_size[g].round(5).tolist()}
+                     "size": m.geom_size[g].round(5).tolist(),
+                     "surface": None if role == "hand" else SURFACES[int(m.geom_user[g, 0])]}
             if kind == "mesh":
                 mesh = m.geom_dataid[g]
                 v0, nv = m.mesh_vertadr[mesh], m.mesh_vertnum[mesh]

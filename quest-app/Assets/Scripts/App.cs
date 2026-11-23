@@ -51,7 +51,7 @@ public class App : MonoBehaviour
     [Serializable]
     class SceneGeom
     {
-        public string type, role;
+        public string type, role, surface;
         public int hand, finger, obj;
         public float[] size, vertices;
         public int[] faces;
@@ -88,6 +88,8 @@ public class App : MonoBehaviour
     [Serializable] class RecordMessage { public RecordAction record; }
 
     static readonly string[] GeomTypes = { "plane", "hfield", "sphere", "capsule", "ellipsoid", "cylinder", "box", "mesh" };
+    // sim.SURFACES
+    static readonly string[] SurfaceNames = { "slippery", "smooth", "normal", "rough" };
 
     Meta meta;
     Settings settings;
@@ -797,7 +799,9 @@ public class App : MonoBehaviour
                 var src = sim.Geoms[g];
                 geoms[g] = new SceneGeom
                 {
-                    type = GeomTypes[src.type], role = src.role == 1 ? "object" : src.role == 2 ? "hand" : "static",
+                    type = GeomTypes[src.type],
+                    role = src.role == 1 ? "object" : src.role == 2 ? "hand" : src.role == 3 ? "rail" : "static",
+                    surface = src.surface >= 0 && src.surface < SurfaceNames.Length ? SurfaceNames[src.surface] : "",
                     hand = src.hand, finger = src.finger, obj = src.obj,
                     size = new[] { (float)src.size[0], (float)src.size[1], (float)src.size[2] },
                     vertices = src.vert ?? new float[0], faces = src.face ?? new int[0]

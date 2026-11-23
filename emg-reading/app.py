@@ -258,8 +258,8 @@ class SurfaceTry(BaseModel):
 
 
 class HandPlace(BaseModel):
-    """The contact hand back to its start, or ready to grasp the object (sim.World.place_hand)."""
-    where: Literal["start", "object"]
+    """The contact hand back to its start, or ready to grasp the object or the rail (sim.World.place_hand)."""
+    where: Literal["start", "object", "rail"]
 
 
 class ContactParams(BaseModel):

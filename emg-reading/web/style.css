@@ -23,6 +23,11 @@
   --effort: #c93ee6;
   --sim-object: #71717a;
   --sim-free-hand: #8e8e96;
+  /* Surfaces in 3D contact, cool for slippery to warm for rough (also SimView.cs) */
+  --surface-slippery: #7cc4e8;
+  --surface-smooth: #8fd3a8;
+  --surface-normal: #d8c27a;
+  --surface-rough: #c8794f;
   --mains: #4a1f26;
   --font-sans: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, Consolas, "SF Mono", monospace;
@@ -459,6 +464,12 @@ th { color: var(--muted); font: 400 11px var(--font-mono); letter-spacing: 0.12e
 #ctl-contact-canvas, #vr-canvas { display: block; width: 100%; height: 68vh; background: var(--bg); border: 1px solid var(--line); border-radius: 2px; touch-action: none; outline: none; }
 #ctl-contact-canvas:focus-visible, #vr-canvas:focus-visible { border-color: var(--line-strong); }
 .contact-side h2:first-child { margin-top: 0; }
+.surface-key { display: flex; flex-wrap: wrap; gap: 4px 16px; font: 400 11px var(--font-mono); letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); }
+.surface-key span::before { content: ""; display: inline-block; width: 10px; height: 10px; margin-right: 6px; border-radius: 2px; vertical-align: -1px; }
+.surface-key .slippery::before { background: var(--surface-slippery); }
+.surface-key .smooth::before { background: var(--surface-smooth); }
+.surface-key .normal::before { background: var(--surface-normal); }
+.surface-key .rough::before { background: var(--surface-rough); }
 .contact-readout { display: flex; flex-wrap: wrap; gap: 8px 32px; }
 .contact-readout p { flex-basis: 100%; margin: 0; }
 .contact-force b { display: block; font-size: 28px; font-weight: 600; letter-spacing: -0.02em; }
