@@ -239,15 +239,6 @@ class ControlParams(BaseModel):
         default_factory=lambda: copy.deepcopy(HAPTIC_DEFAULTS["surfaces"]))
 
 
-class HapticTestStart(BaseModel):
-    profile: str | None = None
-
-
-class HapticTestNote(BaseModel):
-    note: str = Field(max_length=2000)
-    rating: int | None = Field(None, ge=1, le=5)
-
-
 class SurfaceProfile(BaseModel):
     """One surface's pulses, see haptics.SURFACE_DEFAULTS."""
     hz: float = Field(ge=0.5, le=10)
@@ -1108,45 +1099,6 @@ def make_app(recorder, band, camera, tools, lan=True, serving=False):
         if presets.pop(name, None) is None:
             refuse("no saved preset with that name")
         PRESET_FILE.write_text(json.dumps(presets, indent=2) + "\n")
-        return {"ok": True}
-
-    @app.post("/api/haptic-tests/start")
-    def haptic_test_start(choice: HapticTestStart):
-        """Logs the combined haptics from now on (tools.HapticTest), with the profile the page has picked."""
-        h = tools.haptics.state
-        if not h.get("running") or h.get("mode") != "combined":
-            refuse("start the haptics with control first (Start or Simulate with the ESP32 connected)")
-        c = tools.control.state
-        name = tools.haptics.test_log.start({
-            "started": time.strftime("%Y-%m-%d %H:%M:%S"), "profile": choice.profile,
-            "params": tools.control.params, "rules": tools.control.rules,
-            "model": tools.predictor.state.get("model"), "levels_from": c.get("levels_from"),
-            "touch_from": "quest" if tools.contact.quest_readout() is not None else "pc",
-            "object": tools.contact.state.get("object")})
-        return {"ok": True, "name": name}
-
-    @app.post("/api/haptic-tests/stop")
-    def haptic_test_stop():
-        return {"ok": True, "name": tools.haptics.test_log.stop()}
-
-    @app.get("/api/haptic-tests")
-    def haptic_tests():
-        return tools.haptics.test_log.runs()
-
-    @app.get("/api/haptic-tests/{name}")
-    def haptic_test(name: str):
-        try:
-            header, rows = tools.haptics.test_log.load(name)
-        except ValueError as e:
-            refuse(e)
-        return {"header": header, "rows": rows}
-
-    @app.post("/api/haptic-tests/{name}")
-    def haptic_test_note(name: str, note: HapticTestNote):
-        try:
-            tools.haptics.test_log.annotate(name, note.note, note.rating)
-        except ValueError as e:
-            refuse(e)
         return {"ok": True}
 
     @app.post("/api/cursor/start")

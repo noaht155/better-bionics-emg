@@ -445,9 +445,6 @@ class Haptics(Tool):
         self._settings = HAPTIC_DEFAULTS
         # Force on everything the simulated hand touches (N) and the surface it presses on most (Contact.touch)
         self.touch = lambda: (0.0, None)
-        # The control layer's effort and closure, for the test log
-        self.control_state = lambda: {}
-        self.test_log = HapticTest()
 
     def start(self, port, wifi, session=None, settings=None):
         """settings: the Control tab's parameters, combined mode, read on every update so a change applies straight
@@ -512,7 +509,6 @@ class Haptics(Tool):
                     self._stop.wait(1.0)
         finally:
             self._log_session(False)
-            self.test_log.stop()
             self.esp_lock.release()
 
     def _drive(self, port, wifi, ranges, car, settings):
@@ -541,12 +537,6 @@ class Haptics(Tool):
                     if phase >= 0.5:
                         level_ *= profile["off"] / 100
                     duties, lost = step or [scaled_duty(level_, floor)] * len(OUTPUTS), no_loss
-                    c = self.control_state()
-                    self.test_log.write({"effort": c.get("effort"), "grip_effort": c.get("grip_effort"),
-                                         "closure": c.get("closure"), "grip": c.get("grip"),
-                                         "force": round(force, 2), "surface": surface if force > 0 else None,
-                                         "level": round(level_, 3), "duty": max(duties),
-                                         "cue": self._cue[2] if step else None})
                 else:
                     raw, filtered = self.recorder.window(self.recorder.env_len)
                     if raw.shape[1] == self.recorder.env_len:
@@ -566,75 +556,6 @@ class Haptics(Tool):
         session = self.recorder.session
         if session is not None:
             session.add_event("haptics", on=on, link=link)
-
-
-class HapticTest:
-    """A haptics test run in data/haptic-tests/ (Noah, 2026-11-23), so effort and surface settings can be compared
-    later: a header line (profile, settings, mapping, model, what was touched, then the note and rating), then one
-    line per update of the combined haptics with what the motors got and the force and surface behind it."""
-
-    FOLDER = DATA_DIR / "haptic-tests"
-    NAME = re.compile(r"^\d{4}-\d{2}-\d{2}_\d{6}$")
-
-    def __init__(self):
-        self._lock = threading.Lock()
-        self._file = None
-        self._t0 = 0.0
-        self.name = None
-
-    def start(self, header):
-        self.stop()
-        self.FOLDER.mkdir(parents=True, exist_ok=True)
-        name = time.strftime("%Y-%m-%d_%H%M%S")
-        with self._lock:
-            self._file = (self.FOLDER / f"{name}.jsonl").open("w", buffering=1)
-            self._file.write(json.dumps(dict(header, note="", rating=None)) + "\n")
-            self._t0 = time.perf_counter()
-            self.name = name
-        return name
-
-    def stop(self):
-        with self._lock:
-            if self._file is not None:
-                self._file.close()
-            self._file, name, self.name = None, self.name, None
-        return name
-
-    def write(self, row):
-        with self._lock:
-            if self._file is not None:
-                self._file.write(json.dumps(dict(t=round(time.perf_counter() - self._t0, 3), **row)) + "\n")
-
-    def _path(self, name):
-        path = self.FOLDER / f"{name}.jsonl"
-        if not self.NAME.match(name) or not path.exists():
-            raise ValueError(f"no haptic test called {name}")
-        return path
-
-    def load(self, name):
-        """(header, rows)."""
-        lines = self._path(name).read_text().splitlines()
-        return json.loads(lines[0]), [json.loads(line) for line in lines[1:] if line]
-
-    def annotate(self, name, note, rating):
-        if name == self.name:
-            raise ValueError("stop the test first")
-        path = self._path(name)
-        lines = path.read_text().splitlines()
-        lines[0] = json.dumps(dict(json.loads(lines[0]), note=note, rating=rating))
-        path.write_text("\n".join(lines) + "\n")
-
-    def runs(self):
-        """Newest first: name, profile, note, rating, seconds, the surfaces touched and the peak force."""
-        out = []
-        for path in sorted(self.FOLDER.glob("*.jsonl"), reverse=True):
-            header, rows = self.load(path.stem)
-            out.append({"name": path.stem, "profile": header.get("profile"), "note": header.get("note", ""),
-                        "rating": header.get("rating"), "touch_from": header.get("touch_from"),
-                        "seconds": rows[-1]["t"] if rows else 0.0, "running": path.stem == self.name,
-                        "surfaces": sorted({r["surface"] for r in rows if r.get("surface")}),
-                        "peak_force": max((r["force"] for r in rows), default=0.0)})
-        return out
 
 
 class OutputTest(Tool):
@@ -1481,7 +1402,6 @@ class Tools:
         self.control = Control(recorder, self.haptics)
         self.contact = Contact(self.predictor, self.control)
         self.haptics.touch = self.contact.touch
-        self.haptics.control_state = lambda: self.control.state
         self.cursor = CursorTask(recorder)
         self.trainer = Trainer(self.predictor)
         self.network = NetworkJob()
@@ -1521,5 +1441,4 @@ class Tools:
                 state["running_s"] = now - state["started"]
                 state["quiet_s"] = now - state["last_line"]
             out[name] = state
-        out["haptics"]["test"] = self.haptics.test_log.name
         return out

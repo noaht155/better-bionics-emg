@@ -465,26 +465,6 @@
           <h2>Model output</h2>
           <canvas id="ctl-probs" width="900" height="260"></canvas>
         </div>
-        <h2>Haptic tests</h2>
-        <p class="muted">Logs what the motors get while the haptics run with control (Start or Simulate with the
-          ESP32), with the profile and its settings: effort, the force on what the hand touches, the surface and the
-          pulses. Start a test, touch things in 3D contact or on the Quest, stop it and give it a note and rating.</p>
-        <div class="controls"><button id="ht-start">Start test</button><button id="ht-stop">Stop test</button></div>
-        <p id="ht-status" class="muted"></p>
-        <p id="ht-error" class="error"></p>
-        <div class="table-scroll"><table id="ht-runs"></table></div>
-        <div id="ht-run" hidden>
-          <p id="ht-run-title"></p>
-          <p class="muted">Pink: motor duty. White: force, 100 % at the full force setting. Magenta: effort. Grey
-            bands: touching, named by surface.</p>
-          <canvas id="ht-plot" width="900" height="240"></canvas>
-          <div class="row">
-            <label>Note <input id="ht-note" placeholder="how it felt"></label>
-            <label>Rating <select id="ht-rating"><option value="">none</option><option>1</option><option>2</option>
-              <option>3</option><option>4</option><option>5</option></select></label>
-          </div>
-          <div class="controls"><button id="ht-save">Save note</button></div>
-        </div>
       </div>
       <div class="ctl-settings">
         <h2>Profile</h2>
