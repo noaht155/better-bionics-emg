@@ -2520,6 +2520,11 @@ levels: r 0.995 to 0.999 per session, mean difference 0.005 to 0.013, a clench l
   at effort 0.1, 0.5, 1.0: about 8, 32 to 48, 55 to 89 N, right surface, no blowups; at the default full force
   (30 N) the duty is full from about 40 % pressure. WRAP only gave 4 to 13 N whatever the effort, and sliding while
   gripped dragged the fingers onto the next section.
+- Hum with the motors off (Noah, 14:55, live in the app, haptics not running, no pad losing contact): 60 Hz line
+  per channel 205, 349, 186, 450, 68, 470, 331, 295 uV (median about 310). The rest cues of the 2026-11-20 session
+  (the bad one, no haptics in it either): 48, 134, 65, 323, 69, 344, 81, 76 (median 79); 11-16: median 40; 11-06:
+  32. So the hum is worse with the motors off than in the bad session: the motors running don't explain it on their
+  own. Not yet known what was still plugged in (ESP32, driver board).
 - bbsim: a finger on the rail now presses with the effort cap as on an object (`rail_force`); before, the rail grip
   ran at full force whatever the effort. The Quest needs the rebuild for it.
 - The 3D contact page has the same in a Haptics section: what the motors play now (force, surface, from the hand or
