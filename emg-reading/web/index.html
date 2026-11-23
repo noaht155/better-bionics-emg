@@ -505,8 +505,10 @@
           with the profile.</p>
         <div id="ctl-surface-params"></div>
         <p class="muted">Record keeps a surface's settings as they are now, with the note, so the ones that felt
-          right can be found again. Use puts one back on its surface.</p>
+          right can be found again; Record all surfaces notes the whole set. Every record keeps all four rates. Use
+          puts a record's rates back.</p>
         <div class="row"><label>Note <input id="ctl-try-note" placeholder="how it felt"></label></div>
+        <div class="controls"><button id="ctl-record-all">Record all surfaces</button></div>
         <p id="ctl-try-error" class="error"></p>
         <div class="table-scroll"><table id="ctl-tries"></table></div>
         <div class="controls"><button id="ctl-tries-csv">Export CSV</button></div>
@@ -562,7 +564,8 @@
         <div class="row narrow"><label>Surface <select id="ctl-contact-surface"></select></label></div>
         <div id="ctl-contact-surface-params"></div>
         <div class="row"><label>Note <input id="ctl-contact-note" placeholder="how it felt"></label></div>
-        <div class="controls"><button id="ctl-contact-record">Record</button></div>
+        <div class="controls"><button id="ctl-contact-record">Record this surface</button>
+          <button id="ctl-contact-record-all">Record all surfaces</button></div>
         <p id="ctl-contact-try-error" class="error"></p>
         <div class="table-scroll"><table id="ctl-contact-tries"></table></div>
         <h2>Object</h2>

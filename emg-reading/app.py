@@ -250,8 +250,10 @@ class SurfaceProfile(BaseModel):
 
 
 class SurfaceTry(BaseModel):
-    surface: Literal["slippery", "smooth", "normal", "rough"]
-    settings: SurfaceProfile
+    """A note on one surface's pulses, or on the whole set (surface "all"). Every try keeps the whole set, so a note
+    on one surface says what it was compared with."""
+    surface: Literal["slippery", "smooth", "normal", "rough", "all"]
+    surfaces: dict[Literal["slippery", "smooth", "normal", "rough"], SurfaceProfile]
     profile: str | None = None
     note: str = Field("", max_length=500)
 
@@ -1138,22 +1140,29 @@ def make_app(recorder, band, camera, tools, lan=True, serving=False):
         """The recorded surface settings as a spreadsheet, oldest first."""
         out = io.StringIO()
         writer = csv.writer(out)
-        # Tries before 2026-11-23 also varied the duty between pulses and the strength
-        writer.writerow(["at", "surface", "hz", "between_pulses_pct", "strength_pct", "lowest_duty_pct",
-                         "full_force_n", "profile", "note"])
+        # Tries before 2026-11-23 have only their own surface's settings, which also varied the duty between pulses
+        # and the strength
+        names = list(HAPTIC_DEFAULTS["surfaces"])
+        writer.writerow(["at", "surface", "hz", *[f"{n}_hz" for n in names], "lowest_duty_pct", "full_force_n",
+                         "profile", "note", "between_pulses_pct", "strength_pct"])
         for t in reversed(surface_tries()):
-            s = t["settings"]
-            writer.writerow([t["at"], t["surface"], s["hz"], s.get("off", ""), s.get("strength", ""), t["floor"],
-                             t["full_force"], t["profile"] or "", t["note"]])
+            s = t.get("settings") or {}
+            every = t.get("surfaces") or {}
+            writer.writerow([t["at"], t["surface"], s.get("hz", ""), *[every.get(n, {}).get("hz", "") for n in names],
+                             t["floor"], t["full_force"], t["profile"] or "", t["note"], s.get("off", ""),
+                             s.get("strength", "")])
         return Response(out.getvalue(), media_type="text/csv",
                         headers={"Content-Disposition": 'attachment; filename="surface-tries.csv"'})
 
     @app.post("/api/surface-tries")
     def add_surface_try(entry: SurfaceTry):
-        """The surface's settings as they are now, with the haptics settings they play under."""
+        """The surfaces' settings as they are now, with the haptics settings they play under. settings: the noted
+        surface's own, None for the whole set."""
         p = tools.control.params
-        line = dict(at=time.strftime("%Y-%m-%d %H:%M:%S"), **entry.model_dump(),
-                    floor=p["haptic_floor"], full_force=p["haptic_full_force"])
+        e = entry.model_dump()
+        line = dict(at=time.strftime("%Y-%m-%d %H:%M:%S"), surface=e["surface"],
+                    settings=e["surfaces"].get(e["surface"]), surfaces=e["surfaces"], profile=e["profile"],
+                    note=e["note"], floor=p["haptic_floor"], full_force=p["haptic_full_force"])
         SURFACE_LOG.parent.mkdir(parents=True, exist_ok=True)
         with SURFACE_LOG.open("a") as f:
             f.write(json.dumps(line) + "\n")

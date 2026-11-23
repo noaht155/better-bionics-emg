@@ -962,16 +962,19 @@ async function loadSurfaceTries() {
   showContactTries();
 }
 
+// A whole-set record shows its four rates, slippery to rough
+const tryHz = (t) => t.surface === "all" ? Object.values(t.surfaces).map((s) => s.hz).join(" / ") : t.settings.hz;
+
 function triesTable(rows) {
   return "<tr><th>When</th><th>Surface</th><th>Hz</th><th>Note</th><th></th></tr>"
-    + rows.map(([t, i]) => `<tr><td>${t.at.slice(5, 16)}</td><td>${t.surface}</td><td>${t.settings.hz}</td>
+    + rows.map(([t, i]) => `<tr><td>${t.at.slice(5, 16)}</td><td>${t.surface}</td><td>${tryHz(t)}</td>
       <td>${tryText(t.note)}</td>
       <td><button data-use="${i}">Use</button></td></tr>`).join("");
 }
 
 async function recordSurface(s, noteId, errorId) {
-  if (!s || !ctl.params?.surfaces?.[s]) return;
-  const body = { surface: s, settings: ctl.params.surfaces[s], profile: ctl.profile, note: $(noteId).value };
+  if (!s || !ctl.params?.surfaces || (s !== "all" && !ctl.params.surfaces[s])) return;
+  const body = { surface: s, surfaces: ctl.params.surfaces, profile: ctl.profile, note: $(noteId).value };
   if (await postShowing("/api/surface-tries", body, errorId)) {
     $(noteId).value = "";
     loadSurfaceTries();
@@ -980,11 +983,17 @@ async function recordSurface(s, noteId, errorId) {
 
 $("ctl-surface-params").addEventListener("click", (e) => recordSurface(e.target.dataset.record, "ctl-try-note", "ctl-try-error"));
 $("ctl-contact-record").addEventListener("click", () => recordSurface($("ctl-contact-surface").value, "ctl-contact-note", "ctl-contact-try-error"));
+$("ctl-record-all").addEventListener("click", () => recordSurface("all", "ctl-try-note", "ctl-try-error"));
+$("ctl-contact-record-all").addEventListener("click", () => recordSurface("all", "ctl-contact-note", "ctl-contact-try-error"));
 
 function useTry(e) {
   const t = surfaceTries[e.target.dataset.use];
   if (!t || !ctl.params?.surfaces) return;
-  ctl.params.surfaces[t.surface] = { hz: t.settings.hz };
+  if (t.surface === "all") {
+    for (const [s, v] of Object.entries(t.surfaces)) if (ctl.params.surfaces[s]) ctl.params.surfaces[s] = { hz: v.hz };
+  } else {
+    ctl.params.surfaces[t.surface] = { hz: t.settings.hz };
+  }
   showSurfaces();
   editedParams();
 }
@@ -1060,7 +1069,7 @@ function showContactSurface() {
 
 function showContactTries() {
   const s = $("ctl-contact-surface").value;
-  $("ctl-contact-tries").innerHTML = triesTable(surfaceTries.map((t, i) => [t, i]).filter(([t]) => t.surface === s).slice(0, 5));
+  $("ctl-contact-tries").innerHTML = triesTable(surfaceTries.map((t, i) => [t, i]).filter(([t]) => t.surface === s || t.surface === "all").slice(0, 5));
 }
 
 $("ctl-contact-surface").addEventListener("change", showContactSurface);
