@@ -222,3 +222,34 @@ def test_contact_runs_on_the_control_layer_and_gives_the_touch_to_the_haptics():
         contact.stop()
         contact.join(2)
     assert contact.touch() == (0.0, None)
+
+
+def test_test_touch_grips_the_rail_section_with_the_pressure():
+    """3D contact's test touch: the hand comes down on the rail's section of the surface and grips it harder the
+    higher the pressure; a new surface slides it along to that section; off hands it back."""
+    import time
+    from types import SimpleNamespace
+    import tools
+    predictor = SimpleNamespace(state={"running": False})
+    control = SimpleNamespace(state={})
+    contact = tools.Contact(predictor, control)
+    contact.start()
+    try:
+        forces = []
+        for pressure in (0.2, 1.0):
+            contact.set_test(None)
+            contact.set_test((pressure, "smooth"))
+            time.sleep(1.5)
+            force, surface = contact.touch()
+            assert surface == "smooth"
+            forces.append(force)
+        assert forces[1] > 1.5 * forces[0]
+        contact.set_test((0.5, "rough"))
+        time.sleep(3.0)
+        assert contact.touch()[1] == "rough" and contact.world.blowups == 0
+        assert contact.frame()["test"]
+        contact.set_test(None)
+        assert not contact.frame()["test"]
+    finally:
+        contact.stop()
+        contact.join(2)

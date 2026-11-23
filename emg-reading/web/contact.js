@@ -91,6 +91,9 @@ function applyFrame(f) {
     const force = finger >= 0 ? r.finger_force[finger] : palm ? r.palm_force : 0;
     mesh.material.color.lerpColors(HAND, PRESSED, Math.min(force / TINT_FULL_N, 1));
   });
+  followTestTouch(f.test);
+  // The test touch moves the hand, the keys take it from wherever it ends up
+  if (f.test) cx.hand = null;
   if (!cx.hand) {
     const [p, q] = f.hand;
     cx.hand = { pos: new THREE.Vector3(...p), quat: new THREE.Quaternion(q[1], q[2], q[3], q[0]) };

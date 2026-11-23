@@ -388,6 +388,17 @@ def _doubles(values):
     return (ctypes.c_double * len(values))(*map(float, values))
 
 
+def rail_pose(section, gap=0.0):
+    """Hand position and quaternion that grip the rail's section (SURFACES index) from above in WRAP, gap m above
+    it."""
+    q = np.zeros(4)
+    mujoco.mju_mat2Quat(q, TOP.flatten())
+    # The wrapped fingers press about 3 cm to the +x side of the grasp centre: at the section's middle they read the
+    # next one (2026-11-23)
+    x = (2 * section + 1 - len(SURFACES)) * RAIL_HALF - 0.03
+    return np.array([x, RAIL_Y, RAIL_HEIGHT + gap]) - TOP @ grasp_centre(WRAP, FINGERS, True), q
+
+
 class World:
     """The scene (scene_xml) in bbsim, the code the Quest app runs, seen as one hand and one object: the prosthetic
     hand (a right hand, the mirror convention of the drawn hands) and the chosen object on the desk. The free hand
@@ -469,13 +480,7 @@ class World:
         if where == "start":
             self.set_hand(HAND_START, HAND_QUAT, teleport=True)
         elif where == "rail":
-            q = np.zeros(4)
-            mujoco.mju_mat2Quat(q, TOP.flatten())
-            # The wrapped fingers press about 3 cm to the +x side of the grasp centre: at the section's middle they
-            # read the next one (2026-11-23)
-            x = (1 - len(SURFACES)) * RAIL_HALF - 0.03
-            centre = np.array([x, RAIL_Y, RAIL_HEIGHT + READY_GAP_M]) - TOP @ grasp_centre(WRAP, FINGERS, True)
-            self.set_hand(centre, q, teleport=True)
+            self.set_hand(*rail_pose(0, READY_GAP_M), teleport=True)
         else:
             base, q, back = self.grasp_target()
             self.set_hand(base + back, q, teleport=True)

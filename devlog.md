@@ -2513,9 +2513,15 @@ levels: r 0.995 to 0.999 per session, mean difference 0.005 to 0.013, a clench l
   built. Open Unity Hub, then `quest-app/build.sh`.
 - Placing the prosthetic hand in VR with the other hand and passthrough already exist (Quest Setup page: Adjust by
   hand, Passthrough); Noah will try them before anything changes there.
-- Test touch (Noah): T on the Control tab plays a press on the motors in place of 3D contact's, up and down set
-  the pressure in 10 % steps of the full force, left and right the surface. Needs Start or Simulate with an ESP32
-  link, nothing else (no band, no grasp), so a surface's settings can be tuned and recorded in one place.
+- Test touch (Noah): on the 3D contact page, T makes the hand grip the rail's section of a surface (a fist, the
+  pressure as its effort), up and down change the pressure in 10 % steps, left and right the surface (the hand
+  opens, lifts over and grips again). The motors play the sim's touch, so what is felt is what the view shows.
+  First built as a fake touch fed straight to the haptics; Noah wanted the sim to show it. Fist grip on each section
+  at effort 0.1, 0.5, 1.0: about 8, 32 to 48, 55 to 89 N, right surface, no blowups; at the default full force
+  (30 N) the duty is full from about 40 % pressure. WRAP only gave 4 to 13 N whatever the effort, and sliding while
+  gripped dragged the fingers onto the next section.
+- bbsim: a finger on the rail now presses with the effort cap as on an object (`rail_force`); before, the rail grip
+  ran at full force whatever the effort. The Quest needs the rebuild for it.
 - The 3D contact page has the same in a Haptics section: what the motors play now (force, surface, from the hand or
   the test touch, duty), the test touch, the settings of the surface being felt (they follow it), Record with a note
   and that surface's last five tries.

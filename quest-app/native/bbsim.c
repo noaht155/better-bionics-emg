@@ -30,6 +30,8 @@ typedef struct {
   double angles[NJ], effort, lock_effort;
   int locked, was_locked, grab;
   double finger_force[NF], palm_force, force_on[MAXOBJ];
+  // Each finger's force on the surface rail: a finger pressing on it presses with effort as on an object
+  double rail_force[NF];
   // Force on everything the hand touches (objects, desk, floor), that force times each surface's own friction, and
   // the force per surface kind (each geom's user value, sim.SURFACES), for the haptics
   double touch_force, touch_friction, touch_on[NSURF];
@@ -49,7 +51,7 @@ typedef struct {
   double base_mass[MAXOBJ], base_inertia[MAXOBJ][3];
   double mass_scale;
   // Per geom: the hand it belongs to (-1 none), its finger (-1 palm), the object it is (-1 none)
-  int *hand_of_geom, *finger_of_geom, *obj_of_geom;
+  int *hand_of_geom, *finger_of_geom, *obj_of_geom, *is_rail;
   int floor_geom;
   double max_force;
   int assist_on, blowups;
@@ -84,6 +86,7 @@ EXPORT void bb_free(World* w) {
   free(w->hand_of_geom);
   free(w->finger_of_geom);
   free(w->obj_of_geom);
+  free(w->is_rail);
   free(w);
 }
 
@@ -170,6 +173,7 @@ EXPORT World* bb_create(const char* xml, int len, char* err, int errlen) {
   w->hand_of_geom = malloc(sizeof(int) * m->ngeom);
   w->finger_of_geom = malloc(sizeof(int) * m->ngeom);
   w->obj_of_geom = malloc(sizeof(int) * m->ngeom);
+  w->is_rail = malloc(sizeof(int) * m->ngeom);
   for (int g = 0; g < m->ngeom; g++) {
     w->hand_of_geom[g] = w->finger_of_geom[g] = w->obj_of_geom[g] = -1;
     for (int o = 0; o < w->nobj; o++)
@@ -178,6 +182,7 @@ EXPORT World* bb_create(const char* xml, int len, char* err, int errlen) {
       for (int h = 0; h < NH; h++)
         if (b == w->hand[h].palm) w->hand_of_geom[g] = h;
     const char* gn = mj_id2name(m, mjOBJ_GEOM, g);
+    w->is_rail[g] = gn && !strncmp(gn, "rail", 4);
     if (w->hand_of_geom[g] >= 0 && gn) w->finger_of_geom[g] = finger_index(gn + strlen(PREFIX[w->hand_of_geom[g]]));
   }
   w->floor_geom = mj_name2id(m, mjOBJ_GEOM, "floor");
@@ -300,6 +305,7 @@ static void read_forces(World* w) {
   for (int h = 0; h < NH; h++) {
     Hand* hd = &w->hand[h];
     memset(hd->finger_force, 0, sizeof(hd->finger_force));
+    memset(hd->rail_force, 0, sizeof(hd->rail_force));
     memset(hd->force_on, 0, sizeof(double) * w->nobj);
     hd->palm_force = hd->touch_force = hd->touch_friction = 0;
     memset(hd->touch_on, 0, sizeof(hd->touch_on));
@@ -316,6 +322,8 @@ static void read_forces(World* w) {
       hd->touch_friction += f6[0] * w->m->geom_friction[3 * surface];
       int kind = w->m->nuser_geom > 0 ? (int)w->m->geom_user[surface * w->m->nuser_geom] : -1;
       if (kind >= 0 && kind < NSURF) hd->touch_on[kind] += f6[0];
+      int finger = w->finger_of_geom[hand];
+      if (w->is_rail[surface] && finger >= 0) hd->rail_force[finger] += f6[0];
     }
     int o = w->obj_of_geom[c->geom[0]], other = c->geom[1];
     if (o < 0) {
@@ -403,7 +411,8 @@ static void drive(World* w, Hand* hd) {
   for (int j = 0; j < NJ; j++) {
     double target = hd->angles[j] * M_PI / 180, q = d->qpos[hd->qadr[j]];
     double cap_full = w->max_force * w->arm[j], cap_effort = cap_full * effort;
-    int pressing = hd->finger_force[hd->finger_of_joint[j]] > 0 && hd->bends[j];
+    int finger = hd->finger_of_joint[j];
+    int pressing = (hd->finger_force[finger] > 0 || hd->rail_force[finger] > 0) && hd->bends[j];
     d->ctrl[hd->act[j]] = pressing ? clip(w->kp_press * (target - q), -cap_full, cap_effort)
                                    : clip(w->kp * (target - q), -cap_full, cap_full);
   }

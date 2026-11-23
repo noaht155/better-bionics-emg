@@ -506,11 +506,6 @@
         <div id="ctl-surface-params"></div>
         <p class="muted">Record keeps a surface's settings as they are now, with the note, so the ones that felt
           right can be found again. Use puts one back on its surface.</p>
-        <p class="muted">Test touch plays a press on the motors in place of 3D contact's, so a surface can be felt
-          without the band or a grasp, while Start or Simulate runs with an ESP32 link. Keys on this tab: T on and
-          off, up and down: pressure in 10 % steps of the full force, left and right: surface.</p>
-        <div class="controls"><button id="ctl-test-touch">Test touch</button>
-          <p id="ctl-test-touch-state" class="surface-key"></p></div>
         <div class="row"><label>Note <input id="ctl-try-note" placeholder="how it felt"></label></div>
         <p id="ctl-try-error" class="error"></p>
         <div class="table-scroll"><table id="ctl-tries"></table></div>
@@ -560,8 +555,10 @@
         <div id="ctl-contact-haptics" class="contact-readout"></div>
         <div class="controls"><button id="ctl-contact-test">Test touch</button>
           <p id="ctl-contact-test-state" class="surface-key"></p></div>
-        <p class="muted">Test touch plays a press in place of the hand's, no band or grasp needed. The settings below
-          follow the surface being felt; they are the same as under Surfaces on Grip control.</p>
+        <p class="muted">Test touch makes the hand grip the rail's section of the surface, a fist with the pressure as
+          its effort, no band needed; another surface lifts the hand over to its section. The motors play what the
+          hand feels. The settings below follow the surface being felt; they are the same as under Surfaces on Grip
+          control.</p>
         <div class="row narrow"><label>Surface <select id="ctl-contact-surface"></select></label></div>
         <div id="ctl-contact-surface-params"></div>
         <div class="row"><label>Note <input id="ctl-contact-note" placeholder="how it felt"></label></div>

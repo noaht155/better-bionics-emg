@@ -61,6 +61,9 @@ DELAY_FLASH_TIMEOUT_S = 120
 # The contact simulation's real time loop (sim.py)
 CONTACT_TICK_S = 1 / 60
 CONTACT_MAX_STEP_S = 0.05
+# Test touch: how fast the open hand moves between rail sections (m/s), and how long it waits there before closing
+TEST_MOVE_MPS = 0.15
+TEST_CLOSE_S = 0.2
 # The Quest app's grip force drives the haptics while its readouts are this fresh
 QUEST_FRESH_S = 0.5
 # Commands for the headset are resent with every frame until this many newer ones push them out
@@ -445,9 +448,6 @@ class Haptics(Tool):
         self._settings = HAPTIC_DEFAULTS
         # Force on everything the simulated hand touches (N) and the surface it presses on most (Contact.touch)
         self.touch = lambda: (0.0, None)
-        # (pressure 0 to 1 of the full force, surface) set from the Control tab's keys, played in place of touch()
-        # so the surface settings can be felt without the band or a grasp in 3D contact
-        self.test_touch = None
 
     def start(self, port, wifi, session=None, settings=None):
         """settings: the Control tab's parameters, combined mode, read on every update so a change applies straight
@@ -473,7 +473,6 @@ class Haptics(Tool):
             raise ValueError("the ESP32 is busy with the output test")
         self._stop.clear()
         self._cue = None
-        self.test_touch = None
         self._settings = settings or HAPTIC_DEFAULTS
         try:
             self._launch(self._run, port, wifi, ranges, car, source, settings)
@@ -532,9 +531,7 @@ class Haptics(Tool):
                     floor = settings["haptic_floor"]
                     self.state.update(floor=floor, strength=settings["haptic_strength"])
                     step = self._pattern_step(self._cue) if self._cue else None
-                    test = self.test_touch
-                    force, surface = ((test[0] * settings["haptic_full_force"], test[1]) if test is not None
-                                      else self.touch())
+                    force, surface = self.touch()
                     force = force if force >= TOUCH_MIN_N else 0.0
                     profile = surface_profile(settings, surface)
                     # A new touch starts on a pulse, so the contact is felt at once
@@ -543,8 +540,7 @@ class Haptics(Tool):
                     if phase >= 0.5:
                         level_ *= profile["off"] / 100
                     duties, lost = step or [scaled_duty(level_, floor)] * len(OUTPUTS), no_loss
-                    self.state["touch"] = {"force": round(force, 2), "surface": surface if force > 0 else None,
-                                           "test": test is not None}
+                    self.state["touch"] = {"force": round(force, 2), "surface": surface if force > 0 else None}
                 else:
                     raw, filtered = self.recorder.window(self.recorder.env_len)
                     if raw.shape[1] == self.recorder.env_len:
@@ -814,6 +810,13 @@ class Contact(Tool):
         self.quest_view = None
         self._commands = []
         self._command_id = 0
+        # Test touch (pressure 0 to 1, surface): the hand grips the rail's section of that surface with the pressure
+        # as its effort, in place of the control layer, so a surface can be seen and felt without the band
+        self.test = None
+        self._test_pos = None
+        self._test_section = None
+        self._test_path = []
+        self._test_t = 0.0
 
     def start(self):
         # Imported here so the app still runs where mujoco isn't installed
@@ -845,8 +848,15 @@ class Contact(Tool):
 
     def set_hand(self, pos, quat):
         with self._lock:
-            if self.world is not None:
+            if self.world is not None and self.test is None:
                 self.world.set_hand(pos, quat)
+
+    def set_test(self, test):
+        """test: (pressure, surface), or None to hand the hand back to the control layer where it is."""
+        with self._lock:
+            if test is None or self.test is None:
+                self._test_pos = None
+            self.test = test
 
     def place(self, pos):
         with self._lock:
@@ -861,6 +871,7 @@ class Contact(Tool):
     def place_hand(self, where):
         with self._lock:
             if self.world is not None:
+                self.test = None
                 self.world.place_hand(where)
 
     def scene(self):
@@ -877,7 +888,8 @@ class Contact(Tool):
             control = {k: c.get(k) for k in ("state", "grip", "effort", "closure", "locked")} if driven else None
             return dict(self.world.poses(), readout=self.world.readout(), version=self.version,
                         running=self.state["running"], hand=[v.tolist() for v in self.world.hand_pose()],
-                        control=control, params=self.world.params, quest=self.quest_readout())
+                        control=control, params=self.world.params, quest=self.quest_readout(),
+                        test=self.test is not None)
 
     def quest_frame(self):
         """What the Quest app's sim runs on: the control layer's output and the shared settings."""
@@ -930,6 +942,36 @@ class Contact(Tool):
             return c["angles"], max(c["effort"], c.get("grip_effort", 0.0)), c.get("locked", False)
         return POSES["rest"], 0.0, False
 
+    def _test_step(self, dt):
+        """Moves the hand for the test touch: open onto the rail's section of its surface, then a fist round it with
+        the pressure as effort. A new surface opens the hand, lifts it over to that section and grips again: sliding
+        while gripping drags the fingers onto the wrong section. Called with the lock held."""
+        import sim
+        pressure, surface = self.test
+        section = sim.SURFACES.index(surface)
+        grip, q = sim.rail_pose(section)
+        above, _ = sim.rail_pose(section, sim.READY_GAP_M)
+        if self._test_pos is None:
+            self._test_pos, self._test_path = above, [grip]
+            self.world.set_hand(above, q, teleport=True)
+        elif section != self._test_section:
+            self._test_path = [self._test_pos + [0, 0, sim.READY_GAP_M], above, grip]
+        self._test_section = section
+        step = TEST_MOVE_MPS * dt
+        while self._test_path and step > 0:
+            gap = self._test_path[0] - self._test_pos
+            dist = float(np.linalg.norm(gap))
+            if dist <= step:
+                self._test_pos = self._test_path.pop(0)
+                step -= dist
+            else:
+                self._test_pos = self._test_pos + gap / dist * step
+                step = 0
+        self.world.set_hand(self._test_pos, q)
+        self._test_t = 0.0 if self._test_path else self._test_t + dt
+        closed = not self._test_path and self._test_t > TEST_CLOSE_S
+        return (GESTURES["fist"][1] if closed else GESTURES["open"][1]), pressure, False
+
     def _run(self):
         last = time.perf_counter()
         while not self._stop.is_set():
@@ -939,6 +981,8 @@ class Contact(Tool):
             last = now
             angles, effort_, locked = self._inputs()
             with self._lock:
+                if self.test is not None:
+                    angles, effort_, locked = self._test_step(dt)
                 self.world.step(dt, angles, effort_, locked)
             time.sleep(max(0.0, CONTACT_TICK_S - (time.perf_counter() - now)))
 

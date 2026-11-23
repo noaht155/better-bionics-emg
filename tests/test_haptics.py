@@ -155,17 +155,16 @@ def test_control_haptics_layer_patterns_over_the_contact(monkeypatch):
     monkeypatch.setattr(tools, "Esp32", FakeEsp)
     recorder = SimpleNamespace(band=SimpleNamespace(channels=list(range(8))), session=None)
 
-    def run(touch, seconds=1.2, cue=False, test=None):
+    def run(touch, seconds=1.2, cue=False):
         sent.clear()
         h = tools.Haptics(recorder, threading.Lock())
         h.touch = lambda: touch
         h.start(None, None, settings=dict(HAPTIC_DEFAULTS))
-        h.test_touch = test
         if cue:
             time.sleep(0.2)
             h.cue("start", "fist")
         time.sleep(seconds)
-        assert h.state["touch"]["test"] == (test is not None)
+        assert h.state["touch"]["surface"] == (touch[1] if touch[0] > 0 else None)
         h.stop()
         h.join(3)
         firsts = [d[0] for d in sent]
@@ -176,10 +175,6 @@ def test_control_haptics_layer_patterns_over_the_contact(monkeypatch):
     assert set(firsts) == {0}
     full = HAPTIC_DEFAULTS["haptic_full_force"]
     firsts, _ = run((full / 2, "normal"))
-    assert firsts[0] == 50 and set(firsts) == {25, 50}
-    # The Control tab's test touch plays in place of the sim's, from the update after it is set
-    firsts, _ = run((0.0, None), test=(0.5, "normal"))
-    firsts = firsts[firsts.index(50):]
     assert firsts[0] == 50 and set(firsts) == {25, 50}
     _, fast = run((full / 2, "slippery"))
     _, slow = run((full / 2, "rough"))

@@ -640,7 +640,7 @@ kbd { display: inline-block; min-width: 1.6em; margin-right: 4px; padding: 1px 5
 #ctl-pose-name { text-align: center; margin-top: 6px; color: var(--text); }
 .param { display: grid; grid-template-columns: 9em 1fr 4em; gap: 8px; align-items: center; margin: 6px 0; color: var(--text); }
 .param input[type=range] { width: 100%; padding: 0; border: none; background: none; }
-.sim-classes button.active, #ctl-test-touch.active { color: var(--text); border-color: var(--accent); }
+.sim-classes button.active, #ctl-contact-test.active { color: var(--text); border-color: var(--accent); }
 .param output { font: 13px var(--font-mono); text-align: right; }
 .param small { grid-column: 1 / -1; color: var(--muted); margin-top: -4px; }
 

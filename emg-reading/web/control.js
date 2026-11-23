@@ -997,32 +997,35 @@ loadSurfaceTries();
 
 $("ctl-tries-csv").addEventListener("click", () => { window.location.href = "/api/surface-tries.csv"; });
 
-// Test touch (app /api/haptics/test-touch): a press on the motors from the keys, in place of 3D contact's
+// Test touch (app /api/contact/test-touch): the 3D hand grips the rail's section of a surface at a pressure
 ctl.test = { on: false, pressure: 0.5, surface: "normal" };
 
 function showTestTouch() {
   const t = ctl.test;
-  const text = t.on ? `<span class="${t.surface}">${t.surface} at ${Math.round(100 * t.pressure)} %</span>` : "";
-  for (const id of ["ctl-test-touch", "ctl-contact-test"]) $(id).classList.toggle("active", t.on);
-  $("ctl-test-touch-state").innerHTML = text;
-  $("ctl-contact-test-state").innerHTML = text;
+  $("ctl-contact-test").classList.toggle("active", t.on);
+  $("ctl-contact-test-state").innerHTML = t.on ? `<span class="${t.surface}">${t.surface} at ${Math.round(100 * t.pressure)} %</span>` : "";
 }
 
 async function sendTestTouch() {
-  const errorId = $("ctl-contact-page").hidden ? "ctl-try-error" : "ctl-contact-try-error";
-  if (!(await postShowing("/api/haptics/test-touch", ctl.test, errorId))) ctl.test.on = false;
+  if (!(await postShowing("/api/contact/test-touch", ctl.test, "ctl-contact-try-error"))) ctl.test.on = false;
   showTestTouch();
 }
 
-const toggleTestTouch = () => {
+$("ctl-contact-test").addEventListener("click", () => {
   ctl.test.on = !ctl.test.on;
   sendTestTouch();
-};
-$("ctl-test-touch").addEventListener("click", toggleTestTouch);
-$("ctl-contact-test").addEventListener("click", toggleTestTouch);
+});
+
+// The page turned it off another way (a Ready or Reset hand button)
+function followTestTouch(on) {
+  if (ctl.test.on && !on) {
+    ctl.test.on = false;
+    showTestTouch();
+  }
+}
 
 document.addEventListener("keydown", (e) => {
-  if (currentTab !== "control" || e.target.closest("input, select, textarea") || e.ctrlKey || e.metaKey || e.altKey) return;
+  if (currentTab !== "control" || $("ctl-contact-page").hidden || e.target.closest("input, select, textarea") || e.ctrlKey || e.metaKey || e.altKey) return;
   const t = ctl.test;
   const names = config.surfaces?.names || [];
   if (e.key.toLowerCase() === "t") {
@@ -1079,7 +1082,7 @@ function drawContactHaptics(h) {
     ? `<p class="muted">${h?.running ? "The haptics run in effort mode (System > Haptics), not with the 3D contact."
       : h?.error || "Haptics not running: Simulate with an ESP32 link (or Start on Grip control)."}</p>`
     : `<div class="contact-force"><b>${touch?.surface ? `${touch.force.toFixed(1)} N` : "none"}</b>
-        <span>${touch?.surface ? `${touch.surface}, ${touch.test ? "test touch" : "the hand"}` : "touch"}</span></div>
+        <span>${touch?.surface ? `${touch.surface}${ctl.test.on ? ", test touch" : ""}` : "touch"}</span></div>
       <div class="contact-force"><b>${duty} %</b><span>motor duty now</span></div>
       ${h.error ? `<p class="error">${h.error}</p>` : ""}`;
 }
