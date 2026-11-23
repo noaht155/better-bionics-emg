@@ -109,6 +109,7 @@ These decide when the recorder marks a cue bad and redoes it.
 | `test_haptic_settings_play_as_set` | Buzz pulses play their on and off ms in steps (last off dropped), strength is % of the profile's, a fade runs down to its end %, a sweep goes back and repeats as set, default keeps the event's pattern |
 | `test_control_haptics_layer_patterns_over_the_contact` | The Control tab's haptics with a fake ESP32: off while nothing is touched; touching, every output at the force's duty dropping to the surface's off % between pulses, starting on a pulse; slippery gives more pulses than rough; surface profiles fall back to the defaults and normal; a selection pattern plays over it; a lost link reconnects |
 | `test_rule_haptic_replaces_the_event_pattern` | A mapping rule's own haptic: a pulse code on every motor, fade and sweep borrow release and lock, none is silent, auto keeps the event's pattern |
+| `test_haptic_test_logs_the_combined_haptics` | A haptic test logs a header and one line per combined haptics update (duty, force, surface, effort), stops with the haptics, takes a note and rating only once stopped, sums up in the list, and refuses a bad name |
 
 ### Shared evaluation (`tests/test_evaluate.py`)
 

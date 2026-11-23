@@ -2492,6 +2492,17 @@ levels: r 0.995 to 0.999 per session, mean difference 0.005 to 0.013, a clench l
   bbsim reports the surface the hand presses on most (readout 16, `ReadoutSize` 17 in the app) and the headset sends
   it as `touch_surface`. Replaces the rate from friction.
 
+## 2026-11-23: haptic test log
+
+- Haptic tests (Noah): the Control tab's Haptic tests section logs the combined haptics to `data/haptic-tests/`,
+  one `.jsonl` per test (`tools.HapticTest`). Header: profile, all control settings with the surface profiles,
+  mapping, model, PC or Quest touch, object, then a note and 1 to 5 rating added after. Then one line per haptics
+  update (20 Hz): duty sent, level, force, surface, effort, grip effort, closure, grip, the cue playing. It only
+  logs while the haptics run with control, since the duty wave is made in the haptics loop. The page lists the
+  tests and plots one: duty (the pulse wave), force and effort, with the touched surfaces as bands.
+- Placing the prosthetic hand in VR with the other hand and passthrough already exist (Setup page: Adjust by hand,
+  Passthrough); Noah will try them before anything changes there.
+
 ## Open
 
 Perfboard: replace the motors on positions 3 and 4 and buzz-test them (the rest checked 2026-11-18).
@@ -2578,7 +2589,8 @@ Now: haptics
   back on, set `OUTPUTS_INVERTED` to false. Still to measure: lowest duty that starts a motor (the haptics floor),
   how many levels can be told apart (then set effort mode's lowest duty on the Control tab), and EMG spectra with the motors off and on to see if they show up.
 - Control haptics on the motors: tune the four surface profiles until slippery, smooth, normal and rough feel
-  different, then on the headset (rebuild with `build.sh`).
+  different, then on the headset (rebuild with `build.sh`), logging each try as a haptic test with a note and rating
+  so the profiles can be compared.
 - Quest: the APK built today has the shared sim and the mass fix but not the palm collision or surfaces; rebuild and install
   with `quest-app/build.sh` and try the touch haptics and the grip squeeze in the headset.
 - Motor pickup: run `diagnostics/motor_pickup.py` with the motor band below the pads, relaxed and with a steady
