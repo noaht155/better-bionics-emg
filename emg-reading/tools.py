@@ -66,7 +66,7 @@ CONTACT_MAX_STEP_S = 0.05
 TEST_MOVE_MPS = 0.6
 TEST_SLIDE_MPS = 0.06
 TEST_CLOSE_S = 0.15
-# A jump lifts the hand this high over the rail (m): at the 2 cm of Ready the open fingers catch on it and drag the
+# A jump backs the hand this far off the rail (m): at the 2 cm of Ready the open fingers catch on it and drag the
 # hand onto the section before
 TEST_LIFT_M = 0.07
 # The test touch's 0 to 3 (slippery to rough) covers the rail's sections up to here: gripping the rough end's middle,
@@ -985,7 +985,7 @@ class Contact(Tool):
             self._test_sliding = self.test.get("slide", False) and (not self._test_path or self._test_sliding)
             high, _ = sim.rail_pose(target, TEST_LIFT_M)
             self._test_path = ([grip] if self._test_sliding
-                               else [self._test_pos + [0, 0, TEST_LIFT_M], high, above, grip])
+                               else [self._test_pos + sim.rail_back(TEST_LIFT_M), high, above, grip])
         self._test_target = target
         step = (TEST_SLIDE_MPS if self._test_sliding else TEST_MOVE_MPS) * dt
         while self._test_path and step > 0:

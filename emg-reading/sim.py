@@ -388,20 +388,35 @@ def _doubles(values):
     return (ctypes.c_double * len(values))(*map(float, values))
 
 
+# The rail is held from the user's side: palm towards it, fingers up and curled over the top, thumb under it. From
+# above (TOP), WRAP closed on its top like a pinch (Noah, 2026-11-23). The palm's middle (hand frame) sits on the
+# rail, the hand RAIL_GRIP_DOWN m down the fingers' line so they reach over, and RAIL_GRIP_X along it: sliding, the
+# fingers drag behind and read the next section 2 to 3 cm late one way and on time the other
+_ROLL = np.radians(-90)
+RAIL_ROT = TOP @ np.array([[1, 0, 0], [0, np.cos(_ROLL), -np.sin(_ROLL)], [0, np.sin(_ROLL), np.cos(_ROLL)]])
+PALM_MIDDLE = np.array([-0.005, 0.06, 0.012])
+RAIL_GRIP_DOWN = 0.03
+RAIL_GRIP_X = 0.01
+
+
 def rail_pose(section, gap=0.0):
-    """Hand position and quaternion that grip the rail from above in WRAP at section (SURFACES index, fractions in
-    between: 1.5 is the border of smooth and normal), gap m above it."""
+    """Hand position and quaternion that grip the rail in WRAP at section (SURFACES index, fractions in between: 1.5
+    is the border of smooth and normal), backed off gap m from it."""
     q = np.zeros(4)
-    mujoco.mju_mat2Quat(q, TOP.flatten())
-    # The wrapped fingers press about 3 cm to the +x side of the grasp centre: at the section's middle they read the
-    # next one (2026-11-23)
-    x = (2 * section + 1 - len(SURFACES)) * RAIL_HALF - 0.03
-    return np.array([x, RAIL_Y, RAIL_HEIGHT + gap]) - TOP @ grasp_centre(WRAP, FINGERS, True), q
+    mujoco.mju_mat2Quat(q, RAIL_ROT.flatten())
+    x = (2 * section + 1 - len(SURFACES)) * RAIL_HALF + RAIL_GRIP_X
+    on = np.array([x, RAIL_Y, RAIL_HEIGHT]) - RAIL_ROT @ PALM_MIDDLE - RAIL_ROT[:, 2] * RAIL_RADIUS
+    return on - RAIL_ROT[:, 1] * RAIL_GRIP_DOWN - RAIL_ROT[:, 2] * gap, q
+
+
+def rail_back(gap):
+    """The step that backs the hand off the rail by gap m."""
+    return -RAIL_ROT[:, 2] * gap
 
 
 def rail_section(hand_pos):
     """The section number (as rail_pose takes it) the hand at hand_pos grips."""
-    x = hand_pos[0] + (TOP @ grasp_centre(WRAP, FINGERS, True))[0] + 0.03
+    x = hand_pos[0] - rail_pose(0)[0][0] + (1 - len(SURFACES)) * RAIL_HALF
     return (x / RAIL_HALF + len(SURFACES) - 1) / 2
 
 

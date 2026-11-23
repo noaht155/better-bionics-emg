@@ -2549,6 +2549,11 @@ levels: r 0.995 to 0.999 per session, mean difference 0.005 to 0.013, a clench l
   the wrong section 35 to 55 % of the time (fingers drag behind), WRAP 0 to 6 %, at 8 to 13 N. The rough end stops
   2 cm short of the post: gripping the section's middle, the palm pressed on the post and read the desk.
 - Recordings can be deleted (a Delete under Use, a second click confirms).
+- Rail grip from the side (Noah: from above the thumb sat on top, the rail pinched under the fingertips): palm
+  towards the rail from the user's side, fingers up and over the top, thumb under (`sim.RAIL_ROT`, `rail_pose`).
+  Thumb ends 1.8 cm under the rail's centre, fingertips 1.5 cm over it on the far side. Every section reads right
+  at effort 0.1, 0.5, 1.0 (about 9, 25 to 29, 29 to 53 N, against 8 to 13 N for the old grip); sliding, the
+  reading changes 2 to 3 cm late one way and on time the other, no blowups. Jumps back off sideways now.
 - Record all surfaces (Noah): a note on the whole set (surface `all`) beside the per-surface Record, on Grip
   control and the 3D contact page. Every record now keeps all four rates; the CSV has a column per surface.
 - Bouncing pad wires spoil the signal (Noah): taping the leads to the arm took the hum from about 310 to 56 uV
