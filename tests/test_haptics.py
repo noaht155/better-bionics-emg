@@ -4,7 +4,7 @@ import pytest
 
 import ml  # noqa: F401
 import calibrate
-from haptics import (FADE, GAP, GRIP_CODES, OUTPUTS, SHORT, STEP_MS, SWEEP, TICK_OUTPUT, buzz, level, output_duties,
+from haptics import (FADE, blended_rate, GAP, GRIP_CODES, OUTPUTS, SHORT, STEP_MS, SWEEP, TICK_OUTPUT, buzz, level, output_duties,
                      pattern, scaled_duty)
 from ml import dataset
 from processing import common_average, envelope_series, filter_block
@@ -132,6 +132,8 @@ def test_control_haptics_layer_patterns_over_the_contact(monkeypatch):
     assert rates == sorted(rates, reverse=True)
     assert surface_profile({}, None) == SURFACE_DEFAULTS["normal"]
     assert surface_profile({"surfaces": {"rough": {"hz": 1}}}, "rough")["hz"] == 1
+    assert blended_rate({}, 0) == SURFACE_DEFAULTS["slippery"]["hz"]
+    assert blended_rate({}, 2.5) == (SURFACE_DEFAULTS["normal"]["hz"] + SURFACE_DEFAULTS["rough"]["hz"]) / 2
     sent, fail = [], []
 
     class FakeEsp:

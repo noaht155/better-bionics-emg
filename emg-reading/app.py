@@ -258,6 +258,13 @@ class SurfaceTry(BaseModel):
     note: str = Field("", max_length=500)
 
 
+class TryDelete(BaseModel):
+    """A recording to delete: its place in the newest first list and its time, so a list that changed meanwhile
+    can't delete another one."""
+    index: int = Field(ge=0)
+    at: str
+
+
 class HandPlace(BaseModel):
     """The contact hand back to its start, or ready to grasp the object or the rail (sim.World.place_hand)."""
     where: Literal["start", "object", "rail"]
@@ -320,11 +327,14 @@ class Rule(BaseModel):
 
 
 class TestTouch(BaseModel):
-    """3D contact's test touch while on: the hand grips the rail's section of the surface with the pressure as
-    its effort."""
+    """3D contact's test touch while on: the hand grips the rail at pos (a section number, sim.rail_pose) with the
+    pressure as its effort. slide: move there gripping, else lift over. gradient: the pulse rate blends between the
+    surfaces by where the hand is."""
     on: bool
     pressure: float = Field(0.0, ge=0, le=1)
-    surface: Literal["slippery", "smooth", "normal", "rough"] = "normal"
+    pos: float = Field(2.0, ge=0, le=3)
+    slide: bool = False
+    gradient: bool = False
 
 
 class HapticPlay(BaseModel):
@@ -974,7 +984,7 @@ def make_app(recorder, band, camera, tools, lan=True, serving=False):
     def contact_test_touch(touch: TestTouch):
         if touch.on and not tools.contact.state["running"]:
             refuse("the contact simulation hasn't started")
-        tools.contact.set_test((touch.pressure, touch.surface) if touch.on else None)
+        tools.contact.set_test(touch.model_dump(exclude={"on"}) if touch.on else None)
         return {"ok": True}
 
     @app.post("/api/control/sim")
@@ -1166,6 +1176,15 @@ def make_app(recorder, band, camera, tools, lan=True, serving=False):
         SURFACE_LOG.parent.mkdir(parents=True, exist_ok=True)
         with SURFACE_LOG.open("a") as f:
             f.write(json.dumps(line) + "\n")
+        return {"ok": True}
+
+    @app.post("/api/surface-tries/delete")
+    def delete_surface_try(which: TryDelete):
+        tries = surface_tries()
+        if which.index >= len(tries) or tries[which.index]["at"] != which.at:
+            refuse("that recording changed, reload the list")
+        del tries[which.index]
+        SURFACE_LOG.write_text("".join(json.dumps(t) + "\n" for t in reversed(tries)))
         return {"ok": True}
 
     @app.post("/api/cursor/start")

@@ -74,6 +74,12 @@ def scaled_duty(level_, floor):
     return int(round(floor + (100 - floor) * level_)) if level_ > 0 else 0
 
 
+def blended_rate(settings, section):
+    """Pulse rate at a section number along the rail (sim.rail_section), straight between the surfaces' own rates."""
+    names = list(SURFACE_DEFAULTS)
+    return float(np.interp(section, range(len(names)), [surface_profile(settings, n)["hz"] for n in names]))
+
+
 def surface_profile(settings, surface):
     """The pulses of this surface from the settings, the defaults for one they don't have, normal for an unknown."""
     profiles = {**SURFACE_DEFAULTS, **settings.get("surfaces", {})}

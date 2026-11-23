@@ -969,7 +969,7 @@ function triesTable(rows) {
   return "<tr><th>When</th><th>Surface</th><th>Hz</th><th>Note</th><th></th></tr>"
     + rows.map(([t, i]) => `<tr><td>${t.at.slice(5, 16)}</td><td>${t.surface}</td><td>${tryHz(t)}</td>
       <td>${tryText(t.note)}</td>
-      <td><button data-use="${i}">Use</button></td></tr>`).join("");
+      <td><button data-use="${i}">Use</button> <button data-delete="${i}" class="danger">Delete</button></td></tr>`).join("");
 }
 
 async function recordSurface(s, noteId, errorId) {
@@ -986,7 +986,21 @@ $("ctl-contact-record").addEventListener("click", () => recordSurface($("ctl-con
 $("ctl-record-all").addEventListener("click", () => recordSurface("all", "ctl-try-note", "ctl-try-error"));
 $("ctl-contact-record-all").addEventListener("click", () => recordSurface("all", "ctl-contact-note", "ctl-contact-try-error"));
 
+// A first click arms the button, the second deletes
+async function deleteTry(button) {
+  if (!button.classList.contains("armed")) {
+    button.classList.add("armed");
+    button.textContent = "Sure?";
+    return;
+  }
+  const t = surfaceTries[button.dataset.delete];
+  const errorId = $("ctl-contact-page").hidden ? "ctl-try-error" : "ctl-contact-try-error";
+  if (t) await postShowing("/api/surface-tries/delete", { index: Number(button.dataset.delete), at: t.at }, errorId);
+  loadSurfaceTries();
+}
+
 function useTry(e) {
+  if (e.target.dataset.delete != null) return deleteTry(e.target);
   const t = surfaceTries[e.target.dataset.use];
   if (!t || !ctl.params?.surfaces) return;
   if (t.surface === "all") {
@@ -1004,17 +1018,36 @@ loadSurfaceTries();
 
 $("ctl-tries-csv").addEventListener("click", () => { window.location.href = "/api/surface-tries.csv"; });
 
-// Test touch (app /api/contact/test-touch): the 3D hand grips the rail's section of a surface at a pressure
-ctl.test = { on: false, pressure: 0.5, surface: "normal" };
+// Test touch (app /api/contact/test-touch): the 3D hand grips the rail at a section number (0 slippery to 3 rough,
+// fractions between) at a pressure
+ctl.test = { on: false, pressure: 0.5, pos: 2, slide: false, gradient: false };
+// Shift and an arrow slide this far per key repeat (about 30 a second)
+const SLIDE_STEP = 0.02;
 
-function showTestTouch() {
+function showTestTouch(at) {
   const t = ctl.test;
+  const names = config.surfaces?.names || [];
+  const where = at ?? t.pos;
+  const surface = names[Math.min(names.length - 1, Math.max(0, Math.round(where)))] || "";
   $("ctl-contact-test").classList.toggle("active", t.on);
-  $("ctl-contact-test-state").innerHTML = t.on ? `<span class="${t.surface}">${t.surface} at ${Math.round(100 * t.pressure)} %</span>` : "";
+  $("ctl-contact-gradient").classList.toggle("active", t.gradient);
+  $("ctl-contact-test-state").innerHTML = t.on ? `<span class="${surface}">${t.gradient ? `${where.toFixed(2)} along` : surface} at ${Math.round(100 * t.pressure)} %</span>` : "";
 }
 
+// One request at a time, then the newest state if it changed meanwhile: two in flight can arrive the wrong way round
 async function sendTestTouch() {
-  if (!(await postShowing("/api/contact/test-touch", ctl.test, "ctl-contact-try-error"))) ctl.test.on = false;
+  ctl.testSent = performance.now();
+  showTestTouch();
+  if (ctl.testSending) {
+    ctl.testAgain = true;
+    return;
+  }
+  ctl.testSending = true;
+  do {
+    ctl.testAgain = false;
+    if (!(await postShowing("/api/contact/test-touch", { ...ctl.test }, "ctl-contact-try-error"))) ctl.test.on = false;
+  } while (ctl.testAgain);
+  ctl.testSending = false;
   showTestTouch();
 }
 
@@ -1023,27 +1056,50 @@ $("ctl-contact-test").addEventListener("click", () => {
   sendTestTouch();
 });
 
-// The page turned it off another way (a Ready or Reset hand button)
-function followTestTouch(on) {
-  if (ctl.test.on && !on) {
+function rub() {
+  Object.assign(ctl.test, { on: true, pos: ctl.test.pos < 1.5 ? 3 : 0, slide: true });
+  sendTestTouch();
+}
+$("ctl-contact-rub").addEventListener("click", rub);
+$("ctl-contact-gradient").addEventListener("click", () => {
+  ctl.test.gradient = !ctl.test.gradient;
+  if (ctl.test.on) sendTestTouch();
+  else showTestTouch();
+});
+
+// From each contact frame: the page turned it off another way (a Ready or Reset hand button), or where the hand is
+function followTestTouch(on, at) {
+  // A frame made before the server took the last change still says off
+  if (ctl.test.on && !on && performance.now() - (ctl.testSent || 0) > 1000) {
     ctl.test.on = false;
     showTestTouch();
+  } else if (on && at != null) {
+    showTestTouch(at);
   }
 }
 
 document.addEventListener("keydown", (e) => {
   if (currentTab !== "control" || $("ctl-contact-page").hidden || e.target.closest("input, select, textarea") || e.ctrlKey || e.metaKey || e.altKey) return;
   const t = ctl.test;
-  const names = config.surfaces?.names || [];
-  if (e.key.toLowerCase() === "t") {
+  const key = e.key.toLowerCase();
+  const last = (config.surfaces?.names || []).length - 1;
+  if (key === "t") {
     t.on = !t.on;
+  } else if (key === "b") {
+    e.preventDefault();
+    return rub();
+  } else if (key === "g") {
+    t.gradient = !t.gradient;
   } else if (!t.on || !e.key.startsWith("Arrow")) {
     return;
   } else if (e.key === "ArrowUp" || e.key === "ArrowDown") {
     t.pressure = Math.round(Math.min(1, Math.max(0, t.pressure + (e.key === "ArrowUp" ? 0.1 : -0.1))) * 10) / 10;
-  } else if (names.length) {
-    const i = names.indexOf(t.surface) + (e.key === "ArrowRight" ? 1 : -1);
-    t.surface = names[(i + names.length) % names.length];
+  } else {
+    const dir = e.key === "ArrowRight" ? 1 : -1;
+    t.slide = e.shiftKey;
+    // A jump goes to the next whole section; a slide creeps from wherever it is
+    const next = e.shiftKey ? t.pos + dir * SLIDE_STEP : (dir > 0 ? Math.floor(t.pos + 1e-6) + 1 : Math.ceil(t.pos - 1e-6) - 1);
+    t.pos = Math.round(Math.min(last, Math.max(0, next)) * 1000) / 1000;
   }
   e.preventDefault();
   sendTestTouch();
@@ -1090,6 +1146,7 @@ function drawContactHaptics(h) {
       : h?.error || "Haptics not running: Simulate with an ESP32 link (or Start on Grip control)."}</p>`
     : `<div class="contact-force"><b>${touch?.surface ? `${touch.force.toFixed(1)} N` : "none"}</b>
         <span>${touch?.surface ? `${touch.surface}${ctl.test.on ? ", test touch" : ""}` : "touch"}</span></div>
+      <div class="contact-force"><b>${touch?.surface ? `${touch.hz} Hz` : "n/a"}</b><span>pulses${ctl.test.on && ctl.test.gradient ? ", blended" : ""}</span></div>
       <div class="contact-force"><b>${duty} %</b><span>motor duty now</span></div>
       ${h.error ? `<p class="error">${h.error}</p>` : ""}`;
 }

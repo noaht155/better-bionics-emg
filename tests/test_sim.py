@@ -225,8 +225,9 @@ def test_contact_runs_on_the_control_layer_and_gives_the_touch_to_the_haptics():
 
 
 def test_test_touch_grips_the_rail_section_with_the_pressure():
-    """3D contact's test touch: the hand comes down on the rail's section of the surface and grips it harder the
-    higher the pressure; a new surface slides it along to that section; off hands it back."""
+    """3D contact's test touch: the hand comes down on the rail at its section and grips it harder the higher the
+    pressure; a jump lifts it over to another section, a slide moves it along gripping and reads each surface on
+    the way; gradient gives where it is for the haptics; off hands it back."""
     import time
     from types import SimpleNamespace
     import tools
@@ -234,22 +235,35 @@ def test_test_touch_grips_the_rail_section_with_the_pressure():
     control = SimpleNamespace(state={})
     contact = tools.Contact(predictor, control)
     contact.start()
+    test = lambda pos, pressure=0.5, slide=False, gradient=False: dict(pressure=pressure, pos=pos, slide=slide,
+                                                                      gradient=gradient)
     try:
         forces = []
-        for pressure in (0.2, 1.0):
+        for pressure in (0.1, 1.0):
             contact.set_test(None)
-            contact.set_test((pressure, "smooth"))
+            contact.set_test(test(1, pressure))
             time.sleep(1.5)
             force, surface = contact.touch()
             assert surface == "smooth"
             forces.append(force)
         assert forces[1] > 1.5 * forces[0]
-        contact.set_test((0.5, "rough"))
-        time.sleep(3.0)
-        assert contact.touch()[1] == "rough" and contact.world.blowups == 0
-        assert contact.frame()["test"]
+        assert contact.blend() is None
+        contact.set_test(test(3))
+        time.sleep(1.5)
+        assert contact.touch()[1] == "rough" and contact.frame()["test_at"] == pytest.approx(3, abs=0.01)
+        contact.set_test(test(0, slide=True, gradient=True))
+        seen = []
+        for _ in range(70):
+            time.sleep(0.1)
+            force, surface = contact.touch()
+            if force > 1 and (not seen or seen[-1] != surface):
+                seen.append(surface)
+        # It can flicker between two surfaces right at a border
+        assert seen[0] == "rough" and seen[-1] == "slippery" and set(seen) == set(sim.SURFACES)
+        assert contact.world.blowups == 0
+        assert contact.blend() == pytest.approx(0, abs=0.01)
         contact.set_test(None)
-        assert not contact.frame()["test"]
+        assert not contact.frame()["test"] and contact.blend() is None
     finally:
         contact.stop()
         contact.join(2)

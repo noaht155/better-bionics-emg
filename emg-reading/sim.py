@@ -389,14 +389,20 @@ def _doubles(values):
 
 
 def rail_pose(section, gap=0.0):
-    """Hand position and quaternion that grip the rail's section (SURFACES index) from above in WRAP, gap m above
-    it."""
+    """Hand position and quaternion that grip the rail from above in WRAP at section (SURFACES index, fractions in
+    between: 1.5 is the border of smooth and normal), gap m above it."""
     q = np.zeros(4)
     mujoco.mju_mat2Quat(q, TOP.flatten())
     # The wrapped fingers press about 3 cm to the +x side of the grasp centre: at the section's middle they read the
     # next one (2026-11-23)
     x = (2 * section + 1 - len(SURFACES)) * RAIL_HALF - 0.03
     return np.array([x, RAIL_Y, RAIL_HEIGHT + gap]) - TOP @ grasp_centre(WRAP, FINGERS, True), q
+
+
+def rail_section(hand_pos):
+    """The section number (as rail_pose takes it) the hand at hand_pos grips."""
+    x = hand_pos[0] + (TOP @ grasp_centre(WRAP, FINGERS, True))[0] + 0.03
+    return (x / RAIL_HALF + len(SURFACES) - 1) / 2
 
 
 class World:

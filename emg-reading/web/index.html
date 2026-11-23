@@ -546,7 +546,9 @@
             <p><kbd>R</kbd><kbd>F</kbd> effort up, down</p><p><kbd>Space</kbd> hold for full effort</p></div>
           <div><h3>Test touch</h3>
             <p><kbd>T</kbd> on, off</p><p><kbd>&uarr;</kbd><kbd>&darr;</kbd> pressure</p>
-            <p><kbd>&larr;</kbd><kbd>&rarr;</kbd> surface</p></div>
+            <p><kbd>&larr;</kbd><kbd>&rarr;</kbd> jump to the next surface</p>
+            <p><kbd>Shift</kbd><kbd>&larr;</kbd><kbd>&rarr;</kbd> slide along</p>
+            <p><kbd>B</kbd> rub to the other end</p><p><kbd>G</kbd> gradient on, off</p></div>
           <div><h3>View</h3>
             <p><kbd>Drag</kbd> turn the view</p><p><kbd>Wheel</kbd> zoom</p>
             <p><kbd>Drag object</kbd> slide it</p></div>
@@ -555,12 +557,14 @@
       <div class="contact-side">
         <h2>Haptics</h2>
         <div id="ctl-contact-haptics" class="contact-readout"></div>
-        <div class="controls"><button id="ctl-contact-test">Test touch</button>
+        <div class="controls"><button id="ctl-contact-test">Test touch</button><button id="ctl-contact-rub">Rub along</button>
+          <button id="ctl-contact-gradient">Gradient</button>
           <p id="ctl-contact-test-state" class="surface-key"></p></div>
-        <p class="muted">Test touch makes the hand grip the rail's section of the surface, a fist with the pressure as
-          its effort, no band needed; another surface lifts the hand over to its section. The motors play what the
-          hand feels. The settings below follow the surface being felt; they are the same as under Surfaces on Grip
-          control.</p>
+        <p class="muted">Test touch makes the hand grip the rail with the pressure as its effort, no band needed. Arrows
+          jump it to the next section, Shift and arrows slide it along gripping, Rub along slides it to the other end.
+          Gradient blends the pulse rate between the surfaces by where the hand is, so what lies between can be felt;
+          off, each section pulses at its own rate. The settings below follow the surface being felt; they are the
+          same as under Surfaces on Grip control.</p>
         <div class="row narrow"><label>Surface <select id="ctl-contact-surface"></select></label></div>
         <div id="ctl-contact-surface-params"></div>
         <div class="row"><label>Note <input id="ctl-contact-note" placeholder="how it felt"></label></div>

@@ -2542,6 +2542,13 @@ levels: r 0.995 to 0.999 per session, mean difference 0.005 to 0.013, a clench l
 - Surfaces differ only by pulse rate (Noah): each surface keeps its Hz, the force sets the duty while on, off in
   between. Between pulses % and Strength % are gone; old profiles and tries keep them in their files, the CSV
   leaves them blank for new tries.
+- Test touch moves (Noah): arrows jump to the next section (the open hand lifts 7 cm, 0.6 m/s; at the 2 cm of Ready
+  the open fingers caught on the rail and dragged the hand onto the section before), Shift and arrows slide along
+  gripping (0.06 m/s), Rub along (B) slides to the other end (about 4 s), Gradient (G) blends the pulse rate between
+  the surfaces' rates by where the hand is (`haptics.blended_rate`). The grip is WRAP again: sliding a fist read
+  the wrong section 35 to 55 % of the time (fingers drag behind), WRAP 0 to 6 %, at 8 to 13 N. The rough end stops
+  2 cm short of the post: gripping the section's middle, the palm pressed on the post and read the desk.
+- Recordings can be deleted (a Delete under Use, a second click confirms).
 - Record all surfaces (Noah): a note on the whole set (surface `all`) beside the per-surface Record, on Grip
   control and the 3D contact page. Every record now keeps all four rates; the CSV has a column per surface.
 - Bouncing pad wires spoil the signal (Noah): taping the leads to the arm took the hum from about 310 to 56 uV

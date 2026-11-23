@@ -91,7 +91,7 @@ function applyFrame(f) {
     const force = finger >= 0 ? r.finger_force[finger] : palm ? r.palm_force : 0;
     mesh.material.color.lerpColors(HAND, PRESSED, Math.min(force / TINT_FULL_N, 1));
   });
-  followTestTouch(f.test);
+  followTestTouch(f.test, f.test_at);
   // The test touch moves the hand, the keys take it from wherever it ends up
   if (f.test) cx.hand = null;
   if (!cx.hand) {
