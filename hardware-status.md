@@ -11,6 +11,10 @@
 - 2026-10-29: same pattern, hum moving between ch 0, 3 and 5 (up to 420 uV on ch 5) with the band tight and the pads pressed hard. Pressing the main module (ref and bias) in by hand cleared it and it stayed clean after letting go (all channels under 30 uV), so the ref and bias contact is the cause. The 2026-10-02 hum was most likely the same
 - 2026-11-02: hum mostly on ch 3. Clears when pushing the main hub inwards or wiggling the wire on the side of the hub, pressing the ch 3 pad doesn't help. Points to a wire or joint at or inside the hub. Not repaired, wire not yet confirmed as ch 3's
 - 2026-11-20: new shell, pads slip into undersized slots instead of glue. Right after putting it on, hum on every channel (up to 3400 uV on ch 5, 2170 on ch 3) and drifting for over 10 minutes. Not the motors (band off, driver unplugged: no change), not pressing the ref pads (no change in hum) or the ch 5 pad. It dropped after moving the arm around for a while (25 to 66 uV, ch 5 246), so the band needs to bed in after putting it on. Ch 5 stays the outlier: if it stays high, try it out of its slot and the wire wiggle at the hub.
+- 2026-11-23: loose, bouncing pad wires are a main hum source (Noah). Hum at rest, raw 60 Hz median over channels:
+  about 310 uV with the wires hanging, 56 uV right after taping them to the arm, 230 uV a minute later (ch 3 worst
+  every time, 108 to 601 uV). Fresh pads should get better as they settle, not worse, so the rise came from the
+  wires moving. Tape the leads down before every session; ch 3's lead first. A cable fix belongs in the casing.
 - WiFi access point `Mindrove_ARB_66bb04` at 192.168.4.1. Accepts a second device (the ESP32) and keeps streaming
 
 ## ESP32
