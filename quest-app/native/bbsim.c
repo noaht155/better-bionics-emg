@@ -462,6 +462,11 @@ EXPORT int bb_geom_surface(World* w, int g) {
   return w->m->nuser_geom > 0 ? (int)w->m->geom_user[g * w->m->nuser_geom] : -1;
 }
 
+// A geom's sliding friction, which sets its colour (sim.SURFACE_FRICTION)
+EXPORT double bb_geom_friction(World* w, int g) {
+  return w->m->geom_friction[3 * g];
+}
+
 // Vertex and face counts of a mesh geom, 0 for the rest; with buffers, also copies them out
 EXPORT int bb_mesh(World* w, int g, float* vert, int* face, int* nface) {
   int mesh = w->m->geom_dataid[g];

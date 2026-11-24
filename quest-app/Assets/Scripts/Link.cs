@@ -23,6 +23,7 @@ public class Link
         public float mass_scale;
         public float max_force;
         public bool assist;
+        public string rail;
     }
 
     [Serializable]

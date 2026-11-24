@@ -1,5 +1,5 @@
-"""Writes the Quest app's sim scene (sim.scene_xml, the PC runs the same one): one XML per prosthetic side
-(scene_left.xml: the prosthetic hand is the left), the ghost hands, and scene.json with what the app needs to know
+"""Writes the Quest app's sim scene (sim.scene_xml, the PC runs the same one): one XML per prosthetic side and rail
+(scene_left.xml: the prosthetic hand is the left, scene_left_gradient.xml with the gradient rail), the ghost hands, and scene.json with what the app needs to know
 about it.
     emg-reading/.venv/Scripts/python quest-app/native/export_model.py [output folder]
 Default output: quest-app/Assets/Resources/sim (ignored, the build script runs this).
@@ -23,15 +23,17 @@ def meta():
                 rest=[float(a) for a in POSES["rest"]], fist=[float(a) for a in POSES["fist"]],
                 point=[float(a) for a in POSES["point"]], desk_half=list(sim.DESK_HALF),
                 desk_centre_y=sim.DESK_CENTRE_Y, desk_height=sim.DESK_HEIGHT,
-                park=[sim.PARK_X, sim.PARK_Y, sim.PARK_STEP])
+                park=[sim.PARK_X, sim.PARK_Y, sim.PARK_STEP],
+                surface_friction=[sim.SURFACE_FRICTION[s] for s in sim.SURFACES])
 
 
 def main(out=OUT):
     out.mkdir(parents=True, exist_ok=True)
     for old in out.glob("*"):
         old.unlink()
-    (out / "scene_left.xml").write_text(sim.scene_xml(True))
-    (out / "scene_right.xml").write_text(sim.scene_xml(False))
+    for side, left in (("left", True), ("right", False)):
+        (out / f"scene_{side}.xml").write_text(sim.scene_xml(left))
+        (out / f"scene_{side}_gradient.xml").write_text(sim.scene_xml(left, rail_kind="gradient"))
     (out / "ghost_left.xml").write_text(sim.ghost_xml(True))
     (out / "ghost_right.xml").write_text(sim.ghost_xml(False))
     (out / "scene.json").write_text(json.dumps(meta()))

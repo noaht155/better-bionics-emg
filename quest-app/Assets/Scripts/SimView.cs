@@ -12,6 +12,9 @@ public class SimView
         PressColor = Hex(0xc93ee6), HeldColor = Hex(0xff7a3d), PostColor = Hex(0x151517);
     // Objects and the rail's sections by surface (sim.SURFACES order), the web app's --surface-* tokens
     public static readonly Color[] SurfaceColors = { Hex(0x7cc4e8), Hex(0x8fd3a8), Hex(0xd8c27a), Hex(0xc8794f) };
+    // Each surface's friction (sim.SURFACE_FRICTION, from scene.json): a thing's colour lies between the colours of
+    // the surfaces around its friction, as on the contact page
+    public static float[] SurfaceFriction;
 
     readonly Transform root;
     readonly Material material;
@@ -126,9 +129,17 @@ public class SimView
     // The rail's sections are cylinders, its posts boxes
     static Color ColorOf(Sim.Geom g)
     {
-        if (g.role == 1 || (g.role == 3 && g.type == 5))
-            return g.surface >= 0 && g.surface < SurfaceColors.Length ? SurfaceColors[g.surface] : PostColor;
+        if (g.role == 1 || (g.role == 3 && g.type == 5)) return FrictionColor(g.friction);
         return g.role == 3 ? PostColor : g.hand == Sim.Prosthetic ? ProstheticColor : FreeColor;
+    }
+
+    static Color FrictionColor(float friction)
+    {
+        var f = SurfaceFriction;
+        if (friction <= f[0]) return SurfaceColors[0];
+        for (int i = 1; i < f.Length; i++)
+            if (friction <= f[i]) return Color.Lerp(SurfaceColors[i - 1], SurfaceColors[i], (friction - f[i - 1]) / (f[i] - f[i - 1]));
+        return SurfaceColors[f.Length - 1];
     }
 
     // One geom as a mesh with this material. MuJoCo geom types: 2 sphere, 3 capsule, 4 ellipsoid, 5 cylinder, 6 box,

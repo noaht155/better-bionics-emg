@@ -32,7 +32,8 @@ public class App : MonoBehaviour
         public float mass_scale, max_force;
         public bool assist;
         public string[] objects, pool, joints;
-        public float[] half, rest, fist, point, desk_half, park;
+        public float[] half, rest, fist, point, desk_half, park, surface_friction;
+        public string rail;
         public float desk_centre_y, desk_height;
     }
 
@@ -52,6 +53,7 @@ public class App : MonoBehaviour
     class SceneGeom
     {
         public string type, role, surface;
+        public float friction;
         public int hand, finger, obj;
         public float[] size, vertices;
         public int[] faces;
@@ -93,7 +95,7 @@ public class App : MonoBehaviour
 
     Meta meta;
     Settings settings;
-    string sceneLeft, sceneRight, ghostLeft, ghostRight;
+    string ghostLeft, ghostRight;
     Transform deskRoot, ray, grabber;
     readonly Transform[] controllerModels = new Transform[2];
     Room room;
@@ -138,14 +140,14 @@ public class App : MonoBehaviour
         Ui.InterBoldFont = interBoldFont;
         Ui.MonoFont = monoFont;
         meta = JsonUtility.FromJson<Meta>(Resources.Load<TextAsset>("sim/scene").text);
-        sceneLeft = Resources.Load<TextAsset>("sim/scene_left").text;
-        sceneRight = Resources.Load<TextAsset>("sim/scene_right").text;
         ghostLeft = Resources.Load<TextAsset>("sim/ghost_left").text;
         ghostRight = Resources.Load<TextAsset>("sim/ghost_right").text;
+        SimView.SurfaceFriction = meta.surface_friction;
         settings = Settings.Load();
         current = new Link.Params
         {
-            @object = meta.@object, mass_scale = meta.mass_scale, max_force = meta.max_force, assist = meta.assist
+            @object = meta.@object, mass_scale = meta.mass_scale, max_force = meta.max_force, assist = meta.assist,
+            rail = meta.rail
         };
         fingerOf = new int[Sim.Joints];
         string[] fingers = { "thumb", "index", "middle", "ring", "pinky" };
@@ -191,7 +193,10 @@ public class App : MonoBehaviour
         var p = current;
         // Set up inside the build, so nothing queued for the old scene lands on the new one
         var first = SpawnSpot(current.@object);
-        sim.Load(settings.prostheticLeft ? sceneLeft : sceneRight, w =>
+        // One scene per prosthetic side and rail (export_model.py)
+        var xml = Resources.Load<TextAsset>($"sim/scene_{(settings.prostheticLeft ? "left" : "right")}" +
+            (current.rail == "gradient" ? "_gradient" : "")).text;
+        sim.Load(xml, w =>
         {
             Native.bb_set_floor(w, height);
             Native.bb_set_params(w, p.mass_scale, p.max_force, p.assist ? 1 : 0);
@@ -215,6 +220,8 @@ public class App : MonoBehaviour
             v => Change(p => p.mass_scale = v));
         forceText = menu.Slider(play, "Hand strength", 2, 40, 1, () => current.max_force, v => Change(p => p.max_force = v));
         menu.Toggle(play, "Grasp assist", () => current.assist, () => Change(p => p.assist = !p.assist));
+        menu.Toggle(play, "Gradient rail", () => current.rail == "gradient",
+            () => SetRail(current.rail == "gradient" ? "steps" : "gradient"));
         menu.Toggle(play, "Passthrough", () => settings.passthrough, () => SetPassthrough(!settings.passthrough));
 
         var objects = menu.AddPage("Objects");
@@ -357,6 +364,13 @@ public class App : MonoBehaviour
         link.Send(JsonUtility.ToJson(new ParamsMessage { @params = current }));
     }
 
+    // Another rail is another model, as on the laptop: the scene starts over
+    void SetRail(string rail)
+    {
+        Change(p => p.rail = rail);
+        LoadScene();
+    }
+
     void ApplyParams()
     {
         var p = current;
@@ -374,6 +388,11 @@ public class App : MonoBehaviour
         current.max_force = p.max_force;
         current.assist = p.assist;
         ApplyParams();
+        if (!string.IsNullOrEmpty(p.rail) && p.rail != current.rail)
+        {
+            current.rail = p.rail;
+            LoadScene();
+        }
         if (laptopObject != null && p.@object != laptopObject && Array.IndexOf(meta.objects, p.@object) >= 0)
         {
             ClearDesk();
@@ -802,6 +821,7 @@ public class App : MonoBehaviour
                     type = GeomTypes[src.type],
                     role = src.role == 1 ? "object" : src.role == 2 ? "hand" : src.role == 3 ? "rail" : "static",
                     surface = src.surface >= 0 && src.surface < SurfaceNames.Length ? SurfaceNames[src.surface] : "",
+                    friction = src.friction,
                     hand = src.hand, finger = src.finger, obj = src.obj,
                     size = new[] { (float)src.size[0], (float)src.size[1], (float)src.size[2] },
                     vertices = src.vert ?? new float[0], faces = src.face ?? new int[0]

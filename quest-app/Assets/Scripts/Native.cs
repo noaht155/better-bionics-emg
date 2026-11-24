@@ -20,6 +20,7 @@ static class Native
     [DllImport(Lib)] public static extern int bb_ngeom(IntPtr w);
     [DllImport(Lib)] public static extern void bb_geom(IntPtr w, int g, out int type, out int role, out int hand, out int finger, out int obj, double[] size);
     [DllImport(Lib)] public static extern int bb_geom_surface(IntPtr w, int g);
+    [DllImport(Lib)] public static extern double bb_geom_friction(IntPtr w, int g);
     [DllImport(Lib)] public static extern int bb_mesh(IntPtr w, int g, float[] vert, int[] face, out int nface);
     [DllImport(Lib)] public static extern void bb_poses(IntPtr w, float[] pos, float[] mat);
     [DllImport(Lib)] public static extern void bb_object_pose(IntPtr w, int o, double[] pos, double[] quat);

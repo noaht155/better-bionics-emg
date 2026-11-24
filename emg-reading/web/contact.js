@@ -32,7 +32,7 @@ const placeCamera = () => orbit(camera, view);
 
 // The one colour rule (sim.SURFACE_FRICTION): a friction's colour lies between the surfaces' colours at their
 // frictions, so a thing between two surfaces shows between their colours
-function frictionColor(friction) {
+export function frictionColor(friction) {
   const stops = Object.entries(config.surfaces?.friction || {}).sort((a, b) => a[1] - b[1]);
   if (!stops.length) return color("--raised");
   if (friction <= stops[0][1]) return color(`--surface-${stops[0][0]}`);

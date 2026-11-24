@@ -1,7 +1,7 @@
 // VR tab: what the person in the headset sees, drawn from the Quest app's own simulation (/ws/vr: its scene once,
 // then poses and head at 30 Hz), with its settings and objects beside it. From their eyes, or an orbit view.
 import { THREE, color, createView, geometryFor, orbit, placeMesh } from "./scene3d.js";
-import { CONTACT_PARAMS } from "./contact.js";
+import { CONTACT_PARAMS, frictionColor } from "./contact.js";
 
 // A finger pressing this hard shows fully in the effort colour, as on the contact page
 const TINT_FULL_N = 10;
@@ -12,8 +12,10 @@ const OBJECT_NAMES = { can: "Can", ball: "Ball", block: "Block", "small cube": "
 const canvas = $("vr-canvas");
 const { world, camera, bodies, resize, render } = createView(canvas, 0.8);
 const HAND = color("--hand-solid"), FREE = color("--sim-free-hand");
-// Objects and the rail's sections in their surface's colour; a headset built before surfaces were sent has none
-const surfaceColor = (g) => color(g.surface ? `--surface-${g.surface}` : "--sim-object");
+// Objects and the rail in their friction's colour as on the contact page; a headset built before friction was sent
+// falls back to its surface, one built before surfaces to grey
+const surfaceColor = (g) => (typeof g.friction === "number" ? frictionColor(g.friction)
+  : color(g.surface ? `--surface-${g.surface}` : "--sim-object"));
 const PRESSED = color("--effort"), HELD = color("--accent-orange");
 const vr = { open: false, ws: null, meshes: [], params: {}, lastView: 0, mode: "eyes", turning: null };
 // Behind the user's seat, looking over the desk
