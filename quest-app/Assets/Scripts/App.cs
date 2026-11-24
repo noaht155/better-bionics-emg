@@ -124,7 +124,7 @@ public class App : MonoBehaviour
     readonly List<XRInputSubsystem> inputs = new List<XRInputSubsystem>();
     bool floorSet;
 
-    TextMeshPro linkText, simText, massText, forceText, heightText, sideText, freeText, recordText, recordError;
+    TextMeshPro linkText, simText, hapticsText, massText, forceText, heightText, sideText, freeText, recordText, recordError;
     TextMeshPro[] readouts, sessionButtons;
     TextMeshPro cueMeta, cueTitle, cueBody, cueNext, cueState;
     Action<float> cueProgress;
@@ -215,6 +215,8 @@ public class App : MonoBehaviour
         linkText = menu.Paragraph(play, "", 0.014f, false);
         simText = menu.Paragraph(play, "");
         readouts = menu.Readouts(play, "prosthetic grip", "free hand grip");
+        menu.Section(play, "Haptics");
+        hapticsText = menu.Paragraph(play, "", 0.014f, false);
         menu.Section(play, "Physics");
         massText = menu.Slider(play, "Object mass", 0.25f, 3, 0.25f, () => current.mass_scale,
             v => Change(p => p.mass_scale = v));
@@ -779,6 +781,7 @@ public class App : MonoBehaviour
         Ui.SetChip(menu, recording ? "RECORDING" : link.Connected ? "LAPTOP" : "OFFLINE",
             recording ? Ui.Bad : link.Connected ? Ui.Good : Ui.Muted);
         simText.text = sim.Error ?? $"Sim {sim.Speed:0.0}x real time";
+        hapticsText.text = HapticsText(frame?.haptics);
         readouts[0].text = $"{readout[0]:0.0} N";
         readouts[1].text = $"{readout[7]:0.0} N";
         massText.text = $"x{current.mass_scale:0.00}";
@@ -793,6 +796,16 @@ public class App : MonoBehaviour
             : "Not recording";
         recordError.text = record != null && !string.IsNullOrEmpty(record.error) ? $"<color=#ff3b3b>{record.error}</color>" : "";
         sessionButtons[0].text = record != null && record.paused ? "Continue" : "Pause";
+    }
+
+    static string HapticsText(Link.Haptics h)
+    {
+        if (h == null || !h.on) return "Motors off. Start them from Grip control on the laptop.";
+        if (h.mode != "surface") return $"Following effort, strongest output {h.duty:0}%";
+        if (string.IsNullOrEmpty(h.surface)) return h.test ? "Test touch, not touching yet" : "Not touching anything";
+        string friction = h.friction >= 0 ? $", friction {h.friction:0.00}" : "";
+        // No duty here: it pulses on and off with the surface and would flicker
+        return $"{h.force:0.0} N on {h.surface}{friction}, {h.hz:0.#} Hz pulses" + (h.test ? ", test touch" : "");
     }
 
     void SendReadout()

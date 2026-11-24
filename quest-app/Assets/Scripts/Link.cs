@@ -55,6 +55,16 @@ public class Link
         public int params_seq;
         public Command[] commands;
         public Record record;
+        public Haptics haptics;
+    }
+
+    // What the laptop's motors play (app.headset_haptics_state)
+    [Serializable]
+    public class Haptics
+    {
+        public bool on, test;
+        public string mode, surface;
+        public float force, hz, friction, duty;
     }
 
     readonly CancellationTokenSource stop = new CancellationTokenSource();

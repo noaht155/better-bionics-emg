@@ -2590,6 +2590,9 @@ levels: r 0.995 to 0.999 per session, mean difference 0.005 to 0.013, a clench l
   against Unity's DLLs (dotnet, only the stale project file's missing XR Hands reference fails).
 - The contact page's test touch drives the motors with the headset on too: it wins over the Quest's touch while it
   runs (`Contact.touch`, `touch_friction`); before, a connected Quest silenced it.
+- Haptics on the Quest's Play page: what the motors play (force, surface, friction, pulse rate, test touch, or the
+  strongest duty in effort mode), sent with every frame (`app.headset_haptics_state`). No duty in surface mode, it
+  pulses and would flicker.
 
 ## Open
 

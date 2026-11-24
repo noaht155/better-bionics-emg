@@ -575,6 +575,22 @@ def headset_record_state(recorder):
             "has_target": cue["label"] in POSES}
 
 
+def headset_haptics_state(haptics, test_touch):
+    """What the motors play, for the headset's Play page: the touch they follow, its pulse rate and the strongest
+    duty (%). No nulls, the headset's JSON reader can't take them."""
+    state = haptics.state
+    if not state.get("running"):
+        return {"on": False}
+    touch = state.get("touch")
+    duties = state.get("duties") or [0]
+    if touch is None:
+        return {"on": True, "mode": "effort", "duty": float(max(duties))}
+    friction = touch.get("friction")
+    return {"on": True, "mode": "surface", "force": touch["force"], "surface": touch["surface"] or "",
+            "hz": touch["hz"], "friction": -1.0 if friction is None else friction, "duty": float(max(duties)),
+            "test": test_touch}
+
+
 def session_folder(name):
     """A recorded session's folder by its name, refused unless it is one."""
     folder = DATA_DIR / name
@@ -1570,6 +1586,7 @@ def make_app(recorder, band, camera, tools, lan=True, serving=False):
                 if time.monotonic() - record_at > 1 / QUEST_RECORD_HZ:
                     record_state, record_at = headset_record_state(recorder), time.monotonic()
                 frame["record"] = dict(record_state, error=record_error[0])
+                frame["haptics"] = headset_haptics_state(tools.haptics, tools.contact.test is not None)
                 await ws.send_json(frame)
                 await asyncio.sleep(1 / QUEST_HZ)
         except WebSocketDisconnect:

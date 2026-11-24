@@ -123,3 +123,16 @@ def test_link_maps_the_quest_once_and_leaves_another_live_copy(monkeypatch):
     monkeypatch.setattr(quest_link, "_answers", lambda port: False)
     copy.check()
     assert adb.mapped == 8010
+
+
+def test_headset_gets_what_the_motors_play():
+    import app
+    off = SimpleNamespace(state={"running": False})
+    assert app.headset_haptics_state(off, False) == {"on": False}
+    effort_mode = SimpleNamespace(state={"running": True, "duties": [0, 45, 30]})
+    assert app.headset_haptics_state(effort_mode, False) == {"on": True, "mode": "effort", "duty": 45.0}
+    surface = SimpleNamespace(state={"running": True, "duties": [60] * 7,
+                                     "touch": {"force": 8.2, "surface": "rough", "hz": 12.0, "friction": None}})
+    state = app.headset_haptics_state(surface, True)
+    assert state["surface"] == "rough" and state["friction"] == -1.0 and state["test"]
+    assert None not in state.values()
