@@ -192,6 +192,7 @@ public class App : MonoBehaviour
         ray.GetComponent<MeshRenderer>().sharedMaterial = uiMaterial;
         ray.gameObject.SetActive(false);
         BuildMenu();
+        room.Brand(material, uiMaterial);
         BuildCard();
         BuildDock();
         BuildControls();
@@ -343,7 +344,7 @@ public class App : MonoBehaviour
         dock.root.gameObject.SetActive(true);
     }
 
-    // The controls at a glance, on a card standing just off the desk's near corner on the prosthetic side
+    // The controls at a glance, on a card by the Menu button
     void BuildControls()
     {
         controls = new Ui(uiMaterial, false);
@@ -356,16 +357,17 @@ public class App : MonoBehaviour
         controls.Paragraph(page, "<b>Grab</b>  grip, or close your hand. Move a panel by the bar under it.", 0.014f, true, 2);
         controls.Show(page);
         controls.root.SetParent(deskRoot, false);
-        controls.root.localScale = Vector3.one * 0.55f;
+        controls.root.localScale = Vector3.one * 0.5f;
         PlaceControls();
         controls.root.gameObject.SetActive(settings.controlsCard);
     }
 
     void PlaceControls()
     {
-        float x = (FreeIsRight ? -1 : 1) * (meta.desk_half[0] + 0.02f + Ui.Width * 0.55f / 2);
-        controls.root.localPosition = new Vector3(x, 0.12f, -meta.desk_centre_y - meta.desk_half[1] + 0.05f);
-        controls.root.localRotation = Quaternion.Euler(35, (FreeIsRight ? -1 : 1) * 15, 0);
+        // Beside the Menu button on the free hand's side, lying tilted up on the desk's near edge like it, in reach
+        float x = (FreeIsRight ? 1 : -1) * (meta.desk_half[0] - 0.12f - 0.09f - Ui.Width * 0.5f / 2);
+        controls.root.localPosition = new Vector3(x, 0.05f, -meta.desk_centre_y - meta.desk_half[1] + 0.05f);
+        controls.root.localRotation = Quaternion.Euler(50, 0, 0);
     }
 
     void ShowControls(bool on)
@@ -429,7 +431,25 @@ public class App : MonoBehaviour
     void SendTrain(string action) =>
         link.Send(JsonUtility.ToJson(new TrainMessage { train = new TrainAction { action = action } }));
 
-    void PauseOrContinue() => SendRecord(record != null && record.paused ? "continue" : "pause");
+    // Whether the touch that started the current hold paused the recording, so the Pause it confirms doesn't
+    // continue it again
+    bool pausedByTouch;
+
+    void PauseForTouch()
+    {
+        pausedByTouch = record != null && !record.paused;
+        if (pausedByTouch) SendRecord("pause");
+    }
+
+    void PauseOrContinue()
+    {
+        if (pausedByTouch)
+        {
+            pausedByTouch = false;
+            return;
+        }
+        SendRecord(record != null && record.paused ? "continue" : "pause");
+    }
 
     void ResetOffset()
     {
@@ -753,7 +773,11 @@ public class App : MonoBehaviour
         bool clicked = false;
         foreach (var panel in new[] { menu, card, dock })
         {
-            float l = panel.Interact(tip, pointer, down, grabHandle, grabber, out bool c);
+            // During a recording every press is held to confirm and the first touch pauses it, so a stray touch
+            // costs a pause, not a cue (Noah, 2026-11-24)
+            bool recording = record != null && record.running;
+            float l = panel.Interact(tip, pointer, down, grabHandle, grabber, out bool c, !hasF, recording,
+                recording ? PauseForTouch : (Action)null);
             if (l > 0 && length == 0) length = l;
             clicked |= c;
         }

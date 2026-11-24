@@ -1,9 +1,9 @@
 using UnityEngine;
 
-// The room around the sim: a round room with warm walls, a wooden floor, a ceiling light over the desk and a few
-// things around the desk (rug, plant, sideboard with books, floor lamp), and the desk itself, sized like the sim's desk
-// (export_model.py) with its top at the desk root and legs down to the real floor. Dim and warm (Noah, 2026-11-24:
-// the first version felt clinical, empty and a bit bright).
+// The room around the sim: a round room with warm walls and a thin brand gradient line round them, a wooden floor, a
+// ceiling light over the desk, a rug, sideboard and floor lamp by the desk, a Better Bionics wall panel behind it, and
+// the desk itself, sized like the sim's desk (export_model.py) with its top at the desk root and legs down to the real
+// floor. Dim and warm (Noah, 2026-11-24: the first version felt clinical and bright, the plant and books goofy).
 public class Room
 {
     const float Radius = 4, Height = 3;
@@ -45,6 +45,8 @@ public class Room
         Part("walls", surroundings.transform, Walls(), backdrop);
         var ceiling = Part("ceiling", surroundings.transform, Disc(Radius, Ceiling, Ceiling), backdrop);
         ceiling.localPosition = new Vector3(0, Height, 0);
+        // The site's orange to pink to magenta as a thin line on the dado rail, going round the room
+        Part("brand line", surroundings.transform, BrandLine(), new Material(unlit) { renderQueue = 1001 });
 
         desk = new GameObject("desk").transform;
         desk.SetParent(deskRoot, false);
@@ -68,6 +70,26 @@ public class Room
         furnishings = new GameObject("furnishings").transform;
         furnishings.SetParent(desk, false);
         Furnish(material);
+    }
+
+    // Behind the desk: a dark panel with the wordmark in the gradient and the line under it, as on the site. Called
+    // once the menu has loaded the fonts
+    public void Brand(Material material, Material unlit)
+    {
+        var panel = new GameObject("brand").transform;
+        panel.SetParent(furnishings, false);
+        panel.localPosition = new Vector3(0, 0, 2.3f);
+        Box(panel, new Vector3(2.4f, 1.0f, 0.04f), new Vector3(0, 1.55f, 0.02f), SimView.Paint(material, SimView.Hex(0x141210), 0.4f));
+        var word = Ui.WorldLabel(panel, new Vector3(0, 1.62f, -0.002f), "BETTER BIONICS", 0.16f, Color.white, false, true,
+            TMPro.TextAlignmentOptions.Center, new Vector2(2.3f, 0.3f));
+        word.characterSpacing = 18;
+        word.enableVertexGradient = true;
+        word.colorGradient = new TMPro.VertexGradient(Ui.Orange, Ui.Magenta, Ui.Orange, Ui.Magenta);
+        var sub = Ui.WorldLabel(panel, new Vector3(0, 1.38f, -0.002f), "EMG CONTROL  /  HAPTIC FEEDBACK", 0.045f, Ui.Muted, false,
+            true, TMPro.TextAlignmentOptions.Center, new Vector2(2.3f, 0.1f));
+        sub.characterSpacing = 30;
+        var line = Ui.WorldShape(panel, unlit, new Vector3(0, 1.3f, -0.002f), new Vector2(0.5f, 0.006f), 0, Ui.Accent, 0, true);
+        line.gameObject.name = "brand underline";
     }
 
     // Passthrough shows the real room instead
@@ -99,41 +121,12 @@ public class Room
         Box(t, new Vector3(2.3f, 0.004f, 1.9f), new Vector3(0, 0.002f, -0.25f), SimView.Paint(material, SimView.Hex(0x5a3d31), 0.05f));
         Box(t, new Vector3(2.1f, 0.006f, 1.7f), new Vector3(0, 0.003f, -0.25f), SimView.Paint(material, SimView.Hex(0x3d2a24), 0.05f));
 
-        // Plant on the right, past the desk
-        var pot = SimView.Paint(material, SimView.Hex(0x8a5238), 0.3f);
-        Shape(t, PrimitiveType.Cylinder, new Vector3(0.28f, 0.16f, 0.28f), new Vector3(1.15f, 0.16f, 0.55f), pot);
-        Shape(t, PrimitiveType.Cylinder, new Vector3(0.25f, 0.01f, 0.25f), new Vector3(1.15f, 0.315f, 0.55f),
-            SimView.Paint(material, SimView.Hex(0x2a1d15), 0));
-        var leafA = SimView.Paint(material, SimView.Hex(0x3e6a45), 0.35f);
-        var leafB = SimView.Paint(material, SimView.Hex(0x507e52), 0.35f);
-        var stem = SimView.Paint(material, SimView.Hex(0x3a4a2c), 0.2f);
-        for (int i = 0; i < 9; i++)
-        {
-            float a = i * 2.4f, h = 0.5f + 0.06f * (i % 4), r = 0.08f + 0.03f * (i % 3);
-            var at = new Vector3(1.15f + r * Mathf.Cos(a), h, 0.55f + r * Mathf.Sin(a));
-            var s = Shape(t, PrimitiveType.Cylinder, new Vector3(0.012f, (h - 0.3f) / 2, 0.012f),
-                new Vector3((1.15f + at.x) / 2, (0.3f + h) / 2, (0.55f + at.z) / 2), stem);
-            s.localRotation = Quaternion.FromToRotation(Vector3.up, at - new Vector3(1.15f, 0.3f, 0.55f));
-            var leaf = Shape(t, PrimitiveType.Sphere, new Vector3(0.2f, 0.03f, 0.09f), at, i % 2 == 0 ? leafA : leafB);
-            leaf.localRotation = Quaternion.Euler(-25 + 10 * (i % 3), a * Mathf.Rad2Deg, 15);
-        }
-
-        // Low sideboard on the left with books and a vase on it
+        // Low sideboard on the left
         var wood = SimView.Paint(material, SimView.Hex(0x5a3e2b), 0.3f);
         var dark = SimView.Paint(material, SimView.Hex(0x3a281c), 0.3f);
         Box(t, new Vector3(1.3f, 0.7f, 0.42f), new Vector3(-1.45f, 0.38f, 0.8f), wood);
         Box(t, new Vector3(1.34f, 0.03f, 0.46f), new Vector3(-1.45f, 0.745f, 0.8f), dark);
         Box(t, new Vector3(1.22f, 0.006f, 0.005f), new Vector3(-1.45f, 0.4f, 0.588f), dark);
-        Color[] spines = { SimView.Hex(0x7a5c4a), SimView.Hex(0x4c5a66), SimView.Hex(0x8a7a5a), SimView.Hex(0x6a4a4a), SimView.Hex(0x51604c) };
-        float x = -1.95f;
-        for (int i = 0; i < spines.Length; i++)
-        {
-            float w = 0.04f + 0.012f * (i % 3), h = 0.2f + 0.03f * ((i * 2) % 3);
-            Box(t, new Vector3(w, h, 0.16f), new Vector3(x + w / 2, 0.76f + h / 2, 0.8f), SimView.Paint(material, spines[i], 0.2f));
-            x += w + 0.004f;
-        }
-        Shape(t, PrimitiveType.Cylinder, new Vector3(0.11f, 0.11f, 0.11f), new Vector3(-1.0f, 0.87f, 0.82f),
-            SimView.Paint(material, SimView.Hex(0x9a8f80), 0.6f));
 
         // Floor lamp behind on the left, its shade lit from inside
         Shape(t, PrimitiveType.Cylinder, new Vector3(0.26f, 0.012f, 0.26f), new Vector3(-1.2f, 0.012f, -1.0f), dark);
@@ -193,6 +186,32 @@ public class Room
                 t[k++] = a; t[k++] = a + 1; t[k++] = b;
                 t[k++] = b; t[k++] = a + 1; t[k++] = b + 1;
             }
+        var mesh = new Mesh { vertices = v, colors = c, triangles = t };
+        mesh.RecalculateBounds();
+        return mesh;
+    }
+
+    // A 1.5 cm band just inside the wall at the dado rail, in the gradient twice round
+    static Mesh BrandLine()
+    {
+        const int n = 144;
+        const float r = Radius - 0.005f, y0 = 0.905f, y1 = 0.92f;
+        var v = new Vector3[2 * (n + 1)];
+        var c = new Color[v.Length];
+        var t = new int[n * 6];
+        for (int i = 0; i <= n; i++)
+        {
+            float a = 2 * Mathf.PI * i / n, f = Mathf.PingPong(2f * i / n * 2, 1);
+            v[2 * i] = new Vector3(r * Mathf.Cos(a), y0, r * Mathf.Sin(a));
+            v[2 * i + 1] = new Vector3(r * Mathf.Cos(a), y1, r * Mathf.Sin(a));
+            c[2 * i] = c[2 * i + 1] = Ui.GradientAt(f);
+        }
+        for (int i = 0, k = 0; i < n; i++)
+        {
+            int a = 2 * i, b = 2 * i + 2;
+            t[k++] = a; t[k++] = a + 1; t[k++] = b;
+            t[k++] = b; t[k++] = a + 1; t[k++] = b + 1;
+        }
         var mesh = new Mesh { vertices = v, colors = c, triangles = t };
         mesh.RecalculateBounds();
         return mesh;

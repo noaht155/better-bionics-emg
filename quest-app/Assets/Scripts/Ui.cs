@@ -20,6 +20,9 @@ public class Ui
     // Motion only where something changes state, all under 200 ms as on the web app: a toggle's pill slides, the
     // tab underline slides to the tab picked, the panel grows in from 92 % when it opens
     const float SlideS = 0.14f, OpenS = 0.16f;
+    // A press that has to be held (a bare-hand pinch, anything during a recording) fires after this long, its bar
+    // filling under the button meanwhile (Noah, 2026-11-24: pinches set things off by accident)
+    public const float HoldS = 1.0f;
 
     public static Font InterFont, InterBoldFont, MonoFont;
     static TMP_FontAsset inter, interBold, mono;
@@ -37,9 +40,10 @@ public class Ui
         public Action<float> set;
         public float min, max, step;
         public bool primary;
-        public MeshFilter face, edge, fill, knob;
+        public MeshFilter face, edge, fill, knob, bar;
         public TextMeshPro label;
-        public float hover, press, slide = -1;
+        public float hover, press, slide = -1, hold;
+        public bool fired;
     }
 
     public class Page
@@ -256,8 +260,16 @@ public class Ui
         e.face = Shape(page.root, LControl, new Vector3(e.centre.x, y, 0), e.size, 0.011f, Raised);
         e.fill = Shape(page.root, LFill, new Vector3(e.centre.x, y, -0.0005f), e.size, 0.011f, Accent, true);
         e.knob = Shape(page.root, LKnob, Vector3.zero, Vector2.one * 0.016f, 0.008f, Ui.Text);
+        e.bar = HoldBar(page.root, new Vector3(-Width / 2 + Pad, y - RowH / 2 + 0.003f, 0));
         elements.Add(e);
         page.y -= RowH;
+    }
+
+    MeshFilter HoldBar(Transform parent, Vector3 pos)
+    {
+        var bar = Shape(parent, LText, pos, new Vector2(0.004f, 0.003f), 0.0015f, Accent, true);
+        bar.gameObject.SetActive(false);
+        return bar;
     }
 
     // Buttons across the panel; primary ones are white with black text, the rest outlined
@@ -283,6 +295,7 @@ public class Ui
             e.label = Label(page.root, pos, actions[i].text, 0.0135f, primary ? Color.black : Ui.Text, primary ? interBold : inter,
                 TextAlignmentOptions.Center);
             e.label.rectTransform.sizeDelta = e.size;
+            e.bar = HoldBar(page.root, pos + new Vector3(-e.size.x / 2, -e.size.y / 2 + 0.004f, 0));
             elements.Add(e);
         }
         page.y -= RowH;
@@ -335,7 +348,10 @@ public class Ui
     // Interaction: a fingertip (poke) or a ray (a controller's, or the tracked hand pointing); down is the trigger or
     // the pinch for the ray, grab the fist or grip for the handle. A fingertip near the panel wins, out of reach the
     // ray takes over. Returns the ray's length to the panel, 0 when it misses
-    public float Interact(Vector3? tip, Ray? ray, bool down, bool grab, Transform grabber, out bool clicked)
+    // holdRay: a press through the ray has to be held (the bare hand's pinch); holdAll: every press does, and
+    // holdStarted runs as soon as one begins (a recording pauses at the first touch)
+    public float Interact(Vector3? tip, Ray? ray, bool down, bool grab, Transform grabber, out bool clicked,
+        bool holdRay = false, bool holdAll = false, Action holdStarted = null)
     {
         clicked = false;
         if (!Visible) return 0;
@@ -356,6 +372,7 @@ public class Ui
             if (behind) touching = false;
             prevZ = local.z;
         }
+        bool viaRay = false;
         if (!poking && ray.HasValue)
         {
             var plane = new Plane(root.forward, root.position);
@@ -366,6 +383,7 @@ public class Ui
                 inFront = true;
                 touching = down;
                 length = d;
+                viaRay = true;
             }
         }
         Element hit = null;
@@ -380,11 +398,32 @@ public class Ui
         if (pressed == null && touching && hit != null && (!wasTouching || ray.HasValue) && hit.kind != Kind.Handle)
         {
             pressed = hit;
-            if (hit.kind == Kind.Button || hit.kind == Kind.Toggle)
+            bool clickable = hit.kind == Kind.Button || hit.kind == Kind.Toggle;
+            // Tabs only switch pages, they never need holding
+            bool mustHold = clickable && hit.bar != null && (holdAll || holdRay && viaRay);
+            hit.hold = 0;
+            hit.fired = !mustHold;
+            if (mustHold) holdStarted?.Invoke();
+            else if (clickable)
             {
                 hit.click?.Invoke();
                 clicked = true;
             }
+        }
+        if (pressed != null && !pressed.fired && pressed.kind != Kind.Handle)
+        {
+            // Sliding off the button or letting go before the time is up cancels it
+            if (touching && hit == pressed)
+            {
+                pressed.hold += Time.deltaTime;
+                if (pressed.hold >= HoldS)
+                {
+                    pressed.fired = true;
+                    pressed.click?.Invoke();
+                    clicked = true;
+                }
+            }
+            else pressed.hold = 0;
         }
         if (grab && pressed == null && hit == handle && grabber != null)
         {
@@ -433,6 +472,19 @@ public class Ui
         {
             if (e.page != null && e.page != shown) continue;
             e.hover = Mathf.MoveTowards(e.hover, e == hit ? 1 : 0, dt / 0.12f);
+            if (e.bar != null)
+            {
+                bool holding = e == pressed && !e.fired && e.hold > 0;
+                e.bar.gameObject.SetActive(holding);
+                if (holding)
+                {
+                    float w = Mathf.Max(0.004f, (e.kind == Kind.Toggle ? Width - 2 * Pad : e.size.x) * e.hold / HoldS);
+                    e.bar.sharedMesh = GradientBar(new Vector2(w, 0.003f), 0.0015f);
+                    var start = e.kind == Kind.Toggle ? -Width / 2 + Pad : e.centre.x - e.size.x / 2;
+                    var y = e.kind == Kind.Toggle ? e.centre.y - RowH / 2 + 0.003f : e.centre.y - e.size.y / 2 + 0.004f;
+                    e.bar.transform.localPosition = new Vector3(start + w / 2, y, -0.003f);
+                }
+            }
             e.press = Mathf.MoveTowards(e.press, e == pressed ? 1 : 0, dt / 0.08f);
             switch (e.kind)
             {

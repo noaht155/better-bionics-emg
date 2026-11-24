@@ -32,6 +32,11 @@ APK="$HERE/Build/bb-contact.apk"
 echo "built $APK"
 
 [ "${1:-}" = "--no-install" ] && exit 0
+# The Unity build restarts the adb server, so the Quest takes a few seconds to show up again
+for _ in 1 2 3 4 5 6 7 8 9 10; do
+  "$ADB" get-state > /dev/null 2>&1 && break
+  sleep 1
+done
 if "$ADB" get-state > /dev/null 2>&1; then
   "$ADB" install -r "$APK"
   "$ADB" shell am start -n com.betterbionics.contact/com.unity3d.player.UnityPlayerActivity

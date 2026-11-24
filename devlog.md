@@ -2638,6 +2638,15 @@ levels: r 0.995 to 0.999 per session, mean difference 0.005 to 0.013, a clench l
   wrist animations didn't work): the held wrist bends had no target, so no ghost; now the laptop sends the bend
   (`HEADSET_WRIST_DEG`, 60 and -55 as the web page draws them) and the ghost hands bend at the wrist with a forearm
   shown; the prosthetic hand can't bend, so a bent ghost sits on it for those cues.
+- Hold to confirm (Noah: the pinch set things off by accident): a bare-hand pinch on a button or switch has to be
+  held 1 s (`Ui.HoldS`), a pink bar filling under it; letting go or sliding off cancels. During a recording every
+  press is held, and the first touch pauses the session at once, so a stray touch costs a pause, not a cue. Tabs
+  switch at once.
+- Room (Noah: less clinical but goofy): plant, books and vase gone; a dark wall panel behind the desk with the
+  wordmark in the gradient, "EMG control / haptic feedback" under it and the gradient underline, and a thin gradient
+  line round the walls on the dado rail. The controls card moved next to the Menu button on the desk's near edge.
+- `build.sh` waits up to 10 s for the Quest after the Unity build, which restarts the adb server and made the
+  install step miss a plugged-in headset.
 
 ## Open
 
