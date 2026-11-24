@@ -453,7 +453,9 @@ public class Ui
         }
         wasTouching = touching;
         Draw(hit);
-        return hit != null || pressed != null ? Mathf.Max(length, 0.0001f) : 0;
+        // A ray anywhere on the panel counts, not only on a control, so its line doesn't blink off between buttons
+        bool onPanel = viaRay && Mathf.Abs(at.x) <= Width / 2 + 0.01f && at.y <= 0.01f && at.y >= -height - 0.04f;
+        return hit != null || pressed != null || onPanel ? Mathf.Max(length, 0.0001f) : 0;
     }
 
     static float Ease(float t) => 1 - (1 - t) * (1 - t);

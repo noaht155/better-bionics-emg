@@ -118,6 +118,7 @@ public class App : MonoBehaviour
     // The bare hand's ray, smoothed: hand tracking shakes a few mm, which a 1 m ray turns into cm
     Vector3 rayOrigin, rayDir;
     bool rayWarm;
+    float rayShownUntil;
     // ghost: the cue's sign in front; onFree, onProsthetic: the same on the user's own hands (Noah, 2026-11-24: shown
     // on the hands for the mind to muscle link, done with both hands). The prosthetic hand itself shows the fingers,
     // onProsthetic only appears for a wrist cue, which that hand can't bend
@@ -808,7 +809,9 @@ public class App : MonoBehaviour
             sounds.Play(Sounds.Kind.Click, head.position);
         }
         // The bare hand's ray only shows while it points at a panel, so it isn't always in view
-        bool showRay = pointer.HasValue && (hasF && menu.Visible || length > 0.0001f);
+        // Kept a moment after it leaves a panel, so a shaky hand at the edge doesn't flicker it
+        if (length > 0.0001f) rayShownUntil = Time.time + 0.3f;
+        bool showRay = pointer.HasValue && (hasF && menu.Visible || Time.time < rayShownUntil);
         ray.gameObject.SetActive(showRay);
         if (showRay)
         {

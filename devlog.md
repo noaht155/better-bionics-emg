@@ -2651,6 +2651,8 @@ levels: r 0.995 to 0.999 per session, mean difference 0.005 to 0.013, a clench l
   point, which moves as the fingers close), smoothed like a one euro filter (0.15 s turning slowly, 0.03 s
   swinging); a click when a press goes through and a soft tick when a hold starts, made in code (`Sounds.cs`, the
   audio module and an AudioListener added); the controls card 10 cm past the desk's near edge, tilted to the face.
+- Ray blinking on and off (Noah): it only counted as on a panel over a control, so it vanished between buttons;
+  now anywhere on the panel counts, and it stays 0.3 s after leaving one.
 - `build.sh` waits up to 10 s for the Quest after the Unity build, which restarts the adb server and made the
   install step miss a plugged-in headset.
 
