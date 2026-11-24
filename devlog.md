@@ -2656,6 +2656,8 @@ levels: r 0.995 to 0.999 per session, mean difference 0.005 to 0.013, a clench l
 - Held pinch selecting again and again (Noah): a one-frame drop in the pinch let the press go and a new one start, so
   tabs re-fired. Now one press per pinch or pull: the next only starts after 0.2 s of nothing touching, a press rides
   out drops under 0.1 s, and the trigger counts as pulled past 0.7 and let go under 0.4.
+- Menu close button (Noah: closing with the hand gesture was annoying): an × in the header's top right, the status
+  chip moved left of it; closes at once by fingertip, ray or trigger.
 - `build.sh` waits up to 10 s for the Quest after the Unity build, which restarts the adb server and made the
   install step miss a plugged-in headset.
 

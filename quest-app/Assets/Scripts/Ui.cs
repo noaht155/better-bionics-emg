@@ -76,6 +76,9 @@ public class Ui
     Vector3 grabOffset;
     Quaternion grabTurn;
     public TextMeshPro chip;
+    Element closeButton;
+    // The status chip sits left of the close button
+    const float ChipInset = 0.035f;
     MeshFilter chipDot;
 
     public bool Visible => root.gameObject.activeSelf;
@@ -104,7 +107,15 @@ public class Ui
         word.characterSpacing = 18;
         word.enableVertexGradient = true;
         word.colorGradient = new VertexGradient(Orange, Magenta, Orange, Magenta);
-        chip = Label(body, new Vector3(Width / 2 - Pad, -Pad - 0.008f, 0), "", 0.011f, Muted, mono, TextAlignmentOptions.Right);
+        // Close in the corner, as on a window (Noah, 2026-11-24: closing by the hand gesture again was a chore)
+        var close = new Element { kind = Kind.Button, centre = new Vector2(Width / 2 - Pad - 0.008f, -Pad - 0.008f),
+            size = new Vector2(0.03f, 0.03f), click = Close };
+        close.label = Label(body, new Vector3(close.centre.x, close.centre.y, 0), "×", 0.022f, Muted, inter,
+            TextAlignmentOptions.Center);
+        close.label.rectTransform.sizeDelta = close.size;
+        elements.Add(close);
+        closeButton = close;
+        chip = Label(body, new Vector3(Width / 2 - Pad - ChipInset, -Pad - 0.008f, 0), "", 0.011f, Muted, mono, TextAlignmentOptions.Right);
         chip.characterSpacing = 8;
         chip.rectTransform.pivot = new Vector2(1, 0.5f);
         chipDot = Shape(body, LText, Vector3.zero, Vector2.one * 0.008f, 0.004f, Muted);
@@ -114,7 +125,7 @@ public class Ui
     {
         ui.chip.text = text;
         float w = ui.chip.preferredWidth;
-        ui.chipDot.transform.localPosition = new Vector3(Width / 2 - Pad - w - 0.01f, -Pad - 0.008f, -0.001f);
+        ui.chipDot.transform.localPosition = new Vector3(Width / 2 - Pad - ChipInset - w - 0.01f, -Pad - 0.008f, -0.001f);
         Recolor(ui.chipDot.sharedMesh, dot);
     }
 
@@ -507,6 +518,7 @@ public class Ui
                         Recolor(e.face.sharedMesh, Color.Lerp(face, Accent, e.primary ? 0 : e.press * 0.35f));
                         e.face.transform.localPosition = new Vector3(e.centre.x, e.centre.y, 0.002f * e.press);
                     }
+                    if (e == closeButton) e.label.color = Color.Lerp(Muted, Accent, e.hover);
                     // Tabs (no box) keep the colour Show gives them
                     if (e.edge != null && e.label != null && !e.primary) e.label.color = Ui.Text;
                     break;
