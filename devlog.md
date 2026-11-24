@@ -2653,6 +2653,9 @@ levels: r 0.995 to 0.999 per session, mean difference 0.005 to 0.013, a clench l
   audio module and an AudioListener added); the controls card 10 cm past the desk's near edge, tilted to the face.
 - Ray blinking on and off (Noah): it only counted as on a panel over a control, so it vanished between buttons;
   now anywhere on the panel counts, and it stays 0.3 s after leaving one.
+- Held pinch selecting again and again (Noah): a one-frame drop in the pinch let the press go and a new one start, so
+  tabs re-fired. Now one press per pinch or pull: the next only starts after 0.2 s of nothing touching, a press rides
+  out drops under 0.1 s, and the trigger counts as pulled past 0.7 and let go under 0.4.
 - `build.sh` waits up to 10 s for the Quest after the Unity build, which restarts the adb server and made the
   install step miss a plugged-in headset.
 

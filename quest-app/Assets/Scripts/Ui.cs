@@ -23,6 +23,9 @@ public class Ui
     // A press that has to be held (through a ray) fires after this long, its bar filling under the button meanwhile
     // (Noah, 2026-11-24: pinches set things off by accident)
     public const float HoldS = 1.0f;
+    // One press per pinch or pull: after a press, another only starts once nothing has touched for this long, so a
+    // pinch that flickers for a frame while held doesn't select again (Noah, 2026-11-24)
+    const float ReleaseS = 0.2f;
 
     public static Font InterFont, InterBoldFont, MonoFont;
     static TMP_FontAsset inter, interBold, mono;
@@ -67,7 +70,8 @@ public class Ui
     MeshFilter tabBar;
     float tabFrom, tabTo, tabT = 1, opened = 1;
     bool tabPlaced;
-    bool wasTouching, behind;
+    bool wasTouching, behind, armed = true;
+    float releasedFor;
     float prevZ = -1;
     Vector3 grabOffset;
     Quaternion grabTurn;
@@ -395,8 +399,13 @@ public class Ui
                 var half = e.size / 2 + Vector2.one * 0.004f;
                 if (Mathf.Abs(at.x - c.x) <= half.x && Mathf.Abs(at.y - c.y) <= half.y) hit = e;
             }
-        if (pressed == null && touching && hit != null && (!wasTouching || ray.HasValue) && hit.kind != Kind.Handle)
+        releasedFor = touching ? 0 : releasedFor + Time.deltaTime;
+        if (releasedFor >= ReleaseS) armed = true;
+        // A press rides out a drop shorter than 0.1 s, the pinch flickering, instead of being let go
+        bool still = touching || pressed != null && pressed != handle && releasedFor < 0.1f;
+        if (armed && pressed == null && touching && hit != null && (!wasTouching || ray.HasValue) && hit.kind != Kind.Handle)
         {
+            armed = false;
             pressed = hit;
             bool clickable = hit.kind == Kind.Button || hit.kind == Kind.Toggle;
             // Tabs only switch pages, they never need holding
@@ -413,7 +422,7 @@ public class Ui
         if (pressed != null && !pressed.fired && pressed.kind != Kind.Handle)
         {
             // Sliding off the button or letting go before the time is up cancels it
-            if (touching && hit == pressed)
+            if (still && hit == pressed)
             {
                 pressed.hold += Time.deltaTime;
                 if (pressed.hold >= HoldS)
@@ -449,7 +458,7 @@ public class Ui
                 float v = Mathf.Lerp(pressed.min, pressed.max, t);
                 pressed.set(Mathf.Round(v / pressed.step) * pressed.step);
             }
-            if (!touching) pressed = null;
+            if (!still) pressed = null;
         }
         wasTouching = touching;
         Draw(hit);

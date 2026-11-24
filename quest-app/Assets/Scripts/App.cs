@@ -119,6 +119,7 @@ public class App : MonoBehaviour
     Vector3 rayOrigin, rayDir;
     bool rayWarm;
     float rayShownUntil;
+    bool triggerDown;
     // ghost: the cue's sign in front; onFree, onProsthetic: the same on the user's own hands (Noah, 2026-11-24: shown
     // on the hands for the mind to muscle link, done with both hands). The prosthetic hand itself shows the fingers,
     // onProsthetic only appears for a wrist cue, which that hand can't bend
@@ -784,7 +785,8 @@ public class App : MonoBehaviour
         // Pointing: the controller's ray, or with the bare hand a ray from about the shoulder through the pinch, as
         // the Quest's own menus do, selected by pinching
         Ray? pointer = null;
-        bool down = trigger > 0.7f;
+        // Pulled past 0.7, let go under 0.4, so a trigger held near one level doesn't flicker
+        bool down = triggerDown = triggerDown ? trigger > 0.4f : trigger > 0.7f;
         if (hasF) pointer = new Ray(fp, fq * Vector3.forward);
         else if (tracked.Tracked)
         {
