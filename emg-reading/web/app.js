@@ -139,16 +139,22 @@ function loadSettings() {
   try { tracking = localStorage.getItem(TRACKING_KEY) || "on"; } catch { /* private window */ }
   form.tracking.value = tracking;
   form.tracking.disabled = !config.camera;
+  $("camera-on").checked = config.camera && tracking === "on";
+  $("camera-on").disabled = !config.camera;
   if (config.camera && tracking === "off") setTracking(false);
   showProtocolFields();
   updateDuration();
 }
+
+// The System bar's Camera switch is the same as Hand tracking: off stops the camera so another program can use it
+$("camera-on").addEventListener("change", (e) => setTracking(e.target.checked));
 
 // Refused during a session: the select goes back to what the server has
 function setTracking(on) {
   postShowing("/api/tracking", { on }, "setup-error").then((r) => {
     const value = (r ? r.on : !on) ? "on" : "off";
     $("setup").tracking.value = value;
+    $("camera-on").checked = value === "on";
     try { localStorage.setItem(TRACKING_KEY, value); } catch { /* private window */ }
   });
 }

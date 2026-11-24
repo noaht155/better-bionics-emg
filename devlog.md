@@ -2693,6 +2693,9 @@ levels: r 0.995 to 0.999 per session, mean difference 0.005 to 0.013, a clench l
 - Training view (Noah: the card blocked the 3D hand, the arm snapped in and out, the overlay on the white hand
   confused): the cue card sits on the free hand's side, 42 cm out, turned 28 degrees to the seat; no ghost on the
   prosthetic hand for the wrist cues, the ghost in front shows them; its forearm grows in and out over 0.3 s.
+- Camera for OBS (Noah): a Camera switch in the System bar, the same as the Record tab's Hand tracking (off stops
+  the camera thread and releases it). Checked: with tracking off a second program reads frames from camera 0, with
+  it on it can't.
 
 ## Open
 
