@@ -2610,6 +2610,15 @@ levels: r 0.995 to 0.999 per session, mean difference 0.005 to 0.013, a clench l
 - Quest: Quit on the Play page (press twice within 3 s), closes the app fully like the Quest's own Quit. Found why it
   has to be closed: paused (headset off), Unity stops `Update` but the sim and link threads keep running at 60 Hz.
   Freezing them on pause and quitting after a while off are not built yet.
+- Quest "Laptop not connected" (Noah): Windows didn't see the Quest at all at the time (its USB devices listed as not
+  present), so cable or port, not the link code. Replugged: `adb reverse` mapped and the app's websocket open. The
+  headset still runs the 2026-11-20 build, so nothing since is on it.
+- Quest menu (Noah: show the controls, animate it): a Help page (opening the menu, touching and pointing, moving it,
+  the hands, quitting), opened once on the first start; "or B / Y" under the desk's Menu button. Toggle pills slide
+  with the pink fill growing behind the knob, the tab underline slides to the tab picked, the panel grows in from 92 %
+  when it opens; all 140 to 160 ms, under the 200 ms motion rule.
+- Passthrough shows black on the 2026-11-20 build (Noah). The headset log shows the app's passthrough client started
+  and paused with the app, so the passthrough layer runs and the app's frame covers it. Not found yet.
 
 ## Open
 

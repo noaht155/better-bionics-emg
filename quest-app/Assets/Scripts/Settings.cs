@@ -21,6 +21,8 @@ public class Settings
     public Vector3 deskPos;
     public float deskYaw;
     public bool passthrough;
+    // The menu opens on Help the first time the app starts
+    public bool helpSeen;
 
     public static Settings Load()
     {
@@ -33,6 +35,7 @@ public class Settings
         s.deskPos = LoadVector("desk_pos", Vector3.zero);
         s.deskYaw = PlayerPrefs.GetFloat("desk_yaw", 0);
         s.passthrough = PlayerPrefs.GetInt("passthrough", 0) == 1;
+        s.helpSeen = PlayerPrefs.GetInt("help_seen", 0) == 1;
         return s;
     }
 
@@ -46,6 +49,7 @@ public class Settings
         SaveVector("desk_pos", deskPos);
         PlayerPrefs.SetFloat("desk_yaw", deskYaw);
         PlayerPrefs.SetInt("passthrough", passthrough ? 1 : 0);
+        PlayerPrefs.SetInt("help_seen", helpSeen ? 1 : 0);
         PlayerPrefs.Save();
     }
 

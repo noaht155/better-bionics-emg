@@ -30,6 +30,7 @@ public class App : MonoBehaviour
     const float ReachShowM = 0.05f, ReachHideM = 0.03f;
     // Quit takes a second press within this long, so a stray touch doesn't close the app
     const float QuitConfirmS = 3;
+    const float HelpAfterS = 1.5f;
 
     [Serializable]
     class Meta
@@ -114,6 +115,7 @@ public class App : MonoBehaviour
     Link link;
     Ui menu, card, dock;
     Ghost ghost, reach;
+    Ui.Page help;
     TrackedHand tracked;
     bool prevMenuGesture;
     Link.Params current;
@@ -279,6 +281,23 @@ public class App : MonoBehaviour
         menu.Buttons(setup, ("Reset the hand", ResetOffset));
         menu.Section(setup, "Free hand");
         freeText = menu.Paragraph(setup, "", 0.013f, true, 2);
+
+        help = menu.AddPage("Help");
+        menu.Section(help, "This menu");
+        menu.Paragraph(help, "Open and close it with B or Y on the free hand's controller, the Menu button at the " +
+                             "desk's corner, or with your bare hand: palm towards your face, thumb on the middle fingertip.",
+            0.013f, true, 4);
+        menu.Paragraph(help, "Touch it with a fingertip, or point the controller and pull the trigger. Pinch or grip " +
+                             "the bar under it to move it.", 0.013f, true, 3);
+        menu.Section(help, "Hands");
+        menu.Paragraph(help, "The prosthetic hand sits on the controller strapped to that arm and its fingers follow " +
+                           "the EMG control on the laptop. A grey hand shows where your arm is when the desk or an " +
+                           "object holds the hand back.", 0.013f, true, 4);
+        menu.Paragraph(help, "The free hand is your real hand, or a controller in it: grip and trigger close it to pick " +
+                           "things up.", 0.013f, true, 3);
+        menu.Section(help, "Leaving");
+        menu.Paragraph(help, "Quit is at the bottom of Play. Taking the headset off only pauses the app, it keeps " +
+                             "using the battery.", 0.013f, true, 3);
         menu.Show(play);
         menu.Close();
     }
@@ -308,6 +327,7 @@ public class App : MonoBehaviour
         dock = new Ui(uiMaterial, false);
         var page = dock.AddPage("");
         dock.Buttons(page, ("Menu", ToggleMenu));
+        dock.Paragraph(page, "or B / Y", 0.012f);
         dock.Show(page);
         dock.root.SetParent(deskRoot, false);
         dock.root.localScale = Vector3.one * 0.45f;
@@ -611,6 +631,14 @@ public class App : MonoBehaviour
 
     void Update()
     {
+        // Once, on the first start: the controls, in front of the user once the head is tracked
+        if (!settings.helpSeen && Time.time > HelpAfterS)
+        {
+            menu.Show(help);
+            menu.Open(head);
+            settings.helpSeen = true;
+            settings.Save();
+        }
         if (!floorSet)
         {
             SubsystemManager.GetSubsystems(inputs);

@@ -17,6 +17,9 @@ public class Ui
         Good = SimView.Hex(0x3ddc84), Warn = SimView.Hex(0xffc233), Bad = SimView.Hex(0xff3b3b);
     // Layers, back to front
     const int LBack = 0, LEdge = 1, LControl = 2, LFill = 3, LKnob = 4, LText = 5;
+    // Motion only where something changes state, all under 200 ms as on the web app: a toggle's pill slides, the
+    // tab underline slides to the tab picked, the panel grows in from 92 % when it opens
+    const float SlideS = 0.14f, OpenS = 0.16f;
 
     public static Font InterFont, InterBoldFont, MonoFont;
     static TMP_FontAsset inter, interBold, mono;
@@ -36,7 +39,7 @@ public class Ui
         public bool primary;
         public MeshFilter face, edge, fill, knob;
         public TextMeshPro label;
-        public float hover, press;
+        public float hover, press, slide = -1;
     }
 
     public class Page
@@ -57,6 +60,9 @@ public class Ui
     Element pressed, handle;
     float height;
     float tabsY;
+    MeshFilter tabBar;
+    float tabFrom, tabTo, tabT = 1, opened = 1;
+    bool tabPlaced;
     bool wasTouching, behind;
     float prevZ = -1;
     Vector3 grabOffset;
@@ -115,8 +121,8 @@ public class Ui
         var tab = new Element { kind = Kind.Button, size = new Vector2(0.06f, 0.03f), click = () => Show(page) };
         tab.label = Label(body, Vector3.zero, title.ToUpperInvariant(), 0.011f, Muted, mono, TextAlignmentOptions.Center);
         tab.label.characterSpacing = 10;
-        tab.fill = Shape(body, LFill, Vector3.zero, new Vector2(0.05f, 0.0025f), 0.001f, Accent, true);
         elements.Add(tab);
+        if (tabBar == null) tabBar = Shape(body, LFill, Vector3.zero, new Vector2(0.05f, 0.0025f), 0.001f, Accent, true);
         tabs.Add((tab, page));
         float w = (Width - 2 * Pad) / tabs.Count;
         for (int i = 0; i < tabs.Count; i++)
@@ -126,9 +132,9 @@ public class Ui
             t.size = new Vector2(w, 0.03f);
             t.label.transform.localPosition = new Vector3(t.centre.x, t.centre.y, -0.002f);
             t.label.rectTransform.sizeDelta = t.size;
-            t.fill.transform.localPosition = new Vector3(t.centre.x, tabsY - 0.03f, -0.001f);
-            t.fill.sharedMesh = GradientBar(new Vector2(w * 0.7f, 0.0025f));
         }
+
+        tabBar.sharedMesh = GradientBar(new Vector2(w * 0.7f, 0.0025f));
         return page;
     }
 
@@ -139,7 +145,12 @@ public class Ui
         foreach (var (tab, p) in tabs)
         {
             tab.label.color = p == page ? Text : Muted;
-            tab.fill.gameObject.SetActive(p == page);
+            // The first page shown puts the underline there at once, later ones slide it over
+            if (p != page || tabBar == null) continue;
+            tabFrom = tabPlaced ? Mathf.Lerp(tabFrom, tabTo, Ease(tabT)) : tab.centre.x;
+            tabTo = tab.centre.x;
+            tabT = tabPlaced ? 0 : 1;
+            tabPlaced = true;
         }
         Layout();
     }
@@ -316,6 +327,7 @@ public class Ui
         root.position = head.position + forward * 0.42f + Vector3.down * 0.18f;
         root.rotation = Quaternion.LookRotation(forward, Vector3.up) * Quaternion.Euler(25, 0, 0);
         root.gameObject.SetActive(true);
+        opened = 0;
     }
 
     public void Close() => root.gameObject.SetActive(false);
@@ -402,9 +414,18 @@ public class Ui
         return hit != null || pressed != null ? Mathf.Max(length, 0.0001f) : 0;
     }
 
+    static float Ease(float t) => 1 - (1 - t) * (1 - t);
+
     void Draw(Element hit)
     {
         float dt = Time.deltaTime;
+        opened = Mathf.MoveTowards(opened, 1, dt / OpenS);
+        body.localScale = Vector3.one * Mathf.Lerp(0.92f, 1, Ease(opened));
+        if (tabBar != null)
+        {
+            tabT = Mathf.MoveTowards(tabT, 1, dt / SlideS);
+            tabBar.transform.localPosition = new Vector3(Mathf.Lerp(tabFrom, tabTo, Ease(tabT)), tabsY - 0.03f, -0.001f);
+        }
         foreach (var e in elements)
         {
             if (e.page != null && e.page != shown) continue;
@@ -420,16 +441,25 @@ public class Ui
                         Recolor(e.face.sharedMesh, Color.Lerp(face, Accent, e.primary ? 0 : e.press * 0.35f));
                         e.face.transform.localPosition = new Vector3(e.centre.x, e.centre.y, 0.002f * e.press);
                     }
-                    if (e.fill == null && e.label != null && !e.primary) e.label.color = Ui.Text;
-                    else if (e.fill != null) e.label.color = Color.Lerp(e.label.color, e.fill.gameObject.activeSelf ? Ui.Text : Muted, 1);
+                    // Tabs (no box) keep the colour Show gives them
+                    if (e.edge != null && e.label != null && !e.primary) e.label.color = Ui.Text;
                     break;
                 case Kind.Toggle:
                 {
-                    bool on = e.on();
-                    e.fill.gameObject.SetActive(on);
+                    float target = e.on() ? 1 : 0, was = e.slide;
+                    e.slide = e.slide < 0 ? target : Mathf.MoveTowards(e.slide, target, dt / SlideS);
                     Recolor(e.face.sharedMesh, Color.Lerp(Raised, LineStrong, e.hover));
-                    float x = e.centre.x + (on ? 1 : -1) * (e.size.x / 2 - 0.011f);
+                    float s = Ease(e.slide), travel = e.size.x / 2 - 0.011f;
+                    float x = e.centre.x + Mathf.Lerp(-travel, travel, s);
                     e.knob.transform.localPosition = new Vector3(x, e.centre.y, -0.001f);
+                    // The pink fill grows behind the knob from the left as it slides on
+                    e.fill.gameObject.SetActive(s > 0.01f);
+                    if (e.slide != was || was < 0)
+                    {
+                        float left = e.centre.x - e.size.x / 2, w = Mathf.Lerp(e.size.y, e.size.x, s);
+                        e.fill.sharedMesh = GradientBar(new Vector2(w, e.size.y), e.size.y / 2);
+                        e.fill.transform.localPosition = new Vector3(left + w / 2, e.centre.y, -0.0005f);
+                    }
                     break;
                 }
                 case Kind.Slider:
