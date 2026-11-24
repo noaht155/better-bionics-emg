@@ -58,6 +58,15 @@ public class Link
         public Record record;
         public Haptics haptics;
         public Train train;
+        public Control control;
+    }
+
+    // While control runs, what the board behind the desk shows (tools.Contact._quest_control)
+    [Serializable]
+    public class Control
+    {
+        public string label, state, grip;
+        public float prob;
     }
 
     // Train in VR: the quick calibration on the last session (app.headset_train_state)

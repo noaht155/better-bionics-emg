@@ -113,7 +113,12 @@ public class App : MonoBehaviour
     Sim sim;
     SimView view;
     Link link;
-    Ui menu, card, dock, controls;
+    Ui menu, card, dock, controls, board;
+    // The board behind the desk while control runs: the model's guess, the control layer and the effort, as the
+    // Control tab shows them (Noah, 2026-11-24)
+    TextMeshPro boardTitle, boardBody, boardProb;
+    Action<float> boardEffort;
+    Link.Frame controlFrame;
     readonly Sounds sounds = new Sounds();
     // The bare hand's ray, smoothed: hand tracking shakes a few mm, which a 1 m ray turns into cm
     Vector3 rayOrigin, rayDir;
@@ -334,6 +339,18 @@ public class App : MonoBehaviour
         card.Show(page);
         card.root.SetParent(deskRoot, false);
         card.Close();
+
+        board = new Ui(uiMaterial, false);
+        var shown = board.AddPage("");
+        board.Paragraph(shown, "CONTROL   ·   PREDICTED SIGN", 0.011f, true);
+        boardTitle = board.Paragraph(shown, "", 0.028f, false);
+        boardProb = board.Paragraph(shown, "", 0.014f, true);
+        boardBody = board.Paragraph(shown, "", 0.014f, true, 2);
+        board.Paragraph(shown, "Effort", 0.011f, true);
+        boardEffort = board.Progress(shown);
+        board.Show(shown);
+        board.root.SetParent(deskRoot, false);
+        board.Close();
     }
 
     void BuildDock()
@@ -391,6 +408,8 @@ public class App : MonoBehaviour
         card.root.localPosition = new Vector3(0, 0.5f, -meta.desk_centre_y + meta.desk_half[1] + 0.12f);
         card.root.localRotation = Quaternion.Euler(-5, 0, 0);
         card.root.localScale = Vector3.one * 1.5f;
+        board.root.SetLocalPositionAndRotation(card.root.localPosition, card.root.localRotation);
+        board.root.localScale = card.root.localScale;
         float x = (FreeIsRight ? 1 : -1) * (meta.desk_half[0] - 0.12f);
         dock.root.localPosition = new Vector3(x, 0.05f, -meta.desk_centre_y - meta.desk_half[1] + 0.05f);
         dock.root.localRotation = Quaternion.Euler(50, 0, 0);
@@ -887,6 +906,7 @@ public class App : MonoBehaviour
             sim.SetInput(Sim.Prosthetic, meta.rest, 0, false, false);
         }
         record = frame?.record;
+        controlFrame = frame;
 
         if (movingDesk && (tracked.Tracked || hasF)) DragDesk(grabber.position, grabber.rotation, fist && !busy);
         FreeHandInput(grip, trigger, busy || movingDesk || adjustDragging);
@@ -964,12 +984,32 @@ public class App : MonoBehaviour
         sim.SetInput(Sim.Free, freeAngles, Mathf.Max(grip, trigger), false, grabbing);
     }
 
+    static string Pretty(string name) => string.IsNullOrEmpty(name) ? "" : char.ToUpper(name[0]) + name.Substring(1).Replace('_', ' ');
+
+    void ShowControl(Link.Frame f)
+    {
+        bool on = f != null && f.control != null;
+        if (on != board.Visible)
+        {
+            if (on) board.root.gameObject.SetActive(true);
+            else board.Close();
+        }
+        if (!on) return;
+        var c = f.control;
+        boardTitle.text = string.IsNullOrEmpty(c.label) ? "..." : Pretty(c.label);
+        boardProb.text = c.prob > 0 ? $"{c.prob * 100:0} % sure" : "";
+        boardBody.text = (c.state == "active" ? $"Holding {Pretty(c.grip)}" : c.state == "blend" ? "Blending" : "Open, waiting for a sign")
+                         + (f.locked ? "   ·   locked" : "");
+        boardEffort(Mathf.Clamp01(f.effort));
+    }
+
     // The cue card and ghost hand while the laptop records
     bool Training => record != null && record.running && record.has_target;
 
     void ShowRecording()
     {
         bool running = record != null && record.running;
+        ShowControl(!running && controlFrame != null && controlFrame.driven ? controlFrame : null);
         if (running != card.Visible)
         {
             if (running) card.root.gameObject.SetActive(true);

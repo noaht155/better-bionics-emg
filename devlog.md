@@ -2699,6 +2699,10 @@ levels: r 0.995 to 0.999 per session, mean difference 0.005 to 0.013, a clench l
 - Cue card behind the desk (Noah: like the website, the sign and what comes next where it doesn't cover the hands):
   1.5 times larger, 12 cm past the desk's far edge and 50 cm up; the ghost hand moved out to 45 cm beside it.
   Its buttons are out of reach, the ray works on them.
+- Control board in VR (Noah: show the prediction as the website does): while control runs and nothing records, a board
+  in the cue card's place behind the desk shows the predicted sign, how sure the model is, the control layer's state
+  (open, blending, holding a grip, locked) and an effort bar. Sent with every frame (`Contact._quest_control`).
+  Needs app.py restarted.
 
 ## Open
 

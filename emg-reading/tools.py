@@ -929,7 +929,18 @@ class Contact(Tool):
             except ImportError:
                 params = {}
         return {"angles": [float(a) for a in angles], "effort": float(effort_), "locked": bool(locked),
-                "driven": driven, "params": params, "params_seq": self.params_seq, "commands": list(self._commands)}
+                "driven": driven, "params": params, "params_seq": self.params_seq, "commands": list(self._commands),
+                "control": self._quest_control(driven)}
+
+    def _quest_control(self, driven):
+        """What the headset's board shows while control runs, as the Control tab does: the model's guess and how sure
+        it is, the control layer's state and grip. No nulls, the headset's JSON reader can't take them."""
+        p, c = self.predictor.state, self.control.state
+        probs = p.get("probs") or {}
+        values = list(probs.values()) if isinstance(probs, dict) else list(probs)
+        prob = float(max(values)) if driven and values else 0.0
+        return {"label": str(p.get("label") or "") if driven else "", "prob": prob,
+                "state": str(c.get("state") or "") if driven else "", "grip": str(c.get("grip") or "") if driven else ""}
 
     def quest_command(self, kind, arg=""):
         """Queues a command for the headset; the newest QUEST_COMMANDS go out with every frame."""
