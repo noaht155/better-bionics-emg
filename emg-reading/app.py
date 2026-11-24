@@ -1582,6 +1582,23 @@ def make_app(recorder, band, camera, tools, lan=True, serving=False):
     # card runs it. seen: the job was seen running, so its result is this calibration's
     headset_cal = {"session": None, "job": None, "seen": False, "started": 0.0, "error": ""}
 
+    def headset_device():
+        """The headset has no start page: it takes this computer's setup from the newest session recorded here, or
+        the only setup this computer has."""
+        here = [x for x in devices.setups() if devices.here(x)]
+        for path in sorted(DATA_DIR.glob("*/session.json"), reverse=True):
+            try:
+                used = (json.loads(path.read_text()).get("setup") or {}).get("id")
+            except (OSError, ValueError):
+                continue
+            if any(x["id"] == used for x in here):
+                select_device(DeviceChoice(id=used))
+                return
+        if len(here) == 1:
+            select_device(DeviceChoice(id=here[0]["id"]))
+        else:
+            raise ValueError("pick the device on the start page first")
+
     def headset_train(action, name=""):
         """calibrate: the newest base network on the last quick session. control: the control layer on name, one of
         headset_calibrations, or else the network that calibration saved. Errors go to the headset's Train
@@ -1634,12 +1651,14 @@ def make_app(recorder, band, camera, tools, lan=True, serving=False):
                         if action == "start":
                             if tools.calibration.state["running"]:
                                 raise ValueError("wait for the calibration to finish")
+                            if recorder.setup is None:
+                                headset_device()
                             recorder.start_session(headset_session_settings(bool(record.get("quick"))))
                         elif action in ("continue", "pause", "bad", "stop"):
                             recorder.command(action)
                         record_error[0] = ""
-                    except ValueError as e:
-                        record_error[0] = str(e)
+                    except (ValueError, HTTPException) as e:
+                        record_error[0] = str(getattr(e, "detail", e))
                 train = msg.get("train")
                 if isinstance(train, dict) and train.get("action") in ("calibrate", "control"):
                     await asyncio.to_thread(headset_train, train["action"], str(train.get("name") or ""))
