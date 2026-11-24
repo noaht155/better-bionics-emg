@@ -114,10 +114,12 @@ public class App : MonoBehaviour
     SimView view;
     Link link;
     Ui menu, card, dock, controls, board;
-    // The board behind the desk while control runs: the model's guess, the control layer and the effort, as the
-    // Control tab shows them (Noah, 2026-11-24)
-    TextMeshPro boardTitle, boardBody, boardProb;
-    Action<float> boardEffort;
+    // The board behind the desk while control runs, the Control tab's model output and readout (Noah, 2026-11-24):
+    // a bar per class on the left, the grip line and the numbers on the right. Rebuilt when the classes change
+    TextMeshPro boardTitle, boardSub;
+    TextMeshPro[] boardRows, boardNumbers;
+    Action<float>[] boardBars;
+    string boardClasses;
     Link.Frame controlFrame;
     readonly Sounds sounds = new Sounds();
     // The bare hand's ray, smoothed: hand tracking shakes a few mm, which a 1 m ray turns into cm
@@ -339,18 +341,41 @@ public class App : MonoBehaviour
         card.Show(page);
         card.root.SetParent(deskRoot, false);
         card.Close();
+        BuildBoard(new string[0]);
+    }
 
-        board = new Ui(uiMaterial, false);
-        var shown = board.AddPage("");
-        board.Paragraph(shown, "CONTROL   ·   PREDICTED SIGN", 0.011f, true);
-        boardTitle = board.Paragraph(shown, "", 0.028f, false);
-        boardProb = board.Paragraph(shown, "", 0.014f, true);
-        boardBody = board.Paragraph(shown, "", 0.014f, true, 2);
-        board.Paragraph(shown, "Effort", 0.011f, true);
-        boardEffort = board.Progress(shown);
-        board.Show(shown);
+    void BuildBoard(string[] classes)
+    {
+        bool placed = board != null;
+        if (placed) Destroy(board.root.gameObject);
+        boardClasses = string.Join(",", classes);
+        // Two columns: the second section always starts the right one
+        board = new Ui(uiMaterial, false, 0.001f);
+        var page = board.AddPage("");
+        board.Section(page, "Model output");
+        boardRows = new TextMeshPro[classes.Length];
+        boardBars = new Action<float>[classes.Length];
+        for (int i = 0; i < classes.Length; i++)
+        {
+            boardRows[i] = board.Paragraph(page, "", 0.014f, true);
+            boardBars[i] = board.Progress(page);
+        }
+        board.Section(page, "Control");
+        boardTitle = board.Paragraph(page, "", 0.03f, false);
+        boardSub = board.Paragraph(page, "", 0.012f, true);
+        var top = board.Readouts(page, "effort", "closure", "starts");
+        var bottom = board.Readouts(page, "releases", "open hand picked", "distance");
+        boardNumbers = new[] { top[0], top[1], top[2], bottom[0], bottom[1], bottom[2] };
+        board.Show(page);
         board.root.SetParent(deskRoot, false);
+        if (placed) PlaceBoard();
         board.Close();
+    }
+
+    void PlaceBoard()
+    {
+        board.root.SetLocalPositionAndRotation(card.root.localPosition, card.root.localRotation);
+        board.root.localScale = card.root.localScale;
     }
 
     void BuildDock()
@@ -408,8 +433,7 @@ public class App : MonoBehaviour
         card.root.localPosition = new Vector3(0, 0.5f, -meta.desk_centre_y + meta.desk_half[1] + 0.12f);
         card.root.localRotation = Quaternion.Euler(-5, 0, 0);
         card.root.localScale = Vector3.one * 1.5f;
-        board.root.SetLocalPositionAndRotation(card.root.localPosition, card.root.localRotation);
-        board.root.localScale = card.root.localScale;
+        PlaceBoard();
         float x = (FreeIsRight ? 1 : -1) * (meta.desk_half[0] - 0.12f);
         dock.root.localPosition = new Vector3(x, 0.05f, -meta.desk_centre_y - meta.desk_half[1] + 0.05f);
         dock.root.localRotation = Quaternion.Euler(50, 0, 0);
@@ -984,23 +1008,33 @@ public class App : MonoBehaviour
         sim.SetInput(Sim.Free, freeAngles, Mathf.Max(grip, trigger), false, grabbing);
     }
 
-    static string Pretty(string name) => string.IsNullOrEmpty(name) ? "" : char.ToUpper(name[0]) + name.Substring(1).Replace('_', ' ');
-
-    void ShowControl(Link.Frame f)
+        void ShowControl(Link.Frame f)
     {
-        bool on = f != null && f.control != null;
+        var c = f?.control;
+        bool on = c != null && c.classes != null && c.classes.Length > 0;
+        if (on && string.Join(",", c.classes) != boardClasses) BuildBoard(c.classes);
         if (on != board.Visible)
         {
             if (on) board.root.gameObject.SetActive(true);
             else board.Close();
         }
         if (!on) return;
-        var c = f.control;
-        boardTitle.text = string.IsNullOrEmpty(c.label) ? "..." : Pretty(c.label);
-        boardProb.text = c.prob > 0 ? $"{c.prob * 100:0} % sure" : "";
-        boardBody.text = (c.state == "active" ? $"Holding {Pretty(c.grip)}" : c.state == "blend" ? "Blending" : "Open, waiting for a sign")
-                         + (f.locked ? "   ·   locked" : "");
-        boardEffort(Mathf.Clamp01(f.effort));
+        for (int i = 0; i < boardRows.Length; i++)
+        {
+            float p = c.probs != null && i < c.probs.Length ? c.probs[i] : 0;
+            // Over the threshold in white, as the Control tab's line marks it
+            boardRows[i].text = $"{c.classes[i]}   {p * 100:0} %";
+            boardRows[i].color = p >= c.threshold ? Ui.Text : Ui.Muted;
+            boardBars[i](p);
+        }
+        boardTitle.text = c.title;
+        boardSub.text = c.sub;
+        boardNumbers[0].text = $"{c.effort * 100:0} %";
+        boardNumbers[1].text = $"{c.closure * 100:0} %";
+        boardNumbers[2].text = c.starts.ToString();
+        boardNumbers[3].text = c.releases.ToString();
+        boardNumbers[4].text = c.opens.ToString();
+        boardNumbers[5].text = c.distance;
     }
 
     // The cue card and ghost hand while the laptop records

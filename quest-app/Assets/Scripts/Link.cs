@@ -65,8 +65,11 @@ public class Link
     [Serializable]
     public class Control
     {
-        public string label, state, grip;
-        public float prob;
+        public string[] classes;
+        public float[] probs;
+        public float threshold, effort, closure;
+        public string title, sub, distance;
+        public int starts, releases, opens;
     }
 
     // Train in VR: the quick calibration on the last session (app.headset_train_state)

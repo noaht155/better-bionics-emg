@@ -933,14 +933,30 @@ class Contact(Tool):
                 "control": self._quest_control(driven)}
 
     def _quest_control(self, driven):
-        """What the headset's board shows while control runs, as the Control tab does: the model's guess and how sure
-        it is, the control layer's state and grip. No nulls, the headset's JSON reader can't take them."""
+        """The Control tab's readout for the headset's board while control runs: the model output (a bar per class and
+        the threshold), the title line and the numbers under it. No nulls, the headset's JSON reader can't take them."""
+        if not driven:
+            return {"classes": [], "probs": []}
         p, c = self.predictor.state, self.control.state
+        classes = list(p.get("classes") or [])
         probs = p.get("probs") or {}
-        values = list(probs.values()) if isinstance(probs, dict) else list(probs)
-        prob = float(max(values)) if driven and values else 0.0
-        return {"label": str(p.get("label") or "") if driven else "", "prob": prob,
-                "state": str(c.get("state") or "") if driven else "", "grip": str(c.get("grip") or "") if driven else ""}
+        probs = [float(probs.get(k, 0.0)) for k in classes] if isinstance(probs, dict) else [float(v) for v in probs]
+        nice = lambda name: (name or "").replace("_", " ")
+        closure = float(c.get("closure") or 0.0)
+        if c.get("state") == "active":
+            title = f"{nice(c.get('grip'))} {round(100 * closure)} %"
+            sub = "position locked, only unlock works" if c.get("locked") else "locked, closure"
+        elif c.get("locked"):
+            title, sub = "relaxed", "locked, no grip is picked, only unlock works"
+        elif c.get("state") == "blend":
+            title, sub = f"{nice(c.get('grip')) or 'relaxed'} {round(100 * closure)} %", "blending, closest grip and closure"
+        else:
+            title, sub = "relaxed", "waiting for a grip"
+        distance = c.get("distance")
+        return {"classes": [nice(k) for k in classes], "probs": probs, "threshold": float(p.get("threshold") or 0.0),
+                "title": title, "sub": sub, "effort": float(c.get("effort") or 0.0), "closure": closure,
+                "starts": int(c.get("starts") or 0), "releases": int(c.get("releases") or 0),
+                "opens": int(c.get("opens") or 0), "distance": "n/a" if distance is None else f"{distance:.1f}"}
 
     def quest_command(self, kind, arg=""):
         """Queues a command for the headset; the newest QUEST_COMMANDS go out with every frame."""
