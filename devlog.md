@@ -2677,11 +2677,11 @@ Now: 3D contact
      with a model or Simulate running, settings and spawns both ways, sim speed over 1x. Still to do from the old
      step 4: ghost hand when the desk holds the hand back, a cap on the weld pull, a speed limit on the hand target. Mac needs Android platform-tools for the link.
   5. Training from VR (Noah, 2026-11-20): recording F from the headset built 2026-11-20 (round 3), calibrating and
-     starting control from it built 2026-11-24, both to try. Then the live predicted hand as a new protocol beside F.
+     starting control from it built 2026-11-24, both to try. No live predicted hand protocol beside F (Noah,
+     2026-11-24): dropped.
   Desktop app (Noah, 2026-11-20): either a browser page or its own window is fine; a window (pywebview over the
   same pages) can come later without changing the pages.
-  Uses: training cues as a 3D hand in first person, later the live predicted hand (a new protocol beside F, never a
-  change to F), and the contact sim with a Touch controller strapped to the socket placing the hand, the other
+  Uses: training cues as a 3D hand in first person and the contact sim with a Touch controller strapped to the socket placing the hand, the other
   controller for everything else. The laptop sees the view by casting first, its own spectator view later.
 
 Now: band
