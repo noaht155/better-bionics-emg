@@ -2672,6 +2672,8 @@ levels: r 0.995 to 0.999 per session, mean difference 0.005 to 0.013, a clench l
   from the wrist held out flat, with a pinch or trigger pull away from the panels.
 - Free hand overlay (Noah: incredibly confusing): no ghost on the free hand any more, the sign shows on the
   prosthetic hand and the ghost in front. The forearm already only shows for the two wrist cues.
+- Checked in the headset (Noah): passthrough shows the room (the composition layers fix worked), the bare-hand ray
+  works, the menu close button works, the room looks okay.
 
 ## Open
 
@@ -2760,12 +2762,10 @@ Now: haptics
 - Control haptics on the motors: tune the four surface profiles until slippery, smooth, normal and rough feel
   different, then on the headset (rebuild with `build.sh`). Record the ones that feel right with the surface's
   Record button. The rail on the desk has all four side by side.
-- Quest (all of 2026-11-24 is on the headset, troubleshooting goes on in a new session): check passthrough
-  (composition layers fix), the steady ray and one selection per pinch, the close button, sounds, the room, the
-  training hands and wrist bends (restart `app.py` first, the wrist angles come from it), touch haptics and the grip
-  squeeze. While Noah wears the headset, the log (`adb logcat`) and a screenshot (metacam TAKE_SCREENSHOT, pulled
-  from /sdcard/Oculus/Screenshots) can be read without taking it off. Not built: freezing the sim and link threads
-  on pause and quitting after a while off.
+- Quest: still to check in the headset: the training hands and wrist bends, the cue card distance, a ray hold
+  pausing a recording, desk height by hand, touch haptics and the grip squeeze. While Noah wears the headset, the log
+  (`adb logcat`) and a screenshot (metacam TAKE_SCREENSHOT, pulled from /sdcard/Oculus/Screenshots) can be read
+  without taking it off. Not built: freezing the sim and link threads on pause and quitting after a while off.
 - Motor pickup: run `diagnostics/motor_pickup.py` with the motor band below the pads, relaxed and with a steady
   clench.
 - Haptics: decide on LRAs vs coin motors. LRAs need an AC drive at their resonance (about 170 to 235 Hz), which is
