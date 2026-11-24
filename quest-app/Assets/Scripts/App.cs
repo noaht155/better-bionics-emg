@@ -386,11 +386,11 @@ public class App : MonoBehaviour
     // At the desk's near corner on the free hand's side, tilted up to be read and touched
     void PlaceDock()
     {
-        // The cue card on the free hand's side, clear of the prosthetic hand and the ghost (Noah, 2026-11-24: it
-        // covered the hand), turned in to face the seat
-        float side = FreeIsRight ? 1 : -1;
-        card.root.localPosition = new Vector3(side * 0.42f, 0.36f, 0.1f);
-        card.root.localRotation = Quaternion.Euler(-12, side * 28, 0);
+        // The cue card as a big board behind the desk's far edge, clear of the hands (Noah, 2026-11-24: over the desk
+        // it covered the hand), with the ghost beside it
+        card.root.localPosition = new Vector3(0, 0.5f, -meta.desk_centre_y + meta.desk_half[1] + 0.12f);
+        card.root.localRotation = Quaternion.Euler(-5, 0, 0);
+        card.root.localScale = Vector3.one * 1.5f;
         float x = (FreeIsRight ? 1 : -1) * (meta.desk_half[0] - 0.12f);
         dock.root.localPosition = new Vector3(x, 0.05f, -meta.desk_centre_y - meta.desk_half[1] + 0.05f);
         dock.root.localRotation = Quaternion.Euler(50, 0, 0);
@@ -403,7 +403,7 @@ public class App : MonoBehaviour
         ghost.Root.SetParent(deskRoot, false);
         // Upright beside the card on the prosthetic side, the back of the hand towards the user, like looking at
         // your own raised hand
-        ghost.Root.localPosition = new Vector3((settings.prostheticLeft ? -1 : 1) * 0.33f, 0.3f, 0.5f);
+        ghost.Root.localPosition = new Vector3((settings.prostheticLeft ? -1 : 1) * 0.45f, 0.3f, 0.5f);
         ghost.Root.localRotation = Quaternion.Euler(90, 0, 0);
         ghost.Root.localScale = Vector3.one * 1.2f;
         ghost.Root.gameObject.SetActive(false);

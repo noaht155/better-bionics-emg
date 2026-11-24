@@ -2696,6 +2696,9 @@ levels: r 0.995 to 0.999 per session, mean difference 0.005 to 0.013, a clench l
 - Camera for OBS (Noah): a Camera switch in the System bar, the same as the Record tab's Hand tracking (off stops
   the camera thread and releases it). Checked: with tracking off a second program reads frames from camera 0, with
   it on it can't.
+- Cue card behind the desk (Noah: like the website, the sign and what comes next where it doesn't cover the hands):
+  1.5 times larger, 12 cm past the desk's far edge and 50 cm up; the ghost hand moved out to 45 cm beside it.
+  Its buttons are out of reach, the ray works on them.
 
 ## Open
 
