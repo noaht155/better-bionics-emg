@@ -71,7 +71,7 @@ public class Ui
     float tabFrom, tabTo, tabT = 1, opened = 1;
     bool tabPlaced;
     bool wasTouching, behind, armed = true;
-    float releasedFor;
+    float releasedFor, offFor;
     float prevZ = -1;
     Vector3 grabOffset;
     Quaternion grabTurn;
@@ -422,6 +422,7 @@ public class Ui
             // Tabs only switch pages, they never need holding
             bool mustHold = clickable && hit.bar != null && (holdAll || holdRay && viaRay);
             hit.hold = 0;
+            offFor = 0;
             hit.fired = !mustHold;
             if (mustHold) holdStarted?.Invoke();
             else if (clickable)
@@ -433,7 +434,13 @@ public class Ui
         if (pressed != null && !pressed.fired && pressed.kind != Kind.Handle)
         {
             // Sliding off the button or letting go before the time is up cancels it
-            if (still && hit == pressed)
+            // Pinching swings the ray, so a held press keeps 1.5 cm of slack round its button and rides out leaving
+            // it for under 0.15 s
+            var pc = pressed.centre;
+            var slack = pressed.size / 2 + Vector2.one * 0.015f;
+            bool near = inFront && Mathf.Abs(at.x - pc.x) <= slack.x && Mathf.Abs(at.y - pc.y) <= slack.y;
+            offFor = near ? 0 : offFor + Time.deltaTime;
+            if (still && offFor < 0.15f)
             {
                 pressed.hold += Time.deltaTime;
                 if (pressed.hold >= HoldS)
