@@ -66,6 +66,7 @@ public class Link
     {
         public string session, status, saved, error;
         public bool running;
+        public string[] calibrations;
     }
 
     // What the laptop's motors play (app.headset_haptics_state)

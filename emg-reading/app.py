@@ -626,6 +626,13 @@ def headset_train_state(cal, summary, tools):
     return out
 
 
+def headset_calibrations(limit=6):
+    """The newest calibrated networks (by when they were saved) for the headset's Train section to pick from. From
+    the file names only, so it can run with every refresh."""
+    paths = sorted(NETWORK_DIR.glob("*_cal_*.pt"), key=lambda p: p.stat().st_mtime, reverse=True)
+    return [p.name for p in paths[:limit]]
+
+
 def session_folder(name):
     """A recorded session's folder by its name, refused unless it is one."""
     folder = DATA_DIR / name
@@ -1575,9 +1582,10 @@ def make_app(recorder, band, camera, tools, lan=True, serving=False):
     # card runs it. seen: the job was seen running, so its result is this calibration's
     headset_cal = {"session": None, "job": None, "seen": False, "started": 0.0, "error": ""}
 
-    def headset_train(action):
-        """calibrate: the newest base network on the last quick session. control: the control layer on the network
-        that calibration saved. Errors go to the headset's Train section."""
+    def headset_train(action, name=""):
+        """calibrate: the newest base network on the last quick session. control: the control layer on name, one of
+        headset_calibrations, or else the network that calibration saved. Errors go to the headset's Train
+        section."""
         headset_cal["error"] = ""
         try:
             if action == "calibrate":
@@ -1587,7 +1595,7 @@ def make_app(recorder, band, camera, tools, lan=True, serving=False):
                 reply = quick_calibration(QuickCalibration(session=session))
                 headset_cal.update(session=session, job=reply["job"], seen=False, started=time.monotonic())
             elif action == "control":
-                saved = headset_train_state(headset_cal, recorder.last_summary, tools)["saved"]
+                saved = name if name in headset_calibrations() else                     headset_train_state(headset_cal, recorder.last_summary, tools)["saved"]
                 if not saved:
                     raise ValueError("calibrate first")
                 control_start(ModelChoice(name=saved))
@@ -1634,14 +1642,15 @@ def make_app(recorder, band, camera, tools, lan=True, serving=False):
                         record_error[0] = str(e)
                 train = msg.get("train")
                 if isinstance(train, dict) and train.get("action") in ("calibrate", "control"):
-                    await asyncio.to_thread(headset_train, train["action"])
+                    await asyncio.to_thread(headset_train, train["action"], str(train.get("name") or ""))
                 readout = msg.get("readout")
                 if isinstance(readout, dict) and isinstance(readout.get("grip_force"), (int, float))                         and np.isfinite(readout["grip_force"]):
                     tools.contact.set_quest_readout(readout)
 
         record_error = [""]
         record_state, record_at = {"running": False}, 0.0
-        train_state = headset_train_state(headset_cal, recorder.last_summary, tools)
+        train_state = dict(headset_train_state(headset_cal, recorder.last_summary, tools),
+                           calibrations=headset_calibrations())
         task = asyncio.create_task(receive())
         try:
             while not task.done():
@@ -1649,7 +1658,8 @@ def make_app(recorder, band, camera, tools, lan=True, serving=False):
                 # The recorder's snapshot is more than the headset needs 60 times a second
                 if time.monotonic() - record_at > 1 / QUEST_RECORD_HZ:
                     record_state, record_at = headset_record_state(recorder), time.monotonic()
-                    train_state = headset_train_state(headset_cal, recorder.last_summary, tools)
+                    train_state = dict(headset_train_state(headset_cal, recorder.last_summary, tools),
+                                       calibrations=headset_calibrations())
                 frame["record"] = dict(record_state, error=record_error[0])
                 frame["haptics"] = headset_haptics_state(tools.haptics, tools.contact.test is not None)
                 frame["train"] = train_state

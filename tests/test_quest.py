@@ -173,3 +173,14 @@ def test_headset_shows_held_wrist_bends():
     assert bend["has_target"] and bend["wrist_cue"] and bend["wrist"] == -55.0
     sign = state("two_point")
     assert sign["has_target"] and not sign["wrist_cue"] and sign["wrist"] == 0.0
+
+
+def test_headset_calibrations_are_the_newest_calibrated_networks(tmp_path, monkeypatch):
+    """The headset's Train section can pick an older calibration: calibrated networks only, newest saved first."""
+    import os
+    import app
+    for i, name in enumerate(["a_signs_cal_2026-11-20_100000.pt", "base_signs.pt", "a_signs_cal_2026-11-24_141429.pt"]):
+        (tmp_path / name).write_bytes(b"")
+        os.utime(tmp_path / name, (i, i))
+    monkeypatch.setattr(app, "NETWORK_DIR", tmp_path)
+    assert app.headset_calibrations() == ["a_signs_cal_2026-11-24_141429.pt", "a_signs_cal_2026-11-20_100000.pt"]

@@ -96,7 +96,7 @@ public class App : MonoBehaviour
 
     [Serializable] class RecordMessage { public RecordAction record; }
 
-    [Serializable] class TrainAction { public string action; }
+    [Serializable] class TrainAction { public string action, name; }
 
     [Serializable] class TrainMessage { public TrainAction train; }
 
@@ -147,7 +147,7 @@ public class App : MonoBehaviour
     readonly List<XRInputSubsystem> inputs = new List<XRInputSubsystem>();
     bool floorSet;
 
-    TextMeshPro linkText, simText, hapticsText, trainText, trainError, massText, forceText, heightText, sideText, freeText, recordText, recordError;
+    TextMeshPro linkText, simText, hapticsText, trainText, trainError, calText, massText, forceText, heightText, sideText, freeText, recordText, recordError;
     TextMeshPro[] readouts, sessionButtons, quitButton;
     float quitArmedAt = -QuitConfirmS;
     TextMeshPro cueMeta, cueTitle, cueBody, cueNext, cueState;
@@ -277,7 +277,10 @@ public class App : MonoBehaviour
         menu.Section(rec, "Train");
         trainText = menu.Paragraph(rec, "", 0.013f, true, 2);
         trainError = menu.Paragraph(rec, "", 0.013f, false, 2);
-        menu.Buttons(rec, ("Calibrate on it", () => SendTrain("calibrate")), ("Control with it", () => SendTrain("control")));
+        menu.Buttons(rec, ("Calibrate on it", () => SendTrain("calibrate")));
+        calText = menu.Paragraph(rec, "", 0.013f, true, 2);
+        menu.Buttons(rec, ("Older", () => PickCalibration(1)), ("Newer", () => PickCalibration(-1)),
+            ("Control with it", () => SendTrain("control", calPicked)));
 
         var setup = menu.AddPage("Setup");
         menu.Section(setup, "Prosthetic arm");
@@ -430,8 +433,29 @@ public class App : MonoBehaviour
         Application.Quit();
     }
 
-    void SendTrain(string action) =>
-        link.Send(JsonUtility.ToJson(new TrainMessage { train = new TrainAction { action = action } }));
+    void SendTrain(string action, string name = "") =>
+        link.Send(JsonUtility.ToJson(new TrainMessage { train = new TrainAction { action = action, name = name ?? "" } }));
+
+    // One of the laptop's newest calibrations (app.headset_calibrations, newest first) for Control with it, so an
+    // older one can be used too (Noah, 2026-11-24). Stays on the one picked while new ones come in
+    string calPicked;
+    string[] calibrations = new string[0];
+
+    void PickCalibration(int step)
+    {
+        if (calibrations.Length == 0) return;
+        int i = Mathf.Clamp(Array.IndexOf(calibrations, calPicked) + step, 0, calibrations.Length - 1);
+        calPicked = calibrations[i];
+    }
+
+    static string CalibrationText(string name)
+    {
+        int at = name.LastIndexOf("_cal_", StringComparison.Ordinal);
+        var when = at < 0 ? name : name.Substring(at + 5).Replace(".pt", "");
+        // 2026-11-24_141429 -> 2026-11-24 14:14
+        if (when.Length >= 15 && when[10] == '_') when = when.Substring(0, 10) + " " + when.Substring(11, 2) + ":" + when.Substring(13, 2);
+        return "Calibrated " + when;
+    }
 
     Ray SteadyRay(Vector3 origin, Vector3 dir)
     {
@@ -1018,6 +1042,11 @@ public class App : MonoBehaviour
             : !string.IsNullOrEmpty(train.status) ? train.status
             : !string.IsNullOrEmpty(train.session) ? "Fits the sign network to where the band sits now, on the session just recorded."
             : "Record a quick calibration, then calibrate the sign network on it here.";
+        calibrations = train?.calibrations ?? new string[0];
+        if (Array.IndexOf(calibrations, calPicked) < 0) calPicked = calibrations.Length > 0 ? calibrations[0] : null;
+        int picked = Array.IndexOf(calibrations, calPicked);
+        calText.text = calPicked == null ? "No calibrated network on the laptop yet."
+            : $"{CalibrationText(calPicked)}{(picked == 0 ? ", the newest" : "")} ({picked + 1} of {calibrations.Length})";
         trainError.text = train != null && !string.IsNullOrEmpty(train.error) ? $"<color=#ff3b3b>{train.error}</color>" : "";
     }
 
