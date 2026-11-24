@@ -11,6 +11,7 @@ using UnityEngine;
 using UnityEngine.Rendering;
 using UnityEngine.XR.Management;
 using UnityEngine.XR.OpenXR;
+using UnityEngine.XR.OpenXR.Features.CompositionLayers;
 using UnityEngine.XR.OpenXR.Features.Interactions;
 using UnityEngine.XR.OpenXR.Features.MetaQuestSupport;
 using UnityEngine.XR.Hands.OpenXR;
@@ -97,6 +98,9 @@ public class QuestBuild : IPostGenerateGradleAndroidProject
         // Passthrough, through ARFoundation's camera on Meta's OpenXR runtime
         openxr.GetFeature<ARSessionFeature>().enabled = true;
         openxr.GetFeature<ARCameraFeature>().enabled = true;
+        // The camera feature puts passthrough on a composition layer under the app's own; without this feature there
+        // is no layer to put it on and passthrough shows black (2026-11-24)
+        openxr.GetFeature<OpenXRCompositionLayersFeature>().enabled = true;
         // The panel's text shader isn't checked for single pass, and the scene is small enough to draw twice
         openxr.renderMode = OpenXRSettings.RenderMode.MultiPass;
         EditorUtility.SetDirty(openxr);
@@ -168,21 +172,21 @@ public class QuestBuild : IPostGenerateGradleAndroidProject
         }
 
         var scene = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene);
-        // Light from above as in a room: brighter overhead, warmer, and darker towards the floor
+        // Light from above as in a room in the evening: warm, brighter overhead and darker towards the floor
         RenderSettings.ambientMode = AmbientMode.Trilight;
-        RenderSettings.ambientSkyColor = new Color(0.52f, 0.51f, 0.55f);
-        RenderSettings.ambientEquatorColor = new Color(0.42f, 0.4f, 0.39f);
-        RenderSettings.ambientGroundColor = new Color(0.24f, 0.23f, 0.22f);
+        RenderSettings.ambientSkyColor = new Color(0.44f, 0.4f, 0.36f);
+        RenderSettings.ambientEquatorColor = new Color(0.33f, 0.29f, 0.26f);
+        RenderSettings.ambientGroundColor = new Color(0.18f, 0.16f, 0.14f);
         var sun = new GameObject("sun").AddComponent<Light>();
         sun.type = LightType.Directional;
-        sun.intensity = 1.0f;
-        sun.color = new Color(1f, 0.96f, 0.9f);
+        sun.intensity = 0.85f;
+        sun.color = new Color(1f, 0.9f, 0.78f);
         sun.shadows = LightShadows.Soft;
         sun.shadowStrength = 0.55f;
         sun.transform.rotation = Quaternion.Euler(60, -25, 0);
         var fill = new GameObject("fill").AddComponent<Light>();
         fill.type = LightType.Directional;
-        fill.intensity = 0.35f;
+        fill.intensity = 0.25f;
         fill.color = new Color(0.75f, 0.8f, 1f);
         fill.transform.rotation = Quaternion.Euler(20, 150, 0);
 
