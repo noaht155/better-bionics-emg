@@ -591,6 +591,36 @@ def headset_haptics_state(haptics, test_touch):
             "test": test_touch}
 
 
+def headset_cal_session(summary):
+    """The session the headset can calibrate on: the last one, if it was a completed quick session."""
+    quick = summary and summary.get("quick") and summary.get("completed") and not summary.get("practice")
+    return summary["session"] if quick else None
+
+
+def headset_train_state(cal, summary, tools):
+    """What the headset's Train section shows, for the calibration in cal (make_app's headset_cal) on the last
+    session (summary). No nulls, the headset's JSON reader can't take them."""
+    session = headset_cal_session(summary)
+    out = {"session": session or "", "running": False, "status": "", "saved": "", "error": cal["error"]}
+    if cal["job"] is None or cal["session"] != session:
+        return out
+    job = getattr(tools, cal["job"]).state
+    if job["running"]:
+        cal["seen"] = True
+        out.update(running=True, status=f"Calibrating, {time.monotonic() - cal['started']:.0f} s")
+    elif cal["seen"]:
+        result = job.get("result") or {}
+        if job.get("error") or not result.get("saved"):
+            out["error"] = out["error"] or job.get("error") or "calibration finished without saving a network"
+        else:
+            scores = result.get("scores") or {}
+            score = f"{scores['balanced'] * 100:.0f} % balanced on the last round. " if "balanced" in scores else ""
+            out.update(saved=result["saved"], status=f"{score}Saved {result['saved']}")
+    else:
+        out.update(running=True, status="Starting the calibration")
+    return out
+
+
 def session_folder(name):
     """A recorded session's folder by its name, refused unless it is one."""
     folder = DATA_DIR / name
@@ -1536,6 +1566,31 @@ def make_app(recorder, band, camera, tools, lan=True, serving=False):
         finally:
             task.cancel()
 
+    # Train in VR: the quick calibration the headset started on the session it just recorded, as the Record tab's end
+    # card runs it. seen: the job was seen running, so its result is this calibration's
+    headset_cal = {"session": None, "job": None, "seen": False, "started": 0.0, "error": ""}
+
+    def headset_train(action):
+        """calibrate: the newest base network on the last quick session. control: the control layer on the network
+        that calibration saved. Errors go to the headset's Train section."""
+        headset_cal["error"] = ""
+        try:
+            if action == "calibrate":
+                session = headset_cal_session(recorder.last_summary)
+                if session is None:
+                    raise ValueError("record a quick calibration session first")
+                reply = quick_calibration(QuickCalibration(session=session))
+                headset_cal.update(session=session, job=reply["job"], seen=False, started=time.monotonic())
+            elif action == "control":
+                saved = headset_train_state(headset_cal, recorder.last_summary, tools)["saved"]
+                if not saved:
+                    raise ValueError("calibrate first")
+                control_start(ModelChoice(name=saved))
+        except HTTPException as e:
+            headset_cal["error"] = str(e.detail)
+        except ValueError as e:
+            headset_cal["error"] = str(e)
+
     @app.websocket("/ws/quest")
     async def quest(ws: WebSocket):
         """The Quest app over USB (quest_link): the control layer's output and the contact settings out, settings
@@ -1572,12 +1627,16 @@ def make_app(recorder, band, camera, tools, lan=True, serving=False):
                         record_error[0] = ""
                     except ValueError as e:
                         record_error[0] = str(e)
+                train = msg.get("train")
+                if isinstance(train, dict) and train.get("action") in ("calibrate", "control"):
+                    await asyncio.to_thread(headset_train, train["action"])
                 readout = msg.get("readout")
                 if isinstance(readout, dict) and isinstance(readout.get("grip_force"), (int, float))                         and np.isfinite(readout["grip_force"]):
                     tools.contact.set_quest_readout(readout)
 
         record_error = [""]
         record_state, record_at = {"running": False}, 0.0
+        train_state = headset_train_state(headset_cal, recorder.last_summary, tools)
         task = asyncio.create_task(receive())
         try:
             while not task.done():
@@ -1585,8 +1644,10 @@ def make_app(recorder, band, camera, tools, lan=True, serving=False):
                 # The recorder's snapshot is more than the headset needs 60 times a second
                 if time.monotonic() - record_at > 1 / QUEST_RECORD_HZ:
                     record_state, record_at = headset_record_state(recorder), time.monotonic()
+                    train_state = headset_train_state(headset_cal, recorder.last_summary, tools)
                 frame["record"] = dict(record_state, error=record_error[0])
                 frame["haptics"] = headset_haptics_state(tools.haptics, tools.contact.test is not None)
+                frame["train"] = train_state
                 await ws.send_json(frame)
                 await asyncio.sleep(1 / QUEST_HZ)
         except WebSocketDisconnect:

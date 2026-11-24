@@ -2603,6 +2603,10 @@ levels: r 0.995 to 0.999 per session, mean difference 0.005 to 0.013, a clench l
   asked to be.
 - Quest: a ghost hand (target grey) at the controller's hand pose while the palm is held back over 5 cm (hidden
   under 3 cm), posed like the hand.
+- Train in VR (Quest step 5): the Record page's Train section calibrates the newest sign network on the quick
+  session just recorded, the same job as the Record tab's end card (on the hub when the laptop has one), then
+  Control with it starts the control layer on the saved network with its haptics. Shows the progress, the balanced
+  score and errors (`app.headset_train_state`). Checked on a test copy over `/ws/quest`, not yet with a real session.
 
 ## Open
 
@@ -2672,9 +2676,8 @@ Now: 3D contact
      Noah to try in the headset: default hand offsets, menu text size, grabbing with the free hand, the can grasp
      with a model or Simulate running, settings and spawns both ways, sim speed over 1x. Still to do from the old
      step 4: ghost hand when the desk holds the hand back, a cap on the weld pull, a speed limit on the hand target. Mac needs Android platform-tools for the link.
-  5. Training from VR (Noah, 2026-11-20): recording F from the headset built 2026-11-20 (round 3), to try. Still to
-     do: Train in VR runs training on the desktop. Then the live predicted hand as a new
-     protocol beside F.
+  5. Training from VR (Noah, 2026-11-20): recording F from the headset built 2026-11-20 (round 3), calibrating and
+     starting control from it built 2026-11-24, both to try. Then the live predicted hand as a new protocol beside F.
   Desktop app (Noah, 2026-11-20): either a browser page or its own window is fine; a window (pywebview over the
   same pages) can come later without changing the pages.
   Uses: training cues as a 3D hand in first person, later the live predicted hand (a new protocol beside F, never a

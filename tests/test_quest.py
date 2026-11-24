@@ -136,3 +136,25 @@ def test_headset_gets_what_the_motors_play():
     state = app.headset_haptics_state(surface, True)
     assert state["surface"] == "rough" and state["friction"] == -1.0 and state["test"]
     assert None not in state.values()
+
+
+def test_headset_train_follows_its_own_calibration():
+    """Train in VR: offered after a completed quick session only, and the result shown is the job the headset
+    started (seen running first), not one already finished on the Train tab."""
+    import app
+    quick = {"quick": True, "completed": True, "practice": False, "session": "2026-11-24_100000_f"}
+    assert app.headset_cal_session(dict(quick, completed=False)) is None
+    assert app.headset_cal_session(quick) == quick["session"]
+    job = SimpleNamespace(state={"running": False, "result": {"saved": "old.pt"}})
+    tools_ = SimpleNamespace(network=job)
+    cal = {"session": quick["session"], "job": "network", "seen": False, "started": 0.0, "error": ""}
+    state = app.headset_train_state(cal, quick, tools_)
+    assert state["running"] and not state["saved"]
+    job.state = {"running": True}
+    assert app.headset_train_state(cal, quick, tools_)["running"]
+    job.state = {"running": False, "result": {"saved": "new.pt", "scores": {"balanced": 0.82}}}
+    state = app.headset_train_state(cal, quick, tools_)
+    assert state["saved"] == "new.pt" and state["status"].startswith("82 % balanced")
+    assert None not in state.values()
+    # Another session recorded since: nothing to show for it yet
+    assert not app.headset_train_state(cal, dict(quick, session="later"), tools_)["saved"]

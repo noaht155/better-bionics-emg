@@ -56,6 +56,15 @@ public class Link
         public Command[] commands;
         public Record record;
         public Haptics haptics;
+        public Train train;
+    }
+
+    // Train in VR: the quick calibration on the last session (app.headset_train_state)
+    [Serializable]
+    public class Train
+    {
+        public string session, status, saved, error;
+        public bool running;
     }
 
     // What the laptop's motors play (app.headset_haptics_state)

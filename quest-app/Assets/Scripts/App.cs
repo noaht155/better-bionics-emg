@@ -93,6 +93,10 @@ public class App : MonoBehaviour
 
     [Serializable] class RecordMessage { public RecordAction record; }
 
+    [Serializable] class TrainAction { public string action; }
+
+    [Serializable] class TrainMessage { public TrainAction train; }
+
     static readonly string[] GeomTypes = { "plane", "hfield", "sphere", "capsule", "ellipsoid", "cylinder", "box", "mesh" };
     // sim.SURFACES
     static readonly string[] SurfaceNames = { "slippery", "smooth", "normal", "rough" };
@@ -128,7 +132,7 @@ public class App : MonoBehaviour
     readonly List<XRInputSubsystem> inputs = new List<XRInputSubsystem>();
     bool floorSet;
 
-    TextMeshPro linkText, simText, hapticsText, massText, forceText, heightText, sideText, freeText, recordText, recordError;
+    TextMeshPro linkText, simText, hapticsText, trainText, trainError, massText, forceText, heightText, sideText, freeText, recordText, recordError;
     TextMeshPro[] readouts, sessionButtons;
     TextMeshPro cueMeta, cueTitle, cueBody, cueNext, cueState;
     Action<float> cueProgress;
@@ -251,6 +255,10 @@ public class App : MonoBehaviour
         recordError = menu.Paragraph(rec, "", 0.013f, false, 2);
         sessionButtons = menu.ButtonsWithLabels(rec, ("Pause", PauseOrContinue), ("Mark bad", () => SendRecord("bad")),
             ("Stop", () => SendRecord("stop")));
+        menu.Section(rec, "Train");
+        trainText = menu.Paragraph(rec, "", 0.013f, true, 2);
+        trainError = menu.Paragraph(rec, "", 0.013f, false, 2);
+        menu.Buttons(rec, ("Calibrate on it", () => SendTrain("calibrate")), ("Control with it", () => SendTrain("control")));
 
         var setup = menu.AddPage("Setup");
         menu.Section(setup, "Prosthetic arm");
@@ -334,6 +342,9 @@ public class App : MonoBehaviour
 
     void SendRecord(string action, bool quick = false) =>
         link.Send(JsonUtility.ToJson(new RecordMessage { record = new RecordAction { action = action, quick = quick } }));
+
+    void SendTrain(string action) =>
+        link.Send(JsonUtility.ToJson(new TrainMessage { train = new TrainAction { action = action } }));
 
     void PauseOrContinue() => SendRecord(record != null && record.paused ? "continue" : "pause");
 
@@ -808,6 +819,12 @@ public class App : MonoBehaviour
             : "Not recording";
         recordError.text = record != null && !string.IsNullOrEmpty(record.error) ? $"<color=#ff3b3b>{record.error}</color>" : "";
         sessionButtons[0].text = record != null && record.paused ? "Continue" : "Pause";
+        var train = frame?.train;
+        trainText.text = train == null ? "Laptop not connected"
+            : !string.IsNullOrEmpty(train.status) ? train.status
+            : !string.IsNullOrEmpty(train.session) ? "Fits the sign network to where the band sits now, on the session just recorded."
+            : "Record a quick calibration, then calibrate the sign network on it here.";
+        trainError.text = train != null && !string.IsNullOrEmpty(train.error) ? $"<color=#ff3b3b>{train.error}</color>" : "";
     }
 
     static string HapticsText(Link.Haptics h)
