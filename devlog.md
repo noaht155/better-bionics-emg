@@ -2684,6 +2684,9 @@ levels: r 0.995 to 0.999 per session, mean difference 0.005 to 0.013, a clench l
 - Older calibrations in VR (Noah): Control with it only took the network the headset's own calibration saved. The
   laptop now sends the six newest calibrated networks (`app.headset_calibrations`, `*_cal_*.pt` by save time) and the
   Train section picks one with Older and Newer; Control with it starts the picked one. Needs app.py restarted.
+- Menu hidden behind the desk (Noah): the menu is now two columns wide (0.8 m) and long pages flow into the second
+  column from the first section that starts over 28 cm down (`Ui` columnH, `Arrange`), so it is about half as tall.
+  It opens 50 cm out (was 42) so both columns fit in view. The cue card and dock stay one column.
 
 ## Open
 

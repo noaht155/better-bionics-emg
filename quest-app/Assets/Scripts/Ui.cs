@@ -54,6 +54,11 @@ public class Ui
         public Transform root;
         public float y;
         public int sections;
+        // Two columns: the second starts at the first section below the panel's column height, laid out where
+        // the first started, and Arrange moves each column to its half once
+        public float top, firstEnd;
+        public int splitChild = -1, splitElement = -1;
+        public bool arranged;
     }
 
     public readonly Transform root;
@@ -85,11 +90,16 @@ public class Ui
     public bool Grabbed => handle != null && pressed == handle;
 
     readonly bool header;
+    // A wide panel has two columns of Width; long pages flow into the second so the panel stays short enough to clear
+    // the desk (Noah, 2026-11-24)
+    readonly float panelW, columnH;
 
     // header: the wordmark, status chip and tabs; without it the panel is only its page (the cue card, the dock)
-    public Ui(Material material, bool header = true)
+    public Ui(Material material, bool header = true, float columnH = 0)
     {
         this.header = header;
+        this.columnH = columnH;
+        panelW = columnH > 0 ? 2 * Width : Width;
         this.material = material;
         if (inter == null)
         {
@@ -102,20 +112,20 @@ public class Ui
         body.SetParent(root, false);
         tabsY = -Pad - 0.03f;
         if (!header) return;
-        var word = Label(body, new Vector3(-Width / 2 + Pad, -Pad - 0.008f, 0), "BETTER BIONICS", 0.012f, Text, mono,
+        var word = Label(body, new Vector3(-panelW / 2 + Pad, -Pad - 0.008f, 0), "BETTER BIONICS", 0.012f, Text, mono,
             TextAlignmentOptions.Left);
         word.characterSpacing = 18;
         word.enableVertexGradient = true;
         word.colorGradient = new VertexGradient(Orange, Magenta, Orange, Magenta);
         // Close in the corner, as on a window (Noah, 2026-11-24: closing by the hand gesture again was a chore)
-        var close = new Element { kind = Kind.Button, centre = new Vector2(Width / 2 - Pad - 0.008f, -Pad - 0.008f),
+        var close = new Element { kind = Kind.Button, centre = new Vector2(panelW / 2 - Pad - 0.008f, -Pad - 0.008f),
             size = new Vector2(0.03f, 0.03f), click = Close };
         close.label = Label(body, new Vector3(close.centre.x, close.centre.y, 0), "×", 0.022f, Muted, inter,
             TextAlignmentOptions.Center);
         close.label.rectTransform.sizeDelta = close.size;
         elements.Add(close);
         closeButton = close;
-        chip = Label(body, new Vector3(Width / 2 - Pad - ChipInset, -Pad - 0.008f, 0), "", 0.011f, Muted, mono, TextAlignmentOptions.Right);
+        chip = Label(body, new Vector3(panelW / 2 - Pad - ChipInset, -Pad - 0.008f, 0), "", 0.011f, Muted, mono, TextAlignmentOptions.Right);
         chip.characterSpacing = 8;
         chip.rectTransform.pivot = new Vector2(1, 0.5f);
         chipDot = Shape(body, LText, Vector3.zero, Vector2.one * 0.008f, 0.004f, Muted);
@@ -125,7 +135,7 @@ public class Ui
     {
         ui.chip.text = text;
         float w = ui.chip.preferredWidth;
-        ui.chipDot.transform.localPosition = new Vector3(Width / 2 - Pad - ChipInset - w - 0.01f, -Pad - 0.008f, -0.001f);
+        ui.chipDot.transform.localPosition = new Vector3(ui.panelW / 2 - Pad - ChipInset - w - 0.01f, -Pad - 0.008f, -0.001f);
         Recolor(ui.chipDot.sharedMesh, dot);
     }
 
@@ -134,6 +144,7 @@ public class Ui
     public Page AddPage(string title)
     {
         var page = new Page { root = new GameObject(title).transform, y = header ? tabsY - 0.05f : -Pad };
+        page.top = page.y;
         page.root.SetParent(body, false);
         pages.Add(page);
         if (!header) return page;
@@ -143,11 +154,11 @@ public class Ui
         elements.Add(tab);
         if (tabBar == null) tabBar = Shape(body, LFill, Vector3.zero, new Vector2(0.05f, 0.0025f), 0.001f, Accent, true);
         tabs.Add((tab, page));
-        float w = (Width - 2 * Pad) / tabs.Count;
+        float w = (panelW - 2 * Pad) / tabs.Count;
         for (int i = 0; i < tabs.Count; i++)
         {
             var t = tabs[i].tab;
-            t.centre = new Vector2(-Width / 2 + Pad + w * (i + 0.5f), tabsY - 0.012f);
+            t.centre = new Vector2(-panelW / 2 + Pad + w * (i + 0.5f), tabsY - 0.012f);
             t.size = new Vector2(w, 0.03f);
             t.label.transform.localPosition = new Vector3(t.centre.x, t.centre.y, -0.002f);
             t.label.rectTransform.sizeDelta = t.size;
@@ -159,6 +170,7 @@ public class Ui
 
     public void Show(Page page)
     {
+        foreach (var p in pages) Arrange(p);
         foreach (var p in pages) p.root.gameObject.SetActive(p == page);
         shown = page;
         foreach (var (tab, p) in tabs)
@@ -174,9 +186,20 @@ public class Ui
         Layout();
     }
 
+    // Once, after the pages are built: a split page's columns to the panel's halves, the rest stays in the middle
+    void Arrange(Page page)
+    {
+        if (page.arranged || page.splitChild < 0) return;
+        page.arranged = true;
+        for (int i = 0; i < page.root.childCount; i++)
+            page.root.GetChild(i).localPosition += Vector3.right * (i < page.splitChild ? -Width / 2 : Width / 2);
+        for (int i = 0; i < elements.Count; i++)
+            if (elements[i].page == page) elements[i].centre.x += i < page.splitElement ? -Width / 2 : Width / 2;
+    }
+
     void Layout()
     {
-        height = -(shown?.y ?? 0) + Pad;
+        height = -Mathf.Min(shown?.y ?? 0, shown != null && shown.splitChild >= 0 ? shown.firstEnd : 0) + Pad;
         if (back == null)
         {
             back = Shape(body, LBack, Vector3.zero, Vector2.one, Corner, new Color(Bg.r, Bg.g, Bg.b, 0.9f));
@@ -187,11 +210,11 @@ public class Ui
             elements.Add(grip);
             handle = grip;
         }
-        back.sharedMesh = RoundedRect(new Vector2(Width, height), Corner, new Color(Bg.r, Bg.g, Bg.b, 0.92f));
+        back.sharedMesh = RoundedRect(new Vector2(panelW, height), Corner, new Color(Bg.r, Bg.g, Bg.b, 0.92f));
         back.transform.localPosition = new Vector3(0, -height / 2, 0.003f);
-        backEdge.sharedMesh = RoundedRect(new Vector2(Width + 0.0016f, height + 0.0016f), Corner + 0.0008f, LineStrong);
+        backEdge.sharedMesh = RoundedRect(new Vector2(panelW + 0.0016f, height + 0.0016f), Corner + 0.0008f, LineStrong);
         backEdge.transform.localPosition = new Vector3(0, -height / 2, 0.0035f);
-        topStrip.sharedMesh = GradientBar(new Vector2(Width - 2 * Corner, 0.0015f));
+        topStrip.sharedMesh = GradientBar(new Vector2(panelW - 2 * Corner, 0.0015f));
         topStrip.transform.localPosition = new Vector3(0, -0.0008f, 0.002f);
         body.localPosition = new Vector3(0, height / 2, 0);
         handle.centre = new Vector2(0, -height / 2 - 0.022f);
@@ -202,6 +225,13 @@ public class Ui
 
     public void Section(Page page, string title)
     {
+        if (columnH > 0 && page.splitChild < 0 && page.y < page.top - columnH)
+        {
+            page.firstEnd = page.y;
+            page.y = page.top;
+            page.splitChild = page.root.childCount;
+            page.splitElement = elements.Count;
+        }
         page.sections++;
         page.y -= 0.012f;
         float y = page.y - 0.01f;
@@ -352,7 +382,8 @@ public class Ui
     {
         var forward = Vector3.ProjectOnPlane(head.forward, Vector3.up).normalized;
         if (forward.sqrMagnitude < 0.5f) forward = Vector3.forward;
-        root.position = head.position + forward * 0.42f + Vector3.down * 0.18f;
+        // A wide panel opens further out so both columns fit in view
+        root.position = head.position + forward * (columnH > 0 ? 0.5f : 0.42f) + Vector3.down * 0.18f;
         root.rotation = Quaternion.LookRotation(forward, Vector3.up) * Quaternion.Euler(25, 0, 0);
         root.gameObject.SetActive(true);
         opened = 0;
@@ -481,7 +512,7 @@ public class Ui
         wasTouching = touching;
         Draw(hit);
         // A ray anywhere on the panel counts, not only on a control, so its line doesn't blink off between buttons
-        bool onPanel = viaRay && Mathf.Abs(at.x) <= Width / 2 + 0.01f && at.y <= 0.01f && at.y >= -height - 0.04f;
+        bool onPanel = viaRay && Mathf.Abs(at.x) <= panelW / 2 + 0.01f && at.y <= 0.01f && at.y >= -height - 0.04f;
         return hit != null || pressed != null || onPanel ? Mathf.Max(length, 0.0001f) : 0;
     }
 
@@ -509,7 +540,7 @@ public class Ui
                 {
                     float w = Mathf.Max(0.004f, (e.kind == Kind.Toggle ? Width - 2 * Pad : e.size.x) * e.hold / HoldS);
                     e.bar.sharedMesh = GradientBar(new Vector2(w, 0.003f), 0.0015f);
-                    var start = e.kind == Kind.Toggle ? -Width / 2 + Pad : e.centre.x - e.size.x / 2;
+                    var start = e.kind == Kind.Toggle ? e.centre.x + 0.02f + 2 * Pad - Width : e.centre.x - e.size.x / 2;
                     var y = e.kind == Kind.Toggle ? e.centre.y - RowH / 2 + 0.003f : e.centre.y - e.size.y / 2 + 0.004f;
                     e.bar.transform.localPosition = new Vector3(start + w / 2, y, -0.003f);
                 }

@@ -234,7 +234,7 @@ public class App : MonoBehaviour
 
     void BuildMenu()
     {
-        menu = new Ui(uiMaterial);
+        menu = new Ui(uiMaterial, true, 0.28f);
         var play = menu.AddPage("Play");
         menu.Section(play, "Status");
         linkText = menu.Paragraph(play, "", 0.014f, false);
