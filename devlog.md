@@ -2670,6 +2670,8 @@ levels: r 0.995 to 0.999 per session, mean difference 0.005 to 0.013, a clench l
   38 cm up.
 - Desk height (Noah): the slider goes 40 to 130 cm (was 50 to 110), and "Set height by hand" in Play > Desk sets it
   from the wrist held out flat, with a pinch or trigger pull away from the panels.
+- Free hand overlay (Noah: incredibly confusing): no ghost on the free hand any more, the sign shows on the
+  prosthetic hand and the ghost in front. The forearm already only shows for the two wrist cues.
 
 ## Open
 

@@ -120,13 +120,12 @@ public class App : MonoBehaviour
     bool rayWarm;
     float rayShownUntil;
     bool triggerDown;
-    // ghost: the cue's sign in front; onFree, onProsthetic: the same on the user's own hands (Noah, 2026-11-24: shown
-    // on the hands for the mind to muscle link, done with both hands). The prosthetic hand itself shows the fingers,
-    // onProsthetic only appears for a wrist cue, which that hand can't bend
-    Ghost ghost, reach, onFree, onProsthetic;
-    Vector3 freePos, prosPos;
-    Quaternion freeRot, prosRot;
-    bool freeShown, hasProsthetic;
+    // ghost: the cue's sign in front. The prosthetic hand itself shows the fingers; onProsthetic only appears for a
+    // wrist cue, which that hand can't bend. Nothing sits on the free hand, an overlay there confused (Noah, 2026-11-24)
+    Ghost ghost, reach, onProsthetic;
+    Vector3 prosPos;
+    Quaternion prosRot;
+    bool hasProsthetic;
     Ui.Page help;
     TrackedHand tracked;
     bool prevMenuGesture;
@@ -405,9 +404,6 @@ public class App : MonoBehaviour
         reach?.Destroy();
         reach = new Ghost(settings.prostheticLeft ? ghostLeft : ghostRight, material, SimView.Hex(0x6b6b75));
         reach.Root.gameObject.SetActive(false);
-        onFree?.Destroy();
-        onFree = new Ghost(settings.prostheticLeft ? ghostRight : ghostLeft, material, SimView.Hex(0x6b6b75));
-        onFree.Root.gameObject.SetActive(false);
         onProsthetic?.Destroy();
         onProsthetic = new Ghost(settings.prostheticLeft ? ghostLeft : ghostRight, material, SimView.Hex(0x6b6b75));
         onProsthetic.Root.gameObject.SetActive(false);
@@ -751,7 +747,6 @@ public class App : MonoBehaviour
         tracked.Update(FreeIsRight);
         bool hasP = Pose(ProstheticNode, out var pp, out var pq);
         hasProsthetic = hasP;
-        freeShown = false;
         Vector3 fp = default;
         Quaternion fq = Quaternion.identity;
         bool hasF = !tracked.Tracked && Pose(FreeNode, out fp, out fq);
@@ -766,7 +761,6 @@ public class App : MonoBehaviour
         {
             grabber.SetPositionAndRotation(tracked.WristPos, tracked.WristRot);
             PlaceHand(Sim.Free, tracked.WristPos, tracked.WristRot);
-            (freePos, freeRot, freeShown) = (tracked.WristPos, tracked.WristRot, true);
             grip = tracked.Closure;
         }
         else if (hasF)
@@ -774,7 +768,6 @@ public class App : MonoBehaviour
             grabber.SetPositionAndRotation(fp, fq);
             HandPose(fp, fq, !settings.prostheticLeft, settings.free, out var p, out var q);
             PlaceHand(Sim.Free, p, q);
-            (freePos, freeRot, freeShown) = (p, q, true);
             grip = Axis(FreeNode, CommonUsages.grip);
             trigger = Axis(FreeNode, CommonUsages.trigger);
         }
@@ -962,7 +955,6 @@ public class App : MonoBehaviour
         }
         ghost.Root.gameObject.SetActive(running && record.has_target);
         bool wristCue = running && record.wrist_cue;
-        onFree.Root.gameObject.SetActive(Training && freeShown);
         onProsthetic.Root.gameObject.SetActive(Training && wristCue && hasProsthetic);
         if (!running) return;
         if (record.index != cueIndex)
@@ -979,18 +971,17 @@ public class App : MonoBehaviour
         cueState.text = record.hum ? "<color=#ffc233>Hum on the band: the cue will be redone. Check the pads, then Continue.</color>"
             : record.paused ? "<color=#ffc233>Paused. Continue when ready.</color>"
             : record.seconds <= 0 ? "Continue when ready."
-            : record.has_target ? "Do it with both hands, as the hands show." : "";
+            : record.has_target ? "Do it with both hands." : "";
         if (record.has_target && record.target != null && record.target.Length == Sim.Joints)
         {
             float t = Mathf.Clamp01((Time.time - cueStartedAt) / FollowInS);
             for (int j = 0; j < Sim.Joints; j++) ghostAngles[j] = Mathf.Lerp(meta.rest[j], record.target[j], t);
             float wrist = Mathf.Lerp(0, record.wrist, t);
-            foreach (var g in new[] { ghost, onFree, onProsthetic })
+            foreach (var g in new[] { ghost, onProsthetic })
             {
                 g.Pose(ghostAngles);
                 g.SetWrist(wrist, wristCue);
             }
-            onFree.Root.SetPositionAndRotation(freePos, freeRot);
             onProsthetic.Root.SetPositionAndRotation(prosPos, prosRot);
         }
     }
