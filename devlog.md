@@ -2687,6 +2687,12 @@ levels: r 0.995 to 0.999 per session, mean difference 0.005 to 0.013, a clench l
 - Menu hidden behind the desk (Noah): the menu is now two columns wide (0.8 m) and long pages flow into the second
   column from the first section that starts over 28 cm down (`Ui` columnH, `Arrange`), so it is about half as tall.
   It opens 50 cm out (was 42) so both columns fit in view. The cue card and dock stay one column.
+- "Pick the device on the start page first" from the headset (Noah): after an app.py restart no setup is picked
+  until the start page is opened, and the headset has none. A recording started from the headset now takes this
+  computer's setup from the newest session recorded here, or its only setup (`headset_device`).
+- Training view (Noah: the card blocked the 3D hand, the arm snapped in and out, the overlay on the white hand
+  confused): the cue card sits on the free hand's side, 42 cm out, turned 28 degrees to the seat; no ghost on the
+  prosthetic hand for the wrist cues, the ghost in front shows them; its forearm grows in and out over 0.3 s.
 
 ## Open
 

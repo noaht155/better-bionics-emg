@@ -120,12 +120,12 @@ public class App : MonoBehaviour
     bool rayWarm;
     float rayShownUntil;
     bool triggerDown;
-    // ghost: the cue's sign in front. The prosthetic hand itself shows the fingers; onProsthetic only appears for a
-    // wrist cue, which that hand can't bend. Nothing sits on the free hand, an overlay there confused (Noah, 2026-11-24)
-    Ghost ghost, reach, onProsthetic;
-    Vector3 prosPos;
-    Quaternion prosRot;
-    bool hasProsthetic;
+    // ghost: the cue's sign in front. The prosthetic hand itself shows the fingers. Nothing sits on either hand, an
+    // overlay there confused (Noah, 2026-11-24)
+    Ghost ghost, reach;
+    // The ghost's forearm grows in and out for the wrist cues instead of popping (Noah, 2026-11-24)
+    float armShown;
+    const float ArmFadeS = 0.3f;
     Ui.Page help;
     TrackedHand tracked;
     bool prevMenuGesture;
@@ -333,8 +333,6 @@ public class App : MonoBehaviour
             ("Stop", () => SendRecord("stop")));
         card.Show(page);
         card.root.SetParent(deskRoot, false);
-        card.root.localPosition = new Vector3(0, 0.38f, 0.12f);
-        card.root.localRotation = Quaternion.Euler(-12, 0, 0);
         card.Close();
     }
 
@@ -388,6 +386,11 @@ public class App : MonoBehaviour
     // At the desk's near corner on the free hand's side, tilted up to be read and touched
     void PlaceDock()
     {
+        // The cue card on the free hand's side, clear of the prosthetic hand and the ghost (Noah, 2026-11-24: it
+        // covered the hand), turned in to face the seat
+        float side = FreeIsRight ? 1 : -1;
+        card.root.localPosition = new Vector3(side * 0.42f, 0.36f, 0.1f);
+        card.root.localRotation = Quaternion.Euler(-12, side * 28, 0);
         float x = (FreeIsRight ? 1 : -1) * (meta.desk_half[0] - 0.12f);
         dock.root.localPosition = new Vector3(x, 0.05f, -meta.desk_centre_y - meta.desk_half[1] + 0.05f);
         dock.root.localRotation = Quaternion.Euler(50, 0, 0);
@@ -407,9 +410,6 @@ public class App : MonoBehaviour
         reach?.Destroy();
         reach = new Ghost(settings.prostheticLeft ? ghostLeft : ghostRight, material, SimView.Hex(0x6b6b75));
         reach.Root.gameObject.SetActive(false);
-        onProsthetic?.Destroy();
-        onProsthetic = new Ghost(settings.prostheticLeft ? ghostLeft : ghostRight, material, SimView.Hex(0x6b6b75));
-        onProsthetic.Root.gameObject.SetActive(false);
     }
 
     void ToggleMenu()
@@ -770,7 +770,6 @@ public class App : MonoBehaviour
 
         tracked.Update(FreeIsRight);
         bool hasP = Pose(ProstheticNode, out var pp, out var pq);
-        hasProsthetic = hasP;
         Vector3 fp = default;
         Quaternion fq = Quaternion.identity;
         bool hasF = !tracked.Tracked && Pose(FreeNode, out fp, out fq);
@@ -872,7 +871,6 @@ public class App : MonoBehaviour
             HandPose(pp, pq, settings.prostheticLeft, settings.prosthetic, out var p, out var q);
             PlaceHand(Sim.Prosthetic, p, q);
             reach.Root.SetPositionAndRotation(p, q);
-            (prosPos, prosRot) = (p, q);
         }
 
         var frame = link.Latest;
@@ -979,7 +977,7 @@ public class App : MonoBehaviour
         }
         ghost.Root.gameObject.SetActive(running && record.has_target);
         bool wristCue = running && record.wrist_cue;
-        onProsthetic.Root.gameObject.SetActive(Training && wristCue && hasProsthetic);
+        armShown = Mathf.MoveTowards(armShown, wristCue ? 1 : 0, Time.deltaTime / ArmFadeS);
         if (!running) return;
         if (record.index != cueIndex)
         {
@@ -1001,12 +999,8 @@ public class App : MonoBehaviour
             float t = Mathf.Clamp01((Time.time - cueStartedAt) / FollowInS);
             for (int j = 0; j < Sim.Joints; j++) ghostAngles[j] = Mathf.Lerp(meta.rest[j], record.target[j], t);
             float wrist = Mathf.Lerp(0, record.wrist, t);
-            foreach (var g in new[] { ghost, onProsthetic })
-            {
-                g.Pose(ghostAngles);
-                g.SetWrist(wrist, wristCue);
-            }
-            onProsthetic.Root.SetPositionAndRotation(prosPos, prosRot);
+            ghost.Pose(ghostAngles);
+            ghost.SetWrist(wrist, Mathf.SmoothStep(0, 1, armShown));
         }
     }
 

@@ -70,14 +70,17 @@ public class Ghost
     }
 
     // Bends the hand at the wrist (degrees, towards the palm positive: about the palm's x axis, which turns the
-    // fingers towards the palm side), and shows the forearm while a wrist cue runs
-    public void SetWrist(float flex, bool showArm)
+    // fingers towards the palm side), and shows the forearm (arm 0 to 1) while a wrist cue runs
+    public void SetWrist(float flex, float arm)
     {
         float a = flex * Mathf.Deg2Rad / 2;
         wristQuat[0] = Mathf.Cos(a);
         wristQuat[1] = Mathf.Sin(a);
         wrist.localRotation = SimView.QuatToUnity(wristQuat, 0);
-        forearm.gameObject.SetActive(showArm);
+        // arm 0 to 1: the forearm grows back from the wrist as it fades in
+        forearm.gameObject.SetActive(arm > 0.01f);
+        forearm.localScale = new Vector3(Mathf.Lerp(0.6f, 1, arm), arm, Mathf.Lerp(0.6f, 1, arm));
+        forearm.localPosition = SimView.ToUnity(0, -0.02 - 0.11 * arm, 0);
     }
 
     readonly double[] wristQuat = new double[4];
