@@ -1,9 +1,9 @@
 using UnityEngine;
 
-// The room around the sim: a round room with warm walls and a thin brand gradient line round them, a wooden floor, a
-// ceiling light over the desk, a rug, sideboard and floor lamp by the desk, a Better Bionics wall panel behind it, and
-// the desk itself, sized like the sim's desk (export_model.py) with its top at the desk root and legs down to the real
-// floor. Dim and warm (Noah, 2026-11-24: the first version felt clinical and bright, the plant and books goofy).
+// The room around the sim: a round room with warm walls, a wooden floor, a ceiling light over the desk, a rug,
+// sideboard and floor lamp by the desk, and the desk itself, sized like the sim's desk (export_model.py) with its top at
+// the desk root and legs down to the real floor. Dim and warm (Noah, 2026-11-24: the first version felt clinical and
+// bright, a plant and books goofy, branding not wanted).
 public class Room
 {
     const float Radius = 4, Height = 3;
@@ -45,8 +45,6 @@ public class Room
         Part("walls", surroundings.transform, Walls(), backdrop);
         var ceiling = Part("ceiling", surroundings.transform, Disc(Radius, Ceiling, Ceiling), backdrop);
         ceiling.localPosition = new Vector3(0, Height, 0);
-        // The site's orange to pink to magenta as a thin line on the dado rail, going round the room
-        Part("brand line", surroundings.transform, BrandLine(), new Material(unlit) { renderQueue = 1001 });
 
         desk = new GameObject("desk").transform;
         desk.SetParent(deskRoot, false);
@@ -70,26 +68,6 @@ public class Room
         furnishings = new GameObject("furnishings").transform;
         furnishings.SetParent(desk, false);
         Furnish(material);
-    }
-
-    // Behind the desk: a dark panel with the wordmark in the gradient and the line under it, as on the site. Called
-    // once the menu has loaded the fonts
-    public void Brand(Material material, Material unlit)
-    {
-        var panel = new GameObject("brand").transform;
-        panel.SetParent(furnishings, false);
-        panel.localPosition = new Vector3(0, 0, 2.3f);
-        Box(panel, new Vector3(2.4f, 1.0f, 0.04f), new Vector3(0, 1.55f, 0.02f), SimView.Paint(material, SimView.Hex(0x141210), 0.4f));
-        var word = Ui.WorldLabel(panel, new Vector3(0, 1.62f, -0.002f), "BETTER BIONICS", 0.16f, Color.white, false, true,
-            TMPro.TextAlignmentOptions.Center, new Vector2(2.3f, 0.3f));
-        word.characterSpacing = 18;
-        word.enableVertexGradient = true;
-        word.colorGradient = new TMPro.VertexGradient(Ui.Orange, Ui.Magenta, Ui.Orange, Ui.Magenta);
-        var sub = Ui.WorldLabel(panel, new Vector3(0, 1.38f, -0.002f), "EMG CONTROL  /  HAPTIC FEEDBACK", 0.045f, Ui.Muted, false,
-            true, TMPro.TextAlignmentOptions.Center, new Vector2(2.3f, 0.1f));
-        sub.characterSpacing = 30;
-        var line = Ui.WorldShape(panel, unlit, new Vector3(0, 1.3f, -0.002f), new Vector2(0.5f, 0.006f), 0, Ui.Accent, 0, true);
-        line.gameObject.name = "brand underline";
     }
 
     // Passthrough shows the real room instead
@@ -186,32 +164,6 @@ public class Room
                 t[k++] = a; t[k++] = a + 1; t[k++] = b;
                 t[k++] = b; t[k++] = a + 1; t[k++] = b + 1;
             }
-        var mesh = new Mesh { vertices = v, colors = c, triangles = t };
-        mesh.RecalculateBounds();
-        return mesh;
-    }
-
-    // A 1.5 cm band just inside the wall at the dado rail, in the gradient twice round
-    static Mesh BrandLine()
-    {
-        const int n = 144;
-        const float r = Radius - 0.005f, y0 = 0.905f, y1 = 0.92f;
-        var v = new Vector3[2 * (n + 1)];
-        var c = new Color[v.Length];
-        var t = new int[n * 6];
-        for (int i = 0; i <= n; i++)
-        {
-            float a = 2 * Mathf.PI * i / n, f = Mathf.PingPong(2f * i / n * 2, 1);
-            v[2 * i] = new Vector3(r * Mathf.Cos(a), y0, r * Mathf.Sin(a));
-            v[2 * i + 1] = new Vector3(r * Mathf.Cos(a), y1, r * Mathf.Sin(a));
-            c[2 * i] = c[2 * i + 1] = Ui.GradientAt(f);
-        }
-        for (int i = 0, k = 0; i < n; i++)
-        {
-            int a = 2 * i, b = 2 * i + 2;
-            t[k++] = a; t[k++] = a + 1; t[k++] = b;
-            t[k++] = b; t[k++] = a + 1; t[k++] = b + 1;
-        }
         var mesh = new Mesh { vertices = v, colors = c, triangles = t };
         mesh.RecalculateBounds();
         return mesh;

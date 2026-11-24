@@ -33,6 +33,8 @@ public class TrackedHand
     public Vector3 IndexTip { get; private set; }
     public Vector3 PalmNormal { get; private set; }
     public Vector3 PinchPoint { get; private set; }
+    // The index knuckle: stays put while pinching, so the pointing ray goes through it
+    public Vector3 IndexKnuckle { get; private set; }
     // 0 open to 1 a fist, from the middle, ring and little fingers
     public float Closure { get; private set; }
     public bool Pinching { get; private set; }
@@ -89,6 +91,7 @@ public class TrackedHand
         var thumbTip = Unflip(points[4]);
         IndexTip = Unflip(points[8]);
         PinchPoint = (thumbTip + IndexTip) / 2;
+        IndexKnuckle = Unflip(points[5]);
         float gap = Vector3.Distance(thumbTip, IndexTip);
         Pinching = Pinching ? gap < PinchOffM : gap < PinchOnM;
         gap = Vector3.Distance(thumbTip, Unflip(points[12]));

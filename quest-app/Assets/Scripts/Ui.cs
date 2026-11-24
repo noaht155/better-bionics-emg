@@ -20,8 +20,8 @@ public class Ui
     // Motion only where something changes state, all under 200 ms as on the web app: a toggle's pill slides, the
     // tab underline slides to the tab picked, the panel grows in from 92 % when it opens
     const float SlideS = 0.14f, OpenS = 0.16f;
-    // A press that has to be held (a bare-hand pinch, anything during a recording) fires after this long, its bar
-    // filling under the button meanwhile (Noah, 2026-11-24: pinches set things off by accident)
+    // A press that has to be held (through a ray) fires after this long, its bar filling under the button meanwhile
+    // (Noah, 2026-11-24: pinches set things off by accident)
     public const float HoldS = 1.0f;
 
     public static Font InterFont, InterBoldFont, MonoFont;

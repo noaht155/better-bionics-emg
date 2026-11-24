@@ -2645,6 +2645,12 @@ levels: r 0.995 to 0.999 per session, mean difference 0.005 to 0.013, a clench l
 - Room (Noah: less clinical but goofy): plant, books and vase gone; a dark wall panel behind the desk with the
   wordmark in the gradient, "EMG control / haptic feedback" under it and the gradient underline, and a thin gradient
   line round the walls on the dado rail. The controls card moved next to the Menu button on the desk's near edge.
+- Then (Noah): branding removed again (panel and wall line); hold to confirm only for presses through a ray (bare
+  hand or controller), pokes go through at once, and the start of a ray hold pauses a recording; the bare hand's ray
+  goes from the shoulder through the index knuckle, which stays put while pinching (it went through the pinch
+  point, which moves as the fingers close), smoothed like a one euro filter (0.15 s turning slowly, 0.03 s
+  swinging); a click when a press goes through and a soft tick when a hold starts, made in code (`Sounds.cs`, the
+  audio module and an AudioListener added); the controls card 10 cm past the desk's near edge, tilted to the face.
 - `build.sh` waits up to 10 s for the Quest after the Unity build, which restarts the adb server and made the
   install step miss a plugged-in headset.
 

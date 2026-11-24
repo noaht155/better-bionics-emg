@@ -194,6 +194,8 @@ public class QuestBuild : IPostGenerateGradleAndroidProject
         var head = new GameObject("head") { tag = "MainCamera" };
         head.transform.SetParent(rig.transform, false);
         var camera = head.AddComponent<Camera>();
+        // The menu's sounds are heard from the head
+        head.AddComponent<AudioListener>();
         camera.nearClipPlane = 0.01f;
         camera.farClipPlane = 50;
         camera.clearFlags = CameraClearFlags.SolidColor;

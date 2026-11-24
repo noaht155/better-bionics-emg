@@ -114,6 +114,10 @@ public class App : MonoBehaviour
     SimView view;
     Link link;
     Ui menu, card, dock, controls;
+    readonly Sounds sounds = new Sounds();
+    // The bare hand's ray, smoothed: hand tracking shakes a few mm, which a 1 m ray turns into cm
+    Vector3 rayOrigin, rayDir;
+    bool rayWarm;
     // ghost: the cue's sign in front; onFree, onProsthetic: the same on the user's own hands (Noah, 2026-11-24: shown
     // on the hands for the mind to muscle link, done with both hands). The prosthetic hand itself shows the fingers,
     // onProsthetic only appears for a wrist cue, which that hand can't bend
@@ -192,7 +196,6 @@ public class App : MonoBehaviour
         ray.GetComponent<MeshRenderer>().sharedMaterial = uiMaterial;
         ray.gameObject.SetActive(false);
         BuildMenu();
-        room.Brand(material, uiMaterial);
         BuildCard();
         BuildDock();
         BuildControls();
@@ -364,10 +367,11 @@ public class App : MonoBehaviour
 
     void PlaceControls()
     {
-        // Beside the Menu button on the free hand's side, lying tilted up on the desk's near edge like it, in reach
+        // Beside the Menu button on the free hand's side, just past the desk's near edge towards the user and tilted
+        // up to the face (Noah: closer)
         float x = (FreeIsRight ? 1 : -1) * (meta.desk_half[0] - 0.12f - 0.09f - Ui.Width * 0.5f / 2);
-        controls.root.localPosition = new Vector3(x, 0.05f, -meta.desk_centre_y - meta.desk_half[1] + 0.05f);
-        controls.root.localRotation = Quaternion.Euler(50, 0, 0);
+        controls.root.localPosition = new Vector3(x, 0.1f, -meta.desk_centre_y - meta.desk_half[1] - 0.1f);
+        controls.root.localRotation = Quaternion.Euler(35, 0, 0);
     }
 
     void ShowControls(bool on)
@@ -431,9 +435,29 @@ public class App : MonoBehaviour
     void SendTrain(string action) =>
         link.Send(JsonUtility.ToJson(new TrainMessage { train = new TrainAction { action = action } }));
 
+    Ray SteadyRay(Vector3 origin, Vector3 dir)
+    {
+        if (!rayWarm) (rayOrigin, rayDir, rayWarm) = (origin, dir, true);
+        // Steadier the slower it turns, quick when it swings, like a one euro filter
+        float turn = Vector3.Angle(rayDir, dir) / Mathf.Max(Time.deltaTime, 1e-4f);
+        float tau = Mathf.Lerp(0.15f, 0.03f, Mathf.InverseLerp(20, 200, turn));
+        float k = 1 - Mathf.Exp(-Time.deltaTime / tau);
+        rayOrigin = Vector3.Lerp(rayOrigin, origin, k);
+        rayDir = Vector3.Slerp(rayDir, dir, k).normalized;
+        return new Ray(rayOrigin, rayDir);
+    }
+
     // Whether the touch that started the current hold paused the recording, so the Pause it confirms doesn't
     // continue it again
     bool pausedByTouch;
+
+    // A press through a ray is held to confirm (Noah, 2026-11-24: pinches set things off by accident); during a
+    // recording the start of the hold pauses it, so a stray one costs a pause, not a cue
+    void HoldStarted()
+    {
+        sounds.Play(Sounds.Kind.Tick, head.position);
+        if (record != null && record.running) PauseForTouch();
+    }
 
     void PauseForTouch()
     {
@@ -765,23 +789,24 @@ public class App : MonoBehaviour
         {
             var side = Vector3.ProjectOnPlane(head.right, Vector3.up).normalized * (FreeIsRight ? 1 : -1);
             var shoulder = head.position + Vector3.down * 0.15f + side * 0.15f;
-            pointer = new Ray(tracked.PinchPoint, (tracked.PinchPoint - shoulder).normalized);
+            pointer = SteadyRay(tracked.IndexKnuckle, (tracked.IndexKnuckle - shoulder).normalized);
             down = tracked.Pinching;
         }
+        if (hasF || !tracked.Tracked) rayWarm = false;
         bool grabHandle = tracked.Tracked ? tracked.Pinching : grip > GrabOn;
         float length = 0;
         bool clicked = false;
         foreach (var panel in new[] { menu, card, dock })
         {
-            // During a recording every press is held to confirm and the first touch pauses it, so a stray touch
-            // costs a pause, not a cue (Noah, 2026-11-24)
-            bool recording = record != null && record.running;
-            float l = panel.Interact(tip, pointer, down, grabHandle, grabber, out bool c, !hasF, recording,
-                recording ? PauseForTouch : (Action)null);
+            float l = panel.Interact(tip, pointer, down, grabHandle, grabber, out bool c, true, false, HoldStarted);
             if (l > 0 && length == 0) length = l;
             clicked |= c;
         }
-        if (clicked && hasF) Buzz(FreeNode, 0.25f, 0.03f);
+        if (clicked)
+        {
+            if (hasF) Buzz(FreeNode, 0.25f, 0.03f);
+            sounds.Play(Sounds.Kind.Click, head.position);
+        }
         // The bare hand's ray only shows while it points at a panel, so it isn't always in view
         bool showRay = pointer.HasValue && (hasF && menu.Visible || length > 0.0001f);
         ray.gameObject.SetActive(showRay);
