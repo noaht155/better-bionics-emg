@@ -105,8 +105,10 @@ def _shape(**joints):
 
 MOVEMENTS = {
     "move_thumb_flex": ("THUMB FLEX\nbend it across the palm and back", _bent("thumb")),
+    # Sideways in the palm plane, away from the index (Noah, 2026-11-24: lifted 60 deg out of the palm it read as the
+    # wrong direction). -30 is the sim hand's limit: 75 deg from the fingers against the open hand's 55
     "move_thumb_abd": ("THUMB OUT AND IN\nmove it away from the index and back",
-                       _shape(thumb_cmc_flex=-20, thumb_cmc_abd=60, thumb_mcp=5, thumb_ip=5)),
+                       _shape(thumb_cmc_flex=-30, thumb_cmc_abd=5, thumb_mcp=5, thumb_ip=5)),
     "move_index": ("INDEX\nbend it fully and back", _bent("index")),
     "move_middle": ("MIDDLE\nbend it fully and back", _bent("middle")),
     "move_ring_little": ("RING AND LITTLE\nbend both together and back",

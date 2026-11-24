@@ -2629,6 +2629,9 @@ levels: r 0.995 to 0.999 per session, mean difference 0.005 to 0.013, a clench l
   pokes, out of reach the ray takes over (`Ui.Interact`).
 - Controls card (Noah: easy controls somewhere): menu, select and grab at a glance, on a small card off the desk's
   near corner on the prosthetic side; Help has a switch to hide it.
+- Thumb out (`move_thumb_abd`) target pose (Noah: it lifted out of the palm): now sideways in the palm plane, cmc
+  flex -30 (the sim hand's limit), abd 5, was -20 and 60. Only the drawn and ghost target changes, the sign's data
+  is labelled by name.
 
 ## Open
 
