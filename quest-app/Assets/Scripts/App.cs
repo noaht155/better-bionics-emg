@@ -331,7 +331,7 @@ public class App : MonoBehaviour
             ("Stop", () => SendRecord("stop")));
         card.Show(page);
         card.root.SetParent(deskRoot, false);
-        card.root.localPosition = new Vector3(0, 0.42f, 0.5f);
+        card.root.localPosition = new Vector3(0, 0.38f, 0.12f);
         card.root.localRotation = Quaternion.Euler(-12, 0, 0);
         card.Close();
     }
