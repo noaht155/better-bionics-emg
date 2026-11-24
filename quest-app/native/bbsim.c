@@ -291,6 +291,10 @@ EXPORT void bb_place_object(World* w, int o, const double* pos, const double* qu
   w->parked[o] = parked;
   w->m->geom_contype[w->obj_geom[o]] = parked ? 0 : 2;
   w->m->geom_conaffinity[w->obj_geom[o]] = parked ? 0 : 3;
+  // The broadphase checks the body's masks first, and mj_setConst (bb_set_params) rebuilds them from the geoms':
+  // run while the objects were parked it left them at 0, and every object put on the desk fell through it
+  w->m->body_contype[w->obj_body[o]] = parked ? 0 : 2;
+  w->m->body_conaffinity[w->obj_body[o]] = parked ? 0 : 3;
   mj_forward(w->m, w->d);
 }
 

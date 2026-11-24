@@ -2674,6 +2674,13 @@ levels: r 0.995 to 0.999 per session, mean difference 0.005 to 0.013, a clench l
   prosthetic hand and the ghost in front. The forearm already only shows for the two wrist cues.
 - Checked in the headset (Noah): passthrough shows the room (the composition layers fix worked), the bare-hand ray
   works, the menu close button works, the room looks okay.
+- Objects fell straight through the desk and floor on the Quest (Noah), 1.4 to 1.8 km down in the VR stream. Cause:
+  MuJoCo also keeps each body's collision masks (`body_contype`, the broadphase checks them first), and `mj_setConst`
+  in `bb_set_params` rebuilds them from the geoms'. It runs when the mass scale changes, which the Quest does once at
+  load while every object is parked with its masks at 0, so no object put on the desk collided again. The laptop
+  never hit it because it places before setting params. `bb_place_object` now sets the body masks too. Reproduced on
+  the PC with the Quest's call order (-31 m after 2.5 s), 0.033 m resting after the fix. `tests/test_sim.py` couldn't
+  run: Noah's app.py holds the host DLL so it can't be rebuilt.
 
 ## Open
 
