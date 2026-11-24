@@ -75,6 +75,11 @@ def test_quest_touch_drives_the_haptics_while_fresh(monkeypatch):
     assert c.touch() == (0.0, None)
     c.set_quest_readout({"grip_force": 12.5, "touch_force": 14.0, "touch_surface": sim.SURFACES.index("normal")})
     assert c.touch() == (14.0, "normal")
+    # The laptop's test touch wins over the headset (its sim isn't running here, so it reads nothing)
+    c.set_test(dict(pressure=0.5, pos=1, slide=False))
+    assert c.touch() == (0.0, None) and c.touch_friction() is None
+    c.set_test(None)
+    assert c.touch() == (14.0, "normal")
     monkeypatch.setattr(tools, "QUEST_FRESH_S", 0.0)
     assert c.touch() == (0.0, None)
     monkeypatch.undo()

@@ -949,9 +949,10 @@ class Contact(Tool):
 
     def touch(self):
         """Force on everything the hand touches (N) and the surface it presses on most (sim.SURFACES, None for none),
-        from the Quest app while it sends."""
+        from the Quest app while it sends. The test touch wins over the Quest: it is started on purpose, to feel the
+        surfaces with the headset on too."""
         quest = self.quest_readout()
-        if quest is not None:
+        if quest is not None and self.test is None:
             import sim
             kind = quest.get("touch_surface", -1)
             surface = sim.SURFACES[kind] if isinstance(kind, int) and 0 <= kind < len(sim.SURFACES) else None
@@ -975,9 +976,10 @@ class Contact(Tool):
         return round(float(sim.rail_section(self._test_pos)) * (len(sim.SURFACES) - 1) / TEST_RAIL_END, 3)
 
     def touch_friction(self):
-        """Friction of what the hand presses on (sim.World.touch_friction), from the Quest app while it sends."""
+        """Friction of what the hand presses on (sim.World.touch_friction), from the Quest app while it sends and no
+        test touch runs."""
         quest = self.quest_readout()
-        if quest is not None:
+        if quest is not None and self.test is None:
             friction = quest.get("touch_friction")
             return float(friction) if friction and quest.get("touch_force", 0) > 0 else None
         world = self.world

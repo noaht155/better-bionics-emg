@@ -2588,6 +2588,8 @@ levels: r 0.995 to 0.999 per session, mean difference 0.005 to 0.013, a clench l
   ceiling and light are unlit vertex colours drawn first as a backdrop. Passthrough hides all of it.
 - Not on the headset yet: the Unity batch build stops at the licence check again (Hub not signed in). The C# compiles
   against Unity's DLLs (dotnet, only the stale project file's missing XR Hands reference fails).
+- The contact page's test touch drives the motors with the headset on too: it wins over the Quest's touch while it
+  runs (`Contact.touch`, `touch_friction`); before, a connected Quest silenced it.
 
 ## Open
 
