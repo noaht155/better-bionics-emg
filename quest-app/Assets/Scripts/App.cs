@@ -28,6 +28,8 @@ public class App : MonoBehaviour
     // clear the desk or an object holds the hand back; hidden again under ReachHideM. Moving fast, the palm trails by
     // about 0.04 s times the speed, so under ReachShowM for normal moves
     const float ReachShowM = 0.05f, ReachHideM = 0.03f;
+    // Quit takes a second press within this long, so a stray touch doesn't close the app
+    const float QuitConfirmS = 3;
 
     [Serializable]
     class Meta
@@ -133,7 +135,8 @@ public class App : MonoBehaviour
     bool floorSet;
 
     TextMeshPro linkText, simText, hapticsText, trainText, trainError, massText, forceText, heightText, sideText, freeText, recordText, recordError;
-    TextMeshPro[] readouts, sessionButtons;
+    TextMeshPro[] readouts, sessionButtons, quitButton;
+    float quitArmedAt = -QuitConfirmS;
     TextMeshPro cueMeta, cueTitle, cueBody, cueNext, cueState;
     Action<float> cueProgress;
 
@@ -233,6 +236,8 @@ public class App : MonoBehaviour
         menu.Toggle(play, "Gradient rail", () => current.rail == "gradient",
             () => SetRail(current.rail == "gradient" ? "steps" : "gradient"));
         menu.Toggle(play, "Passthrough", () => settings.passthrough, () => SetPassthrough(!settings.passthrough));
+        menu.Section(play, "App");
+        quitButton = menu.ButtonsWithLabels(play, ("Quit", Quit));
 
         var objects = menu.AddPage("Objects");
         menu.Section(objects, "Spawn on the desk");
@@ -342,6 +347,18 @@ public class App : MonoBehaviour
 
     void SendRecord(string action, bool quick = false) =>
         link.Send(JsonUtility.ToJson(new RecordMessage { record = new RecordAction { action = action, quick = quick } }));
+
+    // Closed fully, as the Quest's own Quit does: paused, the sim and link threads keep running and drain the battery
+    void Quit()
+    {
+        if (Time.time - quitArmedAt > QuitConfirmS)
+        {
+            quitArmedAt = Time.time;
+            return;
+        }
+        settings.Save();
+        Application.Quit();
+    }
 
     void SendTrain(string action) =>
         link.Send(JsonUtility.ToJson(new TrainMessage { train = new TrainAction { action = action } }));
@@ -819,6 +836,7 @@ public class App : MonoBehaviour
             : "Not recording";
         recordError.text = record != null && !string.IsNullOrEmpty(record.error) ? $"<color=#ff3b3b>{record.error}</color>" : "";
         sessionButtons[0].text = record != null && record.paused ? "Continue" : "Pause";
+        quitButton[0].text = Time.time - quitArmedAt <= QuitConfirmS ? "Press again to quit" : "Quit";
         var train = frame?.train;
         trainText.text = train == null ? "Laptop not connected"
             : !string.IsNullOrEmpty(train.status) ? train.status

@@ -2607,6 +2607,9 @@ levels: r 0.995 to 0.999 per session, mean difference 0.005 to 0.013, a clench l
   session just recorded, the same job as the Record tab's end card (on the hub when the laptop has one), then
   Control with it starts the control layer on the saved network with its haptics. Shows the progress, the balanced
   score and errors (`app.headset_train_state`). Checked on a test copy over `/ws/quest`, not yet with a real session.
+- Quest: Quit on the Play page (press twice within 3 s), closes the app fully like the Quest's own Quit. Found why it
+  has to be closed: paused (headset off), Unity stops `Update` but the sim and link threads keep running at 60 Hz.
+  Freezing them on pause and quitting after a while off are not built yet.
 
 ## Open
 
