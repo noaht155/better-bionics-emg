@@ -2663,6 +2663,13 @@ levels: r 0.995 to 0.999 per session, mean difference 0.005 to 0.013, a clench l
   off. The manifest step now adds each line once; it had stopped adding anything once Unity added hand tracking.
 - `build.sh` waits up to 10 s for the Quest after the Unity build, which restarts the adb server and made the
   install step miss a plugged-in headset.
+- Headset check (Noah): a ray hold didn't go through and its bar kept resetting. Pinching swings the ray, so it left
+  the button for a frame and the hold started over. A held press now keeps 1.5 cm of slack round its button and
+  rides out leaving it for under 0.15 s.
+- Cue card still far (Noah): moved from 50 cm past the desk centre to over the desk, 32 cm in from the near edge,
+  38 cm up.
+- Desk height (Noah): the slider goes 40 to 130 cm (was 50 to 110), and "Set height by hand" in Play > Desk sets it
+  from the wrist held out flat, with a pinch or trigger pull away from the panels.
 
 ## Open
 

@@ -260,9 +260,9 @@ public class App : MonoBehaviour
         menu.Buttons(objects, ("Cube", () => Spawn("small cube")), ("Pen", () => Spawn("pen")), ("Clear", ClearDesk));
         menu.Section(objects, "Desk");
         menu.Toggle(objects, "Move it with your hand", () => movingDesk, () => movingDesk = !movingDesk);
-        heightText = menu.Slider(objects, "Height", 50, 110, 1, () => Mathf.Round(settings.deskHeight * 100),
+        heightText = menu.Slider(objects, "Height", 40, 130, 1, () => Mathf.Round(settings.deskHeight * 100),
             v => SetDeskHeight(v / 100));
-        menu.Buttons(objects, ("Put it in front of me", DeskToMe));
+        menu.Buttons(objects, ("Put it in front of me", DeskToMe), ("Set height by hand", StartHandHeight));
 
         var rec = menu.AddPage("Record");
         menu.Section(rec, "Protocol F");
@@ -630,9 +630,17 @@ public class App : MonoBehaviour
         PlaceDeskFromSettings();
     }
 
+    bool handHeight, handHeightArmed;
+
+    void StartHandHeight()
+    {
+        handHeight = true;
+        handHeightArmed = false;
+    }
+
     void SetDeskHeight(float height)
     {
-        settings.deskHeight = Mathf.Clamp(height, 0.5f, 1.1f);
+        settings.deskHeight = Mathf.Clamp(height, 0.4f, 1.3f);
         settings.Save();
         room.SetHeight(settings.deskHeight);
         PlaceDeskFromSettings();
@@ -823,6 +831,20 @@ public class App : MonoBehaviour
             ray.localScale = new Vector3(0.0015f, shown, 1);
         }
         bool busy = length > 0 || menu.Grabbed || card.Grabbed;
+        // Height by hand: the hand held out flat where the desk should be, set with a pinch or trigger pull away
+        // from the panels. Waits for the press that started it to end first
+        if (handHeight)
+        {
+            bool set = tracked.Tracked ? tracked.Pinching : hasF && trigger > 0.7f;
+            if (!set) handHeightArmed = true;
+            else if (handHeightArmed && length == 0)
+            {
+                float y = tracked.Tracked ? tracked.WristPos.y : fp.y;
+                SetDeskHeight(y - 0.03f);
+                handHeight = false;
+                sounds.Play(Sounds.Kind.Click, head.position);
+            }
+        }
 
         // Placing the prosthetic hand: a fist inside it carries it, its offset from the controller follows
         bool fist = grip > GrabOn;
@@ -988,7 +1010,8 @@ public class App : MonoBehaviour
         readouts[1].text = $"{readout[7]:0.0} N";
         massText.text = $"x{current.mass_scale:0.00}";
         forceText.text = $"{current.max_force:0} N";
-        heightText.text = $"{settings.deskHeight * 100:0} cm";
+        heightText.text = handHeight ? "pinch to set"
+            : $"{settings.deskHeight * 100:0} cm";
         sideText.text = settings.prostheticLeft ? "Left: the controller strapped to the left forearm"
             : "Right: the controller strapped to the right forearm";
         freeText.text = tracked.Tracked ? "Tracked from your real hand, nothing to set."
