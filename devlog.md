@@ -2658,6 +2658,9 @@ levels: r 0.995 to 0.999 per session, mean difference 0.005 to 0.013, a clench l
   out drops under 0.1 s, and the trigger counts as pulled past 0.7 and let go under 0.4.
 - Menu close button (Noah: closing with the hand gesture was annoying): an × in the header's top right, the status
   chip moved left of it; closes at once by fingertip, ray or trigger.
+- Boundaryless (Noah: fine with no boundary): `com.oculus.feature.BOUNDARYLESS_APP` in the manifest. Meta honours it
+  only while passthrough is on; in VR the developer setting (Settings > System > Developer > Boundary) turns it
+  off. The manifest step now adds each line once; it had stopped adding anything once Unity added hand tracking.
 - `build.sh` waits up to 10 s for the Quest after the Unity build, which restarts the adb server and made the
   install step miss a plugged-in headset.
 
@@ -2748,9 +2751,12 @@ Now: haptics
 - Control haptics on the motors: tune the four surface profiles until slippery, smooth, normal and rough feel
   different, then on the headset (rebuild with `build.sh`). Record the ones that feel right with the surface's
   Record button. The rail on the desk has all four side by side.
-- Quest: the APK on the headset has the shared sim and the mass fix but not the palm collision, surfaces, friction
-  colours, gradient rail or the new room. Sign in to Unity Hub, rebuild and install with `quest-app/build.sh`, then
-  try the touch haptics, the grip squeeze and the room in the headset.
+- Quest (all of 2026-11-24 is on the headset, troubleshooting goes on in a new session): check passthrough
+  (composition layers fix), the steady ray and one selection per pinch, the close button, sounds, the room, the
+  training hands and wrist bends (restart `app.py` first, the wrist angles come from it), touch haptics and the grip
+  squeeze. While Noah wears the headset, the log (`adb logcat`) and a screenshot (metacam TAKE_SCREENSHOT, pulled
+  from /sdcard/Oculus/Screenshots) can be read without taking it off. Not built: freezing the sim and link threads
+  on pause and quitting after a while off.
 - Motor pickup: run `diagnostics/motor_pickup.py` with the motor band below the pads, relaxed and with a steady
   clench.
 - Haptics: decide on LRAs vs coin motors. LRAs need an AC drive at their resonance (about 170 to 235 Hz), which is

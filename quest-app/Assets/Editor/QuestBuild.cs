@@ -108,15 +108,25 @@ public class QuestBuild : IPostGenerateGradleAndroidProject
 
     public int callbackOrder => 0;
 
-    // Hand tracking needs Meta's permission and feature in the manifest, which nothing else adds
+    // Hand tracking needs Meta's permission and feature in the manifest, which nothing else adds. Boundaryless: no
+    // boundary to set up for this seated app (Noah, 2026-11-24); Meta only honours it while passthrough is on, in VR
+    // the headset's developer setting turns the boundary off
     public void OnPostGenerateGradleAndroidProject(string path)
     {
         var manifest = Path.Combine(path, "src/main/AndroidManifest.xml");
         var text = File.ReadAllText(manifest);
-        if (text.Contains("HAND_TRACKING")) return;
-        text = text.Replace("</manifest>",
-            "  <uses-permission android:name=\"com.oculus.permission.HAND_TRACKING\" />\n" +
-            "  <uses-feature android:name=\"oculus.software.handtracking\" android:required=\"false\" />\n</manifest>");
+        string[] lines =
+        {
+            "<uses-permission android:name=\"com.oculus.permission.HAND_TRACKING\" />",
+            "<uses-feature android:name=\"oculus.software.handtracking\" android:required=\"false\" />",
+            "<uses-feature android:name=\"com.oculus.feature.BOUNDARYLESS_APP\" android:required=\"true\" />",
+        };
+        // Each one only once: Unity's OpenXR features add some of them on their own
+        foreach (var line in lines)
+        {
+            var name = line.Split('"')[1];
+            if (!text.Contains("\"" + name + "\"")) text = text.Replace("</manifest>", "  " + line + "\n</manifest>");
+        }
         File.WriteAllText(manifest, text);
     }
 
