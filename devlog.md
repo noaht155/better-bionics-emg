@@ -2632,6 +2632,12 @@ levels: r 0.995 to 0.999 per session, mean difference 0.005 to 0.013, a clench l
 - Thumb out (`move_thumb_abd`) target pose (Noah: it lifted out of the palm): now sideways in the palm plane, cmc
   flex -30 (the sim hand's limit), abd 5, was -20 and 60. Only the drawn and ghost target changes, the sign's data
   is labelled by name.
+- Training in VR on the hands (Noah: show the sign on the training hand for the mind to muscle link, done with both
+  hands, shown only, nothing checks the free hand): during a cue with a target the prosthetic hand makes the sign
+  itself, a ghost hand shows it on the free hand, and the card says to do it with both hands. Wrist cues (Noah: the
+  wrist animations didn't work): the held wrist bends had no target, so no ghost; now the laptop sends the bend
+  (`HEADSET_WRIST_DEG`, 60 and -55 as the web page draws them) and the ghost hands bend at the wrist with a forearm
+  shown; the prosthetic hand can't bend, so a bent ghost sits on it for those cues.
 
 ## Open
 

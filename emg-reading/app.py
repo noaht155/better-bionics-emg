@@ -560,6 +560,10 @@ def headset_session_settings(quick):
     raise ValueError("record one session on the Record tab first, the headset starts from its setup")
 
 
+# Held wrist bends the headset shows on its ghost hands, degrees towards the palm, as web/app.js wristFrame draws them
+HEADSET_WRIST_DEG = {"hold_wrist_flex": 60.0, "hold_wrist_ext": -55.0}
+
+
 def headset_record_state(recorder):
     """The running session as the headset shows it: the cue, its target pose, progress and pauses."""
     session = recorder.snapshot()["session"]
@@ -572,7 +576,8 @@ def headset_record_state(recorder):
             "text": cue["text"], "seconds": cue["seconds"] or 0, "elapsed": session["cue_elapsed"],
             "marked_bad": session["marked_bad"], "next": upcoming["text"].splitlines()[0] if upcoming else "",
             "target": [float(a) for a in POSES.get(cue["label"], POSES["rest"])],
-            "has_target": cue["label"] in POSES}
+            "has_target": cue["label"] in POSES or cue["label"] in HEADSET_WRIST_DEG,
+            "wrist": HEADSET_WRIST_DEG.get(cue["label"], 0.0), "wrist_cue": cue["label"] in HEADSET_WRIST_DEG}
 
 
 def headset_haptics_state(haptics, test_touch):

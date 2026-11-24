@@ -40,7 +40,8 @@ public class Link
         public bool running, paused, hum, marked_bad, has_target;
         public int index, count;
         public string label, kind, text, next, error;
-        public float seconds, elapsed;
+        public float seconds, elapsed, wrist;
+        public bool wrist_cue;
         public float[] target;
     }
 

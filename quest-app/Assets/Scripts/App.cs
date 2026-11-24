@@ -114,7 +114,13 @@ public class App : MonoBehaviour
     SimView view;
     Link link;
     Ui menu, card, dock, controls;
-    Ghost ghost, reach;
+    // ghost: the cue's sign in front; onFree, onProsthetic: the same on the user's own hands (Noah, 2026-11-24: shown
+    // on the hands for the mind to muscle link, done with both hands). The prosthetic hand itself shows the fingers,
+    // onProsthetic only appears for a wrist cue, which that hand can't bend
+    Ghost ghost, reach, onFree, onProsthetic;
+    Vector3 freePos, prosPos;
+    Quaternion freeRot, prosRot;
+    bool freeShown, hasProsthetic;
     Ui.Page help;
     TrackedHand tracked;
     bool prevMenuGesture;
@@ -391,6 +397,12 @@ public class App : MonoBehaviour
         reach?.Destroy();
         reach = new Ghost(settings.prostheticLeft ? ghostLeft : ghostRight, material, SimView.Hex(0x6b6b75));
         reach.Root.gameObject.SetActive(false);
+        onFree?.Destroy();
+        onFree = new Ghost(settings.prostheticLeft ? ghostRight : ghostLeft, material, SimView.Hex(0x6b6b75));
+        onFree.Root.gameObject.SetActive(false);
+        onProsthetic?.Destroy();
+        onProsthetic = new Ghost(settings.prostheticLeft ? ghostLeft : ghostRight, material, SimView.Hex(0x6b6b75));
+        onProsthetic.Root.gameObject.SetActive(false);
     }
 
     void ToggleMenu()
@@ -684,6 +696,8 @@ public class App : MonoBehaviour
 
         tracked.Update(FreeIsRight);
         bool hasP = Pose(ProstheticNode, out var pp, out var pq);
+        hasProsthetic = hasP;
+        freeShown = false;
         Vector3 fp = default;
         Quaternion fq = Quaternion.identity;
         bool hasF = !tracked.Tracked && Pose(FreeNode, out fp, out fq);
@@ -698,6 +712,7 @@ public class App : MonoBehaviour
         {
             grabber.SetPositionAndRotation(tracked.WristPos, tracked.WristRot);
             PlaceHand(Sim.Free, tracked.WristPos, tracked.WristRot);
+            (freePos, freeRot, freeShown) = (tracked.WristPos, tracked.WristRot, true);
             grip = tracked.Closure;
         }
         else if (hasF)
@@ -705,6 +720,7 @@ public class App : MonoBehaviour
             grabber.SetPositionAndRotation(fp, fq);
             HandPose(fp, fq, !settings.prostheticLeft, settings.free, out var p, out var q);
             PlaceHand(Sim.Free, p, q);
+            (freePos, freeRot, freeShown) = (p, q, true);
             grip = Axis(FreeNode, CommonUsages.grip);
             trigger = Axis(FreeNode, CommonUsages.trigger);
         }
@@ -763,6 +779,7 @@ public class App : MonoBehaviour
             HandPose(pp, pq, settings.prostheticLeft, settings.prosthetic, out var p, out var q);
             PlaceHand(Sim.Prosthetic, p, q);
             reach.Root.SetPositionAndRotation(p, q);
+            (prosPos, prosRot) = (p, q);
         }
 
         var frame = link.Latest;
@@ -770,7 +787,9 @@ public class App : MonoBehaviour
         {
             TakeLaptopParams(frame);
             RunCommands(frame);
-            sim.SetInput(Sim.Prosthetic, frame.angles, frame.effort, frame.locked, false);
+            // While a recording shows a sign, the prosthetic hand makes it too, so the user sees it on that hand
+            if (Training) sim.SetInput(Sim.Prosthetic, ghostAngles, 0, false, false);
+            else sim.SetInput(Sim.Prosthetic, frame.angles, frame.effort, frame.locked, false);
         }
         else
         {
@@ -855,6 +874,8 @@ public class App : MonoBehaviour
     }
 
     // The cue card and ghost hand while the laptop records
+    bool Training => record != null && record.running && record.has_target;
+
     void ShowRecording()
     {
         bool running = record != null && record.running;
@@ -864,6 +885,9 @@ public class App : MonoBehaviour
             else card.Close();
         }
         ghost.Root.gameObject.SetActive(running && record.has_target);
+        bool wristCue = running && record.wrist_cue;
+        onFree.Root.gameObject.SetActive(Training && freeShown);
+        onProsthetic.Root.gameObject.SetActive(Training && wristCue && hasProsthetic);
         if (!running) return;
         if (record.index != cueIndex)
         {
@@ -878,12 +902,20 @@ public class App : MonoBehaviour
         cueNext.text = string.IsNullOrEmpty(record.next) ? "" : "Next: " + record.next;
         cueState.text = record.hum ? "<color=#ffc233>Hum on the band: the cue will be redone. Check the pads, then Continue.</color>"
             : record.paused ? "<color=#ffc233>Paused. Continue when ready.</color>"
-            : record.seconds <= 0 ? "Continue when ready." : "";
+            : record.seconds <= 0 ? "Continue when ready."
+            : record.has_target ? "Do it with both hands, as the hands show." : "";
         if (record.has_target && record.target != null && record.target.Length == Sim.Joints)
         {
             float t = Mathf.Clamp01((Time.time - cueStartedAt) / FollowInS);
             for (int j = 0; j < Sim.Joints; j++) ghostAngles[j] = Mathf.Lerp(meta.rest[j], record.target[j], t);
-            ghost.Pose(ghostAngles);
+            float wrist = Mathf.Lerp(0, record.wrist, t);
+            foreach (var g in new[] { ghost, onFree, onProsthetic })
+            {
+                g.Pose(ghostAngles);
+                g.SetWrist(wrist, wristCue);
+            }
+            onFree.Root.SetPositionAndRotation(freePos, freeRot);
+            onProsthetic.Root.SetPositionAndRotation(prosPos, prosRot);
         }
     }
 

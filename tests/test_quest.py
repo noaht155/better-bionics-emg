@@ -158,3 +158,18 @@ def test_headset_train_follows_its_own_calibration():
     assert None not in state.values()
     # Another session recorded since: nothing to show for it yet
     assert not app.headset_train_state(cal, dict(quick, session="later"), tools_)["saved"]
+
+
+def test_headset_shows_held_wrist_bends():
+    """A held wrist bend has a target for the ghost hands (the rest pose, bent at the wrist), a sign has no bend."""
+    import app
+
+    def state(label):
+        session = {"paused": False, "hum_pause": None, "index": 0, "count": 3, "next": None, "cue_elapsed": 1.0,
+                   "marked_bad": False, "cue": {"label": label, "kind": "nogrip", "text": "X", "seconds": 5}}
+        return app.headset_record_state(SimpleNamespace(snapshot=lambda: {"session": session}))
+
+    bend = state("hold_wrist_ext")
+    assert bend["has_target"] and bend["wrist_cue"] and bend["wrist"] == -55.0
+    sign = state("two_point")
+    assert sign["has_target"] and not sign["wrist_cue"] and sign["wrist"] == 0.0
