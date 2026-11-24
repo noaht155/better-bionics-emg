@@ -113,7 +113,7 @@ public class App : MonoBehaviour
     Sim sim;
     SimView view;
     Link link;
-    Ui menu, card, dock;
+    Ui menu, card, dock, controls;
     Ghost ghost, reach;
     Ui.Page help;
     TrackedHand tracked;
@@ -188,6 +188,7 @@ public class App : MonoBehaviour
         BuildMenu();
         BuildCard();
         BuildDock();
+        BuildControls();
         BuildGhost();
         SetPassthrough(settings.passthrough);
 
@@ -295,6 +296,7 @@ public class App : MonoBehaviour
                            "object holds the hand back.", 0.013f, true, 4);
         menu.Paragraph(help, "The free hand is your real hand, or a controller in it: grip and trigger close it to pick " +
                            "things up.", 0.013f, true, 3);
+        menu.Toggle(help, "Controls card at the desk", () => settings.controlsCard, () => ShowControls(!settings.controlsCard));
         menu.Section(help, "Leaving");
         menu.Paragraph(help, "Quit is at the bottom of Play. Taking the headset off only pauses the app, it keeps " +
                              "using the battery.", 0.013f, true, 3);
@@ -333,6 +335,38 @@ public class App : MonoBehaviour
         dock.root.localScale = Vector3.one * 0.45f;
         PlaceDock();
         dock.root.gameObject.SetActive(true);
+    }
+
+    // The controls at a glance, on a card standing just off the desk's near corner on the prosthetic side
+    void BuildControls()
+    {
+        controls = new Ui(uiMaterial, false);
+        var page = controls.AddPage("");
+        controls.Section(page, "Controls");
+        controls.Paragraph(page, "<b>Menu</b>  B or Y. Bare hand: palm to your face, thumb on the middle fingertip.",
+            0.014f, true, 2);
+        controls.Paragraph(page, "<b>Select</b>  touch with a fingertip, or point and pull the trigger or pinch.",
+            0.014f, true, 2);
+        controls.Paragraph(page, "<b>Grab</b>  grip, or close your hand. Move a panel by the bar under it.", 0.014f, true, 2);
+        controls.Show(page);
+        controls.root.SetParent(deskRoot, false);
+        controls.root.localScale = Vector3.one * 0.55f;
+        PlaceControls();
+        controls.root.gameObject.SetActive(settings.controlsCard);
+    }
+
+    void PlaceControls()
+    {
+        float x = (FreeIsRight ? -1 : 1) * (meta.desk_half[0] + 0.02f + Ui.Width * 0.55f / 2);
+        controls.root.localPosition = new Vector3(x, 0.12f, -meta.desk_centre_y - meta.desk_half[1] + 0.05f);
+        controls.root.localRotation = Quaternion.Euler(35, (FreeIsRight ? -1 : 1) * 15, 0);
+    }
+
+    void ShowControls(bool on)
+    {
+        settings.controlsCard = on;
+        settings.Save();
+        controls.root.gameObject.SetActive(on);
     }
 
     // At the desk's near corner on the free hand's side, tilted up to be read and touched
@@ -400,6 +434,7 @@ public class App : MonoBehaviour
         LoadScene();
         BuildGhost();
         PlaceDock();
+        PlaceControls();
     }
 
     void SetPassthrough(bool on)
@@ -685,23 +720,36 @@ public class App : MonoBehaviour
         if (menuGesture && !prevMenuGesture) ToggleMenu();
         prevMenuGesture = menuGesture;
         Vector3? tip = tracked.Tracked ? tracked.IndexTip : (Vector3?)null;
-        Ray? pointer = hasF ? new Ray(fp, fq * Vector3.forward) : (Ray?)null;
+        // Pointing: the controller's ray, or with the bare hand a ray from about the shoulder through the pinch, as
+        // the Quest's own menus do, selected by pinching
+        Ray? pointer = null;
+        bool down = trigger > 0.7f;
+        if (hasF) pointer = new Ray(fp, fq * Vector3.forward);
+        else if (tracked.Tracked)
+        {
+            var side = Vector3.ProjectOnPlane(head.right, Vector3.up).normalized * (FreeIsRight ? 1 : -1);
+            var shoulder = head.position + Vector3.down * 0.15f + side * 0.15f;
+            pointer = new Ray(tracked.PinchPoint, (tracked.PinchPoint - shoulder).normalized);
+            down = tracked.Pinching;
+        }
         bool grabHandle = tracked.Tracked ? tracked.Pinching : grip > GrabOn;
         float length = 0;
         bool clicked = false;
         foreach (var panel in new[] { menu, card, dock })
         {
-            float l = panel.Interact(tip, pointer, trigger > 0.7f, grabHandle, grabber, out bool c);
+            float l = panel.Interact(tip, pointer, down, grabHandle, grabber, out bool c);
             if (l > 0 && length == 0) length = l;
             clicked |= c;
         }
         if (clicked && hasF) Buzz(FreeNode, 0.25f, 0.03f);
-        bool showRay = hasF && (menu.Visible || length > 0);
+        // The bare hand's ray only shows while it points at a panel, so it isn't always in view
+        bool showRay = pointer.HasValue && (hasF && menu.Visible || length > 0.0001f);
         ray.gameObject.SetActive(showRay);
         if (showRay)
         {
-            float shown = length > 0 ? length : 0.6f;
-            ray.SetPositionAndRotation(fp + fq * Vector3.forward * (shown / 2), fq * Quaternion.Euler(90, 0, 0));
+            var r = pointer.Value;
+            float shown = length > 0.0001f ? length : 0.6f;
+            ray.SetPositionAndRotation(r.origin + r.direction * (shown / 2), Quaternion.LookRotation(r.direction) * Quaternion.Euler(90, 0, 0));
             ray.localScale = new Vector3(0.0015f, shown, 1);
         }
         bool busy = length > 0 || menu.Grabbed || card.Grabbed;

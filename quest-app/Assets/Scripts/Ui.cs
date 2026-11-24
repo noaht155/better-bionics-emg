@@ -332,8 +332,9 @@ public class Ui
 
     public void Close() => root.gameObject.SetActive(false);
 
-    // Interaction: a fingertip (poke) or a controller ray; down is the trigger for the ray, grab the fist or grip for
-    // the handle. Returns the ray's length to the panel, 0 when it misses
+    // Interaction: a fingertip (poke) or a ray (a controller's, or the tracked hand pointing); down is the trigger or
+    // the pinch for the ray, grab the fist or grip for the handle. A fingertip near the panel wins, out of reach the
+    // ray takes over. Returns the ray's length to the panel, 0 when it misses
     public float Interact(Vector3? tip, Ray? ray, bool down, bool grab, Transform grabber, out bool clicked)
     {
         clicked = false;
@@ -341,11 +342,13 @@ public class Ui
         Vector2 at = default;
         bool inFront = false, touching = false;
         float length = 0;
+        bool poking = false;
         if (tip.HasValue)
         {
             var local = root.InverseTransformPoint(tip.Value);
             at = new Vector2(local.x, local.y - body.localPosition.y);
             inFront = local.z > -0.04f && local.z < 0.015f;
+            poking = inFront || pressed != null && pressed != handle && wasTouching;
             touching = local.z > -0.004f && local.z < 0.015f;
             // A fingertip coming through from behind the panel doesn't press until it has left the surface
             if (touching && !wasTouching && !behind && prevZ > 0.015f) behind = true;
@@ -353,7 +356,7 @@ public class Ui
             if (behind) touching = false;
             prevZ = local.z;
         }
-        else if (ray.HasValue)
+        if (!poking && ray.HasValue)
         {
             var plane = new Plane(root.forward, root.position);
             if (plane.Raycast(ray.Value, out float d) && d < 3)

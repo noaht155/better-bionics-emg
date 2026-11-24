@@ -2624,6 +2624,11 @@ levels: r 0.995 to 0.999 per session, mean difference 0.005 to 0.013, a clench l
 - Room again (Noah: clinical, desolate, a bit bright): warm walls with a darker band under a dado rail, wooden floor
   boards, walnut desk, a rug under the desk, a plant, a sideboard with books and a vase, a floor lamp with a lit
   shade (the furnishings stand around the desk and move with it), warmer and dimmer ambient and sun.
+- Quest pointing with the bare hand (Noah): a ray from about the shoulder through the pinch point, select by
+  pinching, as the Quest's own menus do; it shows only while it points at a panel. A fingertip near a panel still
+  pokes, out of reach the ray takes over (`Ui.Interact`).
+- Controls card (Noah: easy controls somewhere): menu, select and grab at a glance, on a small card off the desk's
+  near corner on the prosthetic side; Help has a switch to hide it.
 
 ## Open
 

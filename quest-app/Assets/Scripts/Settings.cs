@@ -23,6 +23,8 @@ public class Settings
     public bool passthrough;
     // The menu opens on Help the first time the app starts
     public bool helpSeen;
+    // The controls card by the desk
+    public bool controlsCard = true;
 
     public static Settings Load()
     {
@@ -36,6 +38,7 @@ public class Settings
         s.deskYaw = PlayerPrefs.GetFloat("desk_yaw", 0);
         s.passthrough = PlayerPrefs.GetInt("passthrough", 0) == 1;
         s.helpSeen = PlayerPrefs.GetInt("help_seen", 0) == 1;
+        s.controlsCard = PlayerPrefs.GetInt("controls_card", 1) == 1;
         return s;
     }
 
@@ -50,6 +53,7 @@ public class Settings
         PlayerPrefs.SetFloat("desk_yaw", deskYaw);
         PlayerPrefs.SetInt("passthrough", passthrough ? 1 : 0);
         PlayerPrefs.SetInt("help_seen", helpSeen ? 1 : 0);
+        PlayerPrefs.SetInt("controls_card", controlsCard ? 1 : 0);
         PlayerPrefs.Save();
     }
 
