@@ -2587,12 +2587,22 @@ levels: r 0.995 to 0.999 per session, mean difference 0.005 to 0.013, a clench l
   the user sits with the grid fading out, a lighter desk and legs, trilight ambient and a warmer sun. Walls,
   ceiling and light are unlit vertex colours drawn first as a backdrop. Passthrough hides all of it.
 - Not on the headset yet: the Unity batch build stops at the licence check again (Hub not signed in). The C# compiles
-  against Unity's DLLs (dotnet, only the stale project file's missing XR Hands reference fails).
+  clean against Unity's DLLs with dotnet (the generated project file is stale: it lists a removed `Panel.cs` and
+  lacks XR Hands, so the check builds a copy with every script and that reference).
 - The contact page's test touch drives the motors with the headset on too: it wins over the Quest's touch while it
   runs (`Contact.touch`, `touch_friction`); before, a connected Quest silenced it.
 - Haptics on the Quest's Play page: what the motors play (force, surface, friction, pulse rate, test touch, or the
   strongest duty in effort mode), sent with every frame (`app.headset_haptics_state`). No duty in surface mode, it
   pulses and would flicker.
+- Hand target limits in bbsim (the leftovers of Quest step 4, PC and Quest both): the target chases what it is asked
+  at up to 2 m/s (`HAND_SPEED`), and while the weld pulls over 30 N (`HAND_PULL_N`) it is drawn back towards the
+  palm, at most 10 cm ahead (`HAND_LEAD`). Before, a target 30 cm under the desk pulled the hand straight through it
+  (0 N touch); now it stays on the desk, 0 blowups. The 200 to 300 N touch it reads there is the same with a cap of
+  10, 20 or 40 N, so it isn't the weld. A 1 m jump: 0.59 m behind after 0.25 s, 0.08 after 0.5 s, with any cap, so
+  fast moves don't hit the cap. All tests pass, lifts included. Readout 17 is how far the palm is from where it is
+  asked to be.
+- Quest: a ghost hand (target grey) at the controller's hand pose while the palm is held back over 5 cm (hidden
+  under 3 cm), posed like the hand.
 
 ## Open
 

@@ -15,6 +15,15 @@
 #define NH 2
 #define MAXOBJ 64
 #define NSURF 8
+// The hand's target follows what it is asked at up to HAND_SPEED (m/s), so a tracking jump can't fling it. While
+// the weld pulls the palm harder than HAND_PULL_N (something holds the hand back, a controller pushed into the desk)
+// the target is drawn back towards the palm, so the pull stays near that instead of growing with the distance:
+// without it a target 30 cm under the desk pulled the palm through it (2026-11-24). Lifts and fast moves stay well
+// under it. HAND_LEAD (m) is the most the target leads the palm; the weld lags about 0.04 s times the speed, so it
+// leaves room for 2 m/s
+#define HAND_SPEED 2.0
+#define HAND_PULL_N 30.0
+#define HAND_LEAD 0.1
 #ifdef _WIN32
 #define EXPORT __declspec(dllexport)
 #else
@@ -25,7 +34,9 @@ static const char* FINGERS[NF] = {"thumb", "index", "middle", "ring", "pinky"};
 static const char* PREFIX[NH] = {"p_", "f_"};
 
 typedef struct {
-  int palm, mocap;
+  int palm, mocap, weld;
+  // Where the hand is asked to be (bb_set_hand); its mocap target follows it under the limits above
+  double goal[3];
   int act[NJ], qadr[NJ], finger_of_joint[NJ], bends[NJ];
   double angles[NJ], effort, lock_effort;
   int locked, was_locked, grab;
@@ -100,6 +111,9 @@ static int setup_hand(World* w, int h) {
   int target = mj_name2id(m, mjOBJ_BODY, name);
   if (hd->palm < 0 || target < 0 || m->body_mocapid[target] < 0) return 0;
   hd->mocap = m->body_mocapid[target];
+  snprintf(name, sizeof(name), "%shand", PREFIX[h]);
+  hd->weld = mj_name2id(m, mjOBJ_EQUALITY, name);
+  if (hd->weld < 0) return 0;
   int j = 0;
   size_t plen = strlen(PREFIX[h]);
   for (int a = 0; a < m->nu && j < NJ; a++) {
@@ -187,8 +201,10 @@ EXPORT World* bb_create(const char* xml, int len, char* err, int errlen) {
   }
   w->floor_geom = mj_name2id(m, mjOBJ_GEOM, "floor");
   w->max_force = 15;
-  for (int h = 0; h < NH; h++)
+  for (int h = 0; h < NH; h++) {
     for (int j = 0; j < NJ; j++) w->d->qpos[w->hand[h].qadr[j]] = 0;
+    memcpy(w->hand[h].goal, w->d->mocap_pos + 3 * w->hand[h].mocap, 3 * sizeof(double));
+  }
   mj_forward(m, w->d);
   return w;
 }
@@ -227,14 +243,16 @@ EXPORT void bb_set_input(World* w, int h, const double* angles, double effort, i
   hd->grab = grab;
 }
 
-// Where the hand's target is (the palm follows it through the weld); teleport puts the palm there at once
+// Where the hand is asked to be (its target follows, the palm follows that through the weld); teleport puts the
+// target and palm there at once
 EXPORT void bb_set_hand(World* w, int h, const double* pos, const double* quat, int teleport) {
   Hand* hd = &w->hand[h];
   double n = sqrt(quat[0] * quat[0] + quat[1] * quat[1] + quat[2] * quat[2] + quat[3] * quat[3]);
   if (n == 0) return;
-  for (int k = 0; k < 3; k++) w->d->mocap_pos[3 * hd->mocap + k] = pos[k];
+  memmove(hd->goal, pos, 3 * sizeof(double));
   for (int k = 0; k < 4; k++) w->d->mocap_quat[4 * hd->mocap + k] = quat[k] / n;
   if (teleport) {
+    for (int k = 0; k < 3; k++) w->d->mocap_pos[3 * hd->mocap + k] = hd->goal[k];
     int adr = w->m->jnt_qposadr[w->m->body_jntadr[hd->palm]], dof = w->m->jnt_dofadr[w->m->body_jntadr[hd->palm]];
     memcpy(w->d->qpos + adr, w->d->mocap_pos + 3 * hd->mocap, 3 * sizeof(double));
     memcpy(w->d->qpos + adr + 3, w->d->mocap_quat + 4 * hd->mocap, 4 * sizeof(double));
@@ -278,9 +296,9 @@ EXPORT void bb_place_object(World* w, int o, const double* pos, const double* qu
 
 EXPORT int bb_nobjects(World* w) { return w->nobj; }
 
-// Hand h's target position and orientation (w x y z)
+// Where hand h is asked to be: position and orientation (w x y z)
 EXPORT void bb_hand_target(World* w, int h, double* pos, double* quat) {
-  memcpy(pos, w->d->mocap_pos + 3 * w->hand[h].mocap, 3 * sizeof(double));
+  memcpy(pos, w->hand[h].goal, 3 * sizeof(double));
   memcpy(quat, w->d->mocap_quat + 4 * w->hand[h].mocap, 4 * sizeof(double));
 }
 
@@ -418,12 +436,55 @@ static void drive(World* w, Hand* hd) {
   }
 }
 
+// Force of the weld that pulls hand h's palm to its target (N), from the last step's constraint forces: its first
+// three rows are the position part
+static double pull(World* w, Hand* hd) {
+  mjData* d = w->d;
+  double sum = 0;
+  int rows = 0;
+  for (int i = 0; i < d->nefc && rows < 3; i++)
+    if (d->efc_type[i] == mjCNSTR_EQUALITY && d->efc_id[i] == hd->weld) {
+      sum += d->efc_force[i] * d->efc_force[i];
+      rows++;
+    }
+  return sqrt(sum);
+}
+
+// Moves hand h's target towards its goal under HAND_SPEED, HAND_PULL_N and HAND_LEAD, for one step of dt
+static void follow(World* w, Hand* hd, double dt) {
+  double* t = w->d->mocap_pos + 3 * hd->mocap;
+  const double* palm = w->d->xpos + 3 * hd->palm;
+  double step[3], lead[3];
+  mju_sub3(step, hd->goal, t);
+  double len = mju_norm3(step), most = HAND_SPEED * dt;
+  if (len > most) mju_scl3(step, step, most / len);
+  mju_addTo3(t, step);
+  mju_sub3(lead, t, palm);
+  len = mju_norm3(lead);
+  double force = pull(w, hd), keep = force > HAND_PULL_N ? HAND_PULL_N / force : 1;
+  if (len * keep > HAND_LEAD) keep = HAND_LEAD / len;
+  if (keep < 1) {
+    mju_scl3(lead, lead, keep);
+    mju_add3(t, palm, lead);
+  }
+}
+
+// How far the prosthetic palm is from where it is asked to be (m): the desk or an object holding it back
+static double lag(World* w, Hand* hd) {
+  double diff[3];
+  mju_sub3(diff, hd->goal, w->d->xpos + 3 * hd->palm);
+  return mju_norm3(diff);
+}
+
 EXPORT void bb_step(World* w, double dt) {
   mjModel* m = w->m;
   mjData* d = w->d;
   long n = lround(dt / m->opt.timestep);
   for (long s = 0; s < (n > 1 ? n : 1); s++) {
-    for (int h = 0; h < NH; h++) drive(w, &w->hand[h]);
+    for (int h = 0; h < NH; h++) {
+      follow(w, &w->hand[h], m->opt.timestep);
+      drive(w, &w->hand[h]);
+    }
     double before = d->time;
     mj_step(m, d);
     hold_parked(w);
@@ -434,7 +495,7 @@ EXPORT void bb_step(World* w, double dt) {
       for (int h = 0; h < NH; h++) {
         Hand* hd = &w->hand[h];
         hd->held = -1;
-        bb_set_hand(w, h, d->mocap_pos + 3 * hd->mocap, d->mocap_quat + 4 * hd->mocap, 1);
+        bb_set_hand(w, h, hd->goal, d->mocap_quat + 4 * hd->mocap, 1);
       }
     }
     read_forces(w);
@@ -493,7 +554,7 @@ EXPORT void bb_object_pose(World* w, int o, double* pos, double* quat) {
 // Prosthetic grip force, its 5 finger forces and palm force, the free hand's grip force, the object each hand
 // holds (-1 none), the object the prosthetic hand presses on most, its weight, time, blow-ups, then the prosthetic
 // hand's force on everything it touches, those surfaces' friction weighted by force (0 while it touches nothing) and
-// the kind of surface it presses on most (-1 none)
+// the kind of surface it presses on most (-1 none), and how far its palm is from where it is asked to be (m)
 EXPORT void bb_readout(World* w, double* out) {
   Hand *p = &w->hand[0], *f = &w->hand[1];
   out[0] = grip_force(p);
@@ -513,6 +574,7 @@ EXPORT void bb_readout(World* w, double* out) {
   for (int k = 0; k < NSURF; k++)
     if (p->touch_on[k] > 0 && (kind < 0 || p->touch_on[k] > p->touch_on[kind])) kind = k;
   out[16] = kind;
+  out[17] = lag(w, p);
 }
 
 // A hand on its own for showing poses (the recording cue's target): no physics, only where its parts are at given

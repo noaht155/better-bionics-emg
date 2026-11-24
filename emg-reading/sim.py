@@ -550,7 +550,7 @@ class World:
         self._lib.bb_step(self._w, float(dt))
 
     def _readout(self):
-        out = _doubles([0] * 17)
+        out = _doubles([0] * 18)
         self._lib.bb_readout(self._w, out)
         return np.array(out)
 

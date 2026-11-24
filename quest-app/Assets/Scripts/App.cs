@@ -24,6 +24,10 @@ public class App : MonoBehaviour
     const float AdjustReach = 0.12f;
     // The ghost hand comes in from rest to the cue's pose over this long, as the page's target hand does
     const float FollowInS = 1.0f;
+    // The prosthetic palm this far from the controller's hand pose (m, readout 17) shows a ghost hand there, so it is
+    // clear the desk or an object holds the hand back; hidden again under ReachHideM. Moving fast, the palm trails by
+    // about 0.04 s times the speed, so under ReachShowM for normal moves
+    const float ReachShowM = 0.05f, ReachHideM = 0.03f;
 
     [Serializable]
     class Meta
@@ -103,7 +107,7 @@ public class App : MonoBehaviour
     SimView view;
     Link link;
     Ui menu, card, dock;
-    Ghost ghost;
+    Ghost ghost, reach;
     TrackedHand tracked;
     bool prevMenuGesture;
     Link.Params current;
@@ -317,6 +321,9 @@ public class App : MonoBehaviour
         ghost.Root.localRotation = Quaternion.Euler(90, 0, 0);
         ghost.Root.localScale = Vector3.one * 1.2f;
         ghost.Root.gameObject.SetActive(false);
+        reach?.Destroy();
+        reach = new Ghost(settings.prostheticLeft ? ghostLeft : ghostRight, material, SimView.Hex(0x6b6b75));
+        reach.Root.gameObject.SetActive(false);
     }
 
     void ToggleMenu()
@@ -651,6 +658,7 @@ public class App : MonoBehaviour
         {
             HandPose(pp, pq, settings.prostheticLeft, settings.prosthetic, out var p, out var q);
             PlaceHand(Sim.Prosthetic, p, q);
+            reach.Root.SetPositionAndRotation(p, q);
         }
 
         var frame = link.Latest;
@@ -668,6 +676,10 @@ public class App : MonoBehaviour
 
         if (movingDesk && (tracked.Tracked || hasF)) DragDesk(grabber.position, grabber.rotation, fist && !busy);
         FreeHandInput(grip, trigger, busy || movingDesk || adjustDragging);
+
+        bool heldBack = reach.Root.gameObject.activeSelf ? readout[17] > ReachHideM : readout[17] > ReachShowM;
+        reach.Root.gameObject.SetActive(hasP && heldBack);
+        if (hasP && heldBack) reach.Pose(frame != null ? frame.angles : meta.rest);
 
         if (view.Update(sim, readout, parked))
         {

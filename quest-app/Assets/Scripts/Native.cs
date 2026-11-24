@@ -6,7 +6,7 @@ using System.Runtime.InteropServices;
 static class Native
 {
     const string Lib = "bbsim";
-    public const int ReadoutSize = 17;
+    public const int ReadoutSize = 18;
 
     [DllImport(Lib)] public static extern IntPtr bb_create(byte[] xml, int len, byte[] err, int errlen);
     [DllImport(Lib)] public static extern void bb_free(IntPtr w);

@@ -304,3 +304,21 @@ def test_friction_is_the_one_rule_and_the_gradient_rail_runs_smoothly():
     finally:
         contact.stop()
         contact.join(2)
+
+
+def test_hand_target_is_speed_limited_and_cannot_pull_the_palm_through_the_desk():
+    """bbsim's follow: a target jump is chased at HAND_SPEED (2 m/s), and a target deep under the desk leaves the
+    palm on the desk instead of the weld pulling it through."""
+    world = sim.World()
+    rest = [0.0] * len(JOINTS)
+    pos, quat = world.hand_pose()
+    run = lambda seconds: [world.step(1 / 60, rest, 0.0, False) for _ in range(round(seconds * 60))]
+    lag = lambda: float(world._readout()[17])
+    world.set_hand(pos + [1.0, 0, 0.2], quat)
+    run(0.25)
+    assert lag() > 0.4
+    run(1.5)
+    assert lag() < 0.05
+    world.set_hand([pos[0], pos[1], -0.3], quat)
+    run(1.0)
+    assert lag() > 0.25 and world.blowups == 0
