@@ -2575,6 +2575,20 @@ levels: r 0.995 to 0.999 per session, mean difference 0.005 to 0.013, a clench l
 - The 3D contact page is the home for testing this (Noah): Simulate and Stop under the view, the simulated effort
   slider, R and F for effort in 10 % steps, and every key laid out under the view; Haptics is the first section.
 
+## 2026-11-24: Quest caught up, a lighter room
+
+- Quest follows the friction rule: objects and the rail are coloured by their friction between the surfaces'
+  colours (new `bb_geom_friction`, the stops from `scene.json`), not by surface name. The headset sends each geom's
+  friction to the VR tab, which colours the same way as the contact page (`frictionColor`), with the old fallbacks.
+- Gradient rail on the Quest: `export_model.py` writes a `_gradient` scene per side, Play > Physics has a Gradient
+  rail switch, and the laptop's `rail` setting switches it too. Like on the laptop, another rail reloads the scene.
+- Room (Noah: "just a dark box", wanted it less dead but still dark): round room 4 m across the seat with walls
+  lighter at eye height, a ceiling with a round light over the desk (moves with the desk), the floor lighter where
+  the user sits with the grid fading out, a lighter desk and legs, trilight ambient and a warmer sun. Walls,
+  ceiling and light are unlit vertex colours drawn first as a backdrop. Passthrough hides all of it.
+- Not on the headset yet: the Unity batch build stops at the licence check again (Hub not signed in). The C# compiles
+  against Unity's DLLs (dotnet, only the stale project file's missing XR Hands reference fails).
+
 ## Open
 
 Perfboard: replace the motors on positions 3 and 4 and buzz-test them (the rest checked 2026-11-18).
@@ -2663,8 +2677,9 @@ Now: haptics
 - Control haptics on the motors: tune the four surface profiles until slippery, smooth, normal and rough feel
   different, then on the headset (rebuild with `build.sh`). Record the ones that feel right with the surface's
   Record button. The rail on the desk has all four side by side.
-- Quest: the APK built today has the shared sim and the mass fix but not the palm collision or surfaces; rebuild and install
-  with `quest-app/build.sh` and try the touch haptics and the grip squeeze in the headset.
+- Quest: the APK on the headset has the shared sim and the mass fix but not the palm collision, surfaces, friction
+  colours, gradient rail or the new room. Sign in to Unity Hub, rebuild and install with `quest-app/build.sh`, then
+  try the touch haptics, the grip squeeze and the room in the headset.
 - Motor pickup: run `diagnostics/motor_pickup.py` with the motor band below the pads, relaxed and with a steady
   clench.
 - Haptics: decide on LRAs vs coin motors. LRAs need an AC drive at their resonance (about 170 to 235 Hz), which is

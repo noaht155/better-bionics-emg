@@ -156,8 +156,8 @@ public class App : MonoBehaviour
         grabber = new GameObject("grabber").transform;
 
         deskRoot = new GameObject("desk root").transform;
-        room = new Room(deskRoot, material, new Vector2(meta.desk_half[0], meta.desk_half[1]), meta.desk_centre_y,
-            2 * meta.desk_half[2]);
+        room = new Room(deskRoot, material, uiMaterial, new Vector2(meta.desk_half[0], meta.desk_half[1]),
+            meta.desk_centre_y, 2 * meta.desk_half[2]);
         room.SetHeight(settings.deskHeight);
         PlaceDeskFromSettings();
         view = new SimView(deskRoot, material);
@@ -352,7 +352,7 @@ public class App : MonoBehaviour
         if (passthroughCamera != null) passthroughCamera.enabled = on;
         // Passthrough shows through where the app draws nothing: a clear background with no alpha
         eyes.backgroundColor = on ? new Color(0, 0, 0, 0) : new Color(Ui.Bg.r, Ui.Bg.g, Ui.Bg.b, 1);
-        room.Floor.SetActive(!on);
+        room.SetVisible(!on);
         RenderSettings.fog = !on;
     }
 

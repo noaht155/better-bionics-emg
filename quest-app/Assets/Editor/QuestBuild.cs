@@ -168,11 +168,15 @@ public class QuestBuild : IPostGenerateGradleAndroidProject
         }
 
         var scene = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene);
-        RenderSettings.ambientMode = AmbientMode.Flat;
-        RenderSettings.ambientLight = new Color(0.35f, 0.35f, 0.38f);
+        // Light from above as in a room: brighter overhead, warmer, and darker towards the floor
+        RenderSettings.ambientMode = AmbientMode.Trilight;
+        RenderSettings.ambientSkyColor = new Color(0.52f, 0.51f, 0.55f);
+        RenderSettings.ambientEquatorColor = new Color(0.42f, 0.4f, 0.39f);
+        RenderSettings.ambientGroundColor = new Color(0.24f, 0.23f, 0.22f);
         var sun = new GameObject("sun").AddComponent<Light>();
         sun.type = LightType.Directional;
         sun.intensity = 1.0f;
+        sun.color = new Color(1f, 0.96f, 0.9f);
         sun.shadows = LightShadows.Soft;
         sun.shadowStrength = 0.55f;
         sun.transform.rotation = Quaternion.Euler(60, -25, 0);
