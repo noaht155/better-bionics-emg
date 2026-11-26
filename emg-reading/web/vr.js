@@ -216,19 +216,21 @@ function download(blob, ext) {
   setTimeout(() => URL.revokeObjectURL(a.href), 1000);
 }
 
-// A clip of the video as the page draws it, until Stop; webm, which Chrome and Edge record
+// A clip of the video as the page draws it, until Stop: webm in Chrome and Edge, mp4 in Safari, which can't record
+// webm
 function toggleClip() {
   if (video.clip) {
     video.clip.stop();
     return;
   }
   const chunks = [];
-  const rec = new MediaRecorder(videoCanvas.captureStream(30), { mimeType: "video/webm" });
+  const type = MediaRecorder.isTypeSupported("video/webm") ? "video/webm" : "video/mp4";
+  const rec = new MediaRecorder(videoCanvas.captureStream(30), { mimeType: type });
   rec.ondataavailable = (e) => chunks.push(e.data);
   rec.onstop = () => {
     video.clip = null;
     $("vr-clip").textContent = "Record a clip";
-    download(new Blob(chunks, { type: "video/webm" }), "webm");
+    download(new Blob(chunks, { type }), type === "video/webm" ? "webm" : "mp4");
   };
   rec.start(1000);
   video.clip = rec;
