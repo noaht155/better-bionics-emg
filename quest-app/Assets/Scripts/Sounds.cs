@@ -1,22 +1,25 @@
 using UnityEngine;
 
-// Short sounds for the menu, made at start so there are no audio files: a click when a press goes through and a
-// softer tick when a hold starts. Played where the head is, quiet.
+// Short sounds for the menu, made at start so there are no audio files: a click when a press goes through, a softer
+// tick when a hold starts and a faint one when the ray or a fingertip moves onto a control. Played where the head is,
+// quiet.
 public class Sounds
 {
-    public enum Kind { Click, Tick }
+    public enum Kind { Click, Tick, Hover }
 
     const int Rate = 48000;
-    readonly AudioClip click, tick;
+    readonly AudioClip click, tick, hover;
 
     public Sounds()
     {
         // A click: a quick rising blip, two tones a fifth apart. A tick: one higher, shorter, softer tone
         click = Tone("click", 0.045f, 0.35f, (t, d) => Mathf.Lerp(880, 1320, t / d));
         tick = Tone("tick", 0.02f, 0.18f, (t, d) => 1760);
+        hover = Tone("hover", 0.012f, 0.06f, (t, d) => 2640);
     }
 
-    public void Play(Kind kind, Vector3 at) => AudioSource.PlayClipAtPoint(kind == Kind.Click ? click : tick, at, 1);
+    public void Play(Kind kind, Vector3 at) =>
+        AudioSource.PlayClipAtPoint(kind == Kind.Click ? click : kind == Kind.Tick ? tick : hover, at, 1);
 
     static AudioClip Tone(string name, float seconds, float volume, System.Func<float, float, float> hz)
     {

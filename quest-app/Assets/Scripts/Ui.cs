@@ -95,7 +95,8 @@ public class Ui
     readonly List<Page> pages = new List<Page>();
     Page shown;
     MeshFilter back, backEdge, topStrip;
-    Element pressed, handle, hovered;
+    Element pressed, handle, hovered, lastHovered;
+    float hoverOff;
     readonly List<(Page page, TextMeshPro label, string title)> sectionLabels = new List<(Page, TextMeshPro, string)>();
     float height;
     float tabsY;
@@ -546,7 +547,10 @@ public class Ui
             if (!still) pressed = null;
         }
         wasTouching = touching;
-        HoverChanged = hit != null && hit != hovered;
+        // A hand shaking at a control's edge drops off it for a frame or two: that isn't a new hover
+        HoverChanged = hit != null && (hit != lastHovered || hoverOff > 0.3f);
+        hoverOff = hit != null ? 0 : hoverOff + Time.deltaTime;
+        if (hit != null) lastHovered = hit;
         hovered = hit;
         Draw(hit);
         // A ray anywhere on the panel counts, not only on a control, so its line doesn't blink off between buttons

@@ -911,17 +911,24 @@ public class App : MonoBehaviour
         if (hasF || !tracked.Tracked) rayWarm = false;
         bool grabHandle = tracked.Tracked ? tracked.Pinching : grip > GrabOn;
         float length = 0;
-        bool clicked = false;
+        bool clicked = false, hovered = false;
         foreach (var panel in new[] { menu, card, dock })
         {
             float l = panel.Interact(tip, pointer, down, grabHandle, grabber, out bool c, true, false, HoldStarted);
             if (l > 0 && length == 0) length = l;
             clicked |= c;
+            hovered |= panel.HoverChanged;
         }
         if (clicked)
         {
             if (hasF) Buzz(FreeNode, 0.25f, 0.03f);
             sounds.Play(Sounds.Kind.Click, head.position);
+        }
+        else if (hovered)
+        {
+            // Onto a new control: a faint tick and the lightest buzz, so moving along the menu can be felt
+            if (hasF) Buzz(FreeNode, 0.08f, 0.01f);
+            sounds.Play(Sounds.Kind.Hover, head.position);
         }
         // The bare hand's ray only shows while it points at a panel, so it isn't always in view
         // Kept a moment after it leaves a panel, so a shaky hand at the edge doesn't flicker it
