@@ -2726,6 +2726,10 @@ levels: r 0.995 to 0.999 per session, mean difference 0.005 to 0.013, a clench l
   Android legacy and round icon. Not yet checked where the Quest shows it for an app from unknown sources.
 - Menu: a faint tick and the lightest controller buzz when the ray or a fingertip moves onto a control, ignoring
   drops at a control's edge shorter than 0.3 s.
+- Quest off the head (open item): the sim thread stops stepping, the laptop link closes and a timer kills the app
+  after 10 min off (`App.OnApplicationPause`); back on, the link starts again. Checked with the headset put to sleep
+  over adb: the laptop saw the link drop and the app sat at 0 % CPU. Waking it over adb only brought up the
+  boundary prompt, so the resume is still to check on the head.
 - Windows didn't see the Quest again until it was replugged (only the XRSP/Crosswind interfaces show errors, the
   ADB one is fine).
 
@@ -2817,9 +2821,9 @@ Now: haptics
   different, then on the headset (rebuild with `build.sh`). Record the ones that feel right with the surface's
   Record button. The rail on the desk has all four side by side.
 - Quest: still to check in the headset: the training hands and wrist bends, the cue card distance, a ray hold
-  pausing a recording, desk height by hand, touch haptics and the grip squeeze. While Noah wears the headset, the log
-  (`adb logcat`) and a screenshot (metacam TAKE_SCREENSHOT, pulled from /sdcard/Oculus/Screenshots) can be read
-  without taking it off. Not built: freezing the sim and link threads on pause and quitting after a while off.
+  pausing a recording, desk height by hand, touch haptics and the grip squeeze; from 2026-11-26 the laptop's point
+  pulse, the hover tick and buzz, the link coming back after the headset was off, and the icon. The VR tab's
+  Headset video shows the headset's picture live (`adb logcat` for the log).
 - Motor pickup: run `diagnostics/motor_pickup.py` with the motor band below the pads, relaxed and with a steady
   clench.
 - Haptics: decide on LRAs vs coin motors. LRAs need an AC drive at their resonance (about 170 to 235 Hz), which is

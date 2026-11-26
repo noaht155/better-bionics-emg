@@ -36,6 +36,8 @@ public class Sim
     readonly HandInput[] inputs = { new HandInput(), new HandInput() };
     Thread thread;
     volatile bool running;
+    // Off the head: no stepping, and no catching up afterwards
+    public volatile bool Paused;
     IntPtr world;
     byte[] xmlStaged;
     Action<IntPtr> afterBuild;
@@ -167,6 +169,12 @@ public class Sim
         double[] o = new double[0];
         while (running)
         {
+            if (Paused)
+            {
+                Thread.Sleep(50);
+                last = clock.Elapsed.TotalSeconds;
+                continue;
+            }
             double now = clock.Elapsed.TotalSeconds;
             double dt = Math.Min(now - last, MaxStepS);
             last = now;

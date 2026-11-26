@@ -30,6 +30,10 @@ public class App : MonoBehaviour
     const float ReachShowM = 0.05f, ReachHideM = 0.03f;
     // Quit takes a second press within this long, so a stray touch doesn't close the app
     const float QuitConfirmS = 3;
+    // Off the head this long, the app closes itself
+    const int QuitAfterOffMs = 10 * 60 * 1000;
+    System.Threading.Timer quitTimer;
+    bool linkStopped;
     // The Help page opens this long after the intro on the first start
     const float HelpAfterS = 0.5f;
 
@@ -332,8 +336,8 @@ public class App : MonoBehaviour
                            "things up.", 0.013f, true, 3);
         menu.Toggle(help, "Controls card at the desk", () => settings.controlsCard, () => ShowControls(!settings.controlsCard));
         menu.Section(help, "Leaving");
-        menu.Paragraph(help, "Quit is at the bottom of Play. Taking the headset off only pauses the app, it keeps " +
-                             "using the battery.", 0.013f, true, 3);
+        menu.Paragraph(help, "Quit is at the bottom of Play. Taking the headset off pauses the app, and after 10 " +
+                             "minutes off it closes.", 0.013f, true, 3);
         menu.Show(play);
         menu.Close();
     }
@@ -1253,14 +1257,34 @@ public class App : MonoBehaviour
         link.View = JsonUtility.ToJson(new ViewMessage { view = viewOut });
     }
 
+    // Off the head the sim and link threads would keep running and drain the battery: they stop, and a timer closes
+    // the app if it stays off. Killing the process is what the Quest does to a paused app anyway; settings are saved
     void OnApplicationPause(bool paused)
     {
-        if (paused) settings.Save();
+        if (sim != null) sim.Paused = paused;
+        if (paused)
+        {
+            settings.Save();
+            link?.Stop();
+            linkStopped = true;
+            quitTimer?.Dispose();
+            quitTimer = new System.Threading.Timer(_ => System.Diagnostics.Process.GetCurrentProcess().Kill(), null,
+                QuitAfterOffMs, System.Threading.Timeout.Infinite);
+            return;
+        }
+        quitTimer?.Dispose();
+        quitTimer = null;
+        if (!linkStopped) return;
+        linkStopped = false;
+        link = new Link();
+        link.Start();
+        sceneSent = -1;
     }
 
     void OnDestroy()
     {
         sim?.Stop();
         link?.Stop();
+        quitTimer?.Dispose();
     }
 }
