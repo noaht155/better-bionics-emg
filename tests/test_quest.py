@@ -234,3 +234,40 @@ def test_link_reads_the_battery_warns_and_closes_the_app_it_links(monkeypatch):
     assert not adb.calls
     link.stop()
     assert adb.calls == [("-s", "Q1", "shell", "am", "force-stop", quest_link.QUEST_APP)]
+
+
+def test_session_video_records_beside_the_session_while_the_quest_is_connected(monkeypatch, tmp_path):
+    import queue
+    import time
+    import quest_video
+    feed = queue.Queue()
+
+    class FakeCapture:
+        def subscribe(self):
+            return feed
+
+        def unsubscribe(self, q):
+            pass
+
+    monkeypatch.setattr(quest_video, "capture", lambda: FakeCapture())
+    monkeypatch.setattr(quest_video, "VIDEO_DIR", tmp_path)
+    monkeypatch.setattr(quest_video, "POLL_S", 0.02)
+    recorder = SimpleNamespace(session=SimpleNamespace(folder=tmp_path / "2026-11-26_120000_a"))
+    connected = [False]
+    video = quest_video.SessionVideo(recorder, lambda: connected[0])
+    video.start()
+    time.sleep(0.1)
+    # Not recorded without the Quest app connected
+    assert not (tmp_path / "2026-11-26_120000_a").exists()
+    connected[0] = True
+    for msg in [("codec", "avc1.64002a"), ("frame", True, b"key"), ("frame", False, b"d1"),
+                ("codec", "avc1.64002a"), ("frame", True, b"key2")]:
+        feed.put(msg)
+    time.sleep(0.2)
+    recorder.session = None
+    time.sleep(0.1)
+    folder = tmp_path / "2026-11-26_120000_a"
+    assert (folder / "000.h264").read_bytes() == b"keyd1"
+    assert (folder / "001.h264").read_bytes() == b"key2"
+    rows = [line.split(",") for line in (folder / "frames.csv").read_text().splitlines()[1:]]
+    assert [(r[0], r[1], r[3]) for r in rows] == [("0", "0", "1"), ("0", "1", "0"), ("1", "0", "1")]

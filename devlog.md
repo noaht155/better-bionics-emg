@@ -2736,6 +2736,12 @@ levels: r 0.995 to 0.999 per session, mean difference 0.005 to 0.013, a clench l
 - Headset video tools: one shared screenrecord for everyone watching (`quest_video.Capture`, restarted for each new
   watcher since it only sends a key frame at the start), 3 Mbit/s. "Save a picture" (png) and "Record a clip"
   (webm from the page's canvas, until Stop) under the video. Checked in Chrome with the headset.
+- Headset video beside sessions: while a session records and the Quest app is connected, `quest_video.SessionVideo`
+  writes the picture to `data/headset-video/<session>/` (a .h264 per capture, frames.csv with segment, frame, arrival
+  time and key flag). Outside the session folder on purpose: `hub.SESSION_FILES` is fixed and `remove_session`
+  refuses folders with extra files. About 22 MB a minute at 3 Mbit/s. Arrival time is about 0.1 s after the
+  headset showed the frame. Checked with the real headset and a stand-in session: two segments when a page joined
+  partway, both decode.
 - Windows didn't see the Quest again until it was replugged (only the XRSP/Crosswind interfaces show errors, the
   ADB one is fine).
 

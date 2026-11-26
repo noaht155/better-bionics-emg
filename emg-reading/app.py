@@ -1830,6 +1830,8 @@ def main():
         tools = Tools(recorder)
         print(f"EMG from {band.source}, open http://localhost:{args.port}")
         quest = None if args.no_quest or args.hub else quest_link.start(args.port)
+        if quest is not None:
+            quest_video.SessionVideo(recorder, lambda: tools.contact.quest_view is not None).start()
         if args.hub:
             print(f"hub for {', '.join(hub.devices()) or 'no devices yet (python hub.py add-device NAME)'}, "
                   f"at http://{socket.gethostname()}:{args.port}")
