@@ -2730,6 +2730,9 @@ levels: r 0.995 to 0.999 per session, mean difference 0.005 to 0.013, a clench l
   after 10 min off (`App.OnApplicationPause`); back on, the link starts again. Checked with the headset put to sleep
   over adb: the laptop saw the link drop and the app sat at 0 % CPU. Waking it over adb only brought up the
   boundary prompt, so the resume is still to check on the head.
+- Quest battery: `quest_link` reads `dumpsys battery` every 30 s while linked and the VR tab shows level, charging
+  and temperature; the warnings bar says so at 15 % and below when not charging, or at 45 °C. When the app stops,
+  it closes the Quest app if the headset was linked to this copy (a test copy on 8010 leaves it alone).
 - Windows didn't see the Quest again until it was replugged (only the XRSP/Crosswind interfaces show errors, the
   ADB one is fine).
 

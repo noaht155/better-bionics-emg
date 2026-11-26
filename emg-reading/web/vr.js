@@ -93,6 +93,10 @@ function showReadout(readout) {
     <div class="contact-force"><b>${(readout.free_grip_force ?? 0).toFixed(1)} N</b><span>free hand grip</span></div>`;
 }
 
+function batteryText(h) {
+  return h ? ` Battery ${h.level} %${h.charging ? " charging" : ""}, ${Math.round(h.temp_c)} °C.` : "";
+}
+
 function applyFrame(msg) {
   if (msg.scene) {
     buildScene(msg.scene);
@@ -108,9 +112,11 @@ function applyFrame(msg) {
   $("vr-panels-note").textContent = !msg.view ? "" : !msg.view.panels ? "The headset runs a build from before the menu was sent."
     : shown ? "Click a control to make it pulse in the headset." : "";
   showReadout(msg.readout);
+  vr.battery = batteryText(msg.headset);
   if (vr.mode !== "video") $("vr-status").textContent = !msg.view
     ? "Waiting for the headset: plug the Quest in over USB and open BB Contact."
-    : `Headset sim ${msg.readout ? msg.readout.speed.toFixed(1) : "?"}x real time${msg.view.menu ? ", menu open" : ""}.`;
+    : `Headset sim ${msg.readout ? msg.readout.speed.toFixed(1) : "?"}x real time${msg.view.menu ? ", menu open" : ""}.`
+      + vr.battery;
 }
 
 function connect() {
@@ -184,7 +190,7 @@ function openVideo() {
 function videoStatus() {
   if (video.error) return video.error;
   if (!video.frames || performance.now() - video.at > 3000) return "Waiting for the headset's picture over USB.";
-  return "The headset's own picture, left eye, about 0.1 s behind. It only changes when the picture does.";
+  return "The headset's own picture, left eye, about 0.1 s behind." + (vr.battery || "");
 }
 
 function tick() {

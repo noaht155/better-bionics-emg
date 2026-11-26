@@ -1719,7 +1719,8 @@ def make_app(recorder, band, camera, tools, lan=True, serving=False):
                     await ws.send_json({"scene": scene})
                     sent = scene
                 await ws.send_json({"view": contact.quest_view, "readout": contact.quest_readout(),
-                                    "params": contact.quest_frame()["params"]})
+                                    "params": contact.quest_frame()["params"],
+                                    "headset": quest_link.LINK.headset if quest_link.LINK else None})
                 await asyncio.sleep(1 / CONTACT_HZ)
         except WebSocketDisconnect:
             pass

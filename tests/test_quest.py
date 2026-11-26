@@ -97,6 +97,10 @@ class FakeAdb:
             out = "List of devices attached\n" + "".join(f"{s}\t{state}\n" for s, state in self.devices)
         elif args[2:] == ("reverse", "--list"):
             out = f"UsbFfs tcp:8000 tcp:{self.mapped}\n" if self.mapped else ""
+        elif args[2:] == ("shell", "dumpsys", "battery"):
+            out = "Current Battery Service state:\n  AC powered: false\n  status: 3\n  level: 12\n  temperature: 331\n"
+        elif args[2] == "shell":
+            out = ""
         else:
             self.mapped = int(args[-1].removeprefix("tcp:"))
             out = ""
@@ -203,3 +207,30 @@ def test_video_splits_into_frames_with_the_codec():
     assert frames[0][2] == sps + pps + idr
     # Each frame decodes on its own: a 4-byte start code in front of every unit
     assert frames[1][2] == b"\x00" + delta
+
+
+def test_link_reads_the_battery_warns_and_closes_the_app_it_links(monkeypatch):
+    monkeypatch.setattr(quest_link, "_answers", lambda port: True)
+    link = quest_link.Reverse(8000, "adb")
+    adb = FakeAdb([("Q1", "device")])
+    monkeypatch.setattr(link, "_run", adb)
+    link.check()
+    link.check()
+    assert link.headset == {"level": 12, "temp_c": 33.1, "charging": False}
+    assert link.warning()[0] == "quest_battery"
+    # Read every BATTERY_S, not every poll
+    assert sum(a[2:] == ("shell", "dumpsys", "battery") for a in adb.calls) == 1
+    link.headset = {"level": 12, "temp_c": 46.0, "charging": True}
+    assert link.warning()[0] == "quest_hot"
+    link.headset["temp_c"] = 30.0
+    assert link.warning() is None
+
+    # A test copy the headset isn't linked to leaves the app running when it stops
+    copy = quest_link.Reverse(8010, "adb")
+    monkeypatch.setattr(copy, "_run", adb)
+    copy.check()
+    adb.calls.clear()
+    copy.stop()
+    assert not adb.calls
+    link.stop()
+    assert adb.calls == [("-s", "Q1", "shell", "am", "force-stop", quest_link.QUEST_APP)]

@@ -10,6 +10,7 @@ import traceback
 
 import numpy as np
 
+import quest_link
 from calibrate import CAL_FILE
 from gestures import plan_for
 from processing import ENVELOPE_MS, FILTER_VERSION, StreamFilter, envelope
@@ -346,6 +347,9 @@ class Recorder:
         out = self.quality.warnings()
         if getattr(self.band, "connected", True) is False:
             out.append(("armband", "Armband not connected: switch it on, then Connect armband WiFi on the Connection tab"))
+        headset = quest_link.LINK.warning() if quest_link.LINK is not None else None
+        if headset is not None:
+            out.append(headset)
         if self.loop_error is not None and time.time() - self.loop_error[0] < ERROR_SHOWN_S:
             out.append(("loop_error", f"Reading the armband failed: {self.loop_error[1]}"))
         if self.camera is None:
