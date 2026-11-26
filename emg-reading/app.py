@@ -17,6 +17,7 @@ import csv
 import importlib.util
 import io
 import json
+import queue
 import socket
 import sys
 import time
@@ -1727,38 +1728,32 @@ def make_app(recorder, band, camera, tools, lan=True, serving=False):
 
     @app.websocket("/ws/vr-video")
     async def vr_video(ws: WebSocket):
-        """The VR tab's Headset video: the Quest's screen over USB (quest_video), a text message with the codec when
-        it starts or changes, then one binary message per frame: a byte that is 1 for a key frame, then the frame.
-        The capture runs only while this page is connected and starts again when screenrecord stops."""
+        """The VR tab's Headset video: the Quest's screen over USB (quest_video's shared capture), a text message with
+        the codec when it starts or changes, then one binary message per frame: a byte that is 1 for a key frame,
+        then the frame."""
         await ws.accept()
-        proc = None
+        video = quest_video.capture()
+        q = video.subscribe()
         try:
             while True:
-                proc = quest_video.start_capture()
-                if proc is None:
-                    await ws.send_json({"error": "no adb on this computer"})
+                try:
+                    msg = await asyncio.to_thread(q.get, timeout=1.0)
+                except queue.Empty:
+                    continue
+                if msg[0] == "codec":
+                    await ws.send_json({"codec": msg[1]})
+                elif msg[0] == "frame":
+                    await ws.send_bytes(bytes([1 if msg[1] else 0]) + msg[2])
+                elif msg[0] == "error":
+                    await ws.send_json({"error": msg[1]})
+                else:
+                    # Fell behind: closing makes the page connect again, with a key frame
+                    await ws.close()
                     return
-                splitter, codec, frames = quest_video.Splitter(), None, 0
-                while True:
-                    data = await asyncio.to_thread(proc.stdout.read, quest_video.READ_BYTES)
-                    if not data:
-                        break
-                    for key, unit_codec, frame in splitter.feed(data):
-                        if unit_codec and unit_codec != codec:
-                            codec = unit_codec
-                            await ws.send_json({"codec": codec})
-                        if codec:
-                            await ws.send_bytes(bytes([1 if key else 0]) + frame)
-                            frames += 1
-                proc.wait()
-                if frames == 0:
-                    await ws.send_json({"error": "no picture from the headset: plug the Quest in over USB"})
-                    await asyncio.sleep(2)
         except WebSocketDisconnect:
             pass
         finally:
-            if proc is not None and proc.poll() is None:
-                proc.kill()
+            video.unsubscribe(q)
 
     @app.websocket("/ws/signals")
     async def signals(ws: WebSocket):

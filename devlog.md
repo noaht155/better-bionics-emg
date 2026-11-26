@@ -2733,6 +2733,9 @@ levels: r 0.995 to 0.999 per session, mean difference 0.005 to 0.013, a clench l
 - Quest battery: `quest_link` reads `dumpsys battery` every 30 s while linked and the VR tab shows level, charging
   and temperature; the warnings bar says so at 15 % and below when not charging, or at 45 °C. When the app stops,
   it closes the Quest app if the headset was linked to this copy (a test copy on 8010 leaves it alone).
+- Headset video tools: one shared screenrecord for everyone watching (`quest_video.Capture`, restarted for each new
+  watcher since it only sends a key frame at the start), 3 Mbit/s. "Save a picture" (png) and "Record a clip"
+  (webm from the page's canvas, until Stop) under the video. Checked in Chrome with the headset.
 - Windows didn't see the Quest again until it was replugged (only the XRSP/Crosswind interfaces show errors, the
   ADB one is fine).
 

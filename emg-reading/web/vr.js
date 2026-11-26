@@ -127,6 +127,7 @@ function connect() {
 }
 
 function closeVideo() {
+  if (video.clip) video.clip.stop();
   const { ws, decoder } = video;
   video.ws = video.decoder = video.codec = null;
   ws?.close();
@@ -187,6 +188,33 @@ function openVideo() {
   ws.onclose = () => { if (video.ws === ws && vr.open && vr.mode === "video") setTimeout(openVideo, 1000); };
 }
 
+function download(blob, ext) {
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = `headset-${new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-")}.${ext}`;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+}
+
+// A clip of the video as the page draws it, until Stop; webm, which Chrome and Edge record
+function toggleClip() {
+  if (video.clip) {
+    video.clip.stop();
+    return;
+  }
+  const chunks = [];
+  const rec = new MediaRecorder(videoCanvas.captureStream(30), { mimeType: "video/webm" });
+  rec.ondataavailable = (e) => chunks.push(e.data);
+  rec.onstop = () => {
+    video.clip = null;
+    $("vr-clip").textContent = "Record a clip";
+    download(new Blob(chunks, { type: "video/webm" }), "webm");
+  };
+  rec.start(1000);
+  video.clip = rec;
+  $("vr-clip").textContent = "Stop and save the clip";
+}
+
 function videoStatus() {
   if (video.error) return video.error;
   if (!video.frames || performance.now() - video.at > 3000) return "Waiting for the headset's picture over USB.";
@@ -212,6 +240,8 @@ function setMode(mode) {
   vr.mode = mode;
   canvas.hidden = mode === "video";
   videoCanvas.hidden = mode !== "video";
+  $("vr-video-tools").hidden = mode !== "video";
+  if (mode !== "video" && video.clip) video.clip.stop();
   if (mode === "video" && vr.open) {
     if (!video.ws) openVideo();
     return;
@@ -271,4 +301,6 @@ $("vr-spawn").addEventListener("click", (e) => {
   const kind = e.target.dataset?.kind;
   if (kind) postShowing("/api/vr/spawn", { kind }, "vr-error");
 });
+$("vr-snap").addEventListener("click", () => videoCanvas.toBlob((b) => b && download(b, "png")));
+$("vr-clip").addEventListener("click", toggleClip);
 $("vr-clear").addEventListener("click", () => postShowing("/api/vr/clear", null, "vr-error"));
