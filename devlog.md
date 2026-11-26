@@ -2711,6 +2711,12 @@ levels: r 0.995 to 0.999 per session, mean difference 0.005 to 0.013, a clench l
   only. Measured on the Quest 3: 1280x720 at 3.7 to 3.9 Mbit/s, about 63 fps, first frame 0.13 s after the page
   connects. It shows passthrough too, with the lens warp. Only runs while a page watches it; screenrecord stops
   after 3 min and is started again. A sleeping headset (taken off) gives no picture.
+- Headset panels on the VR tab: the headset sends the menu, cue card and Menu button it shows (`Ui.Describe`: the
+  controls and section titles on the page shown, which one the ray or fingertip is on, a held press's progress) and
+  the pointing ray with its view. The tab draws them where they float in the 3D view and as flat copies under it
+  (`web/vrpanels.js`). Clicking a control on a copy makes it pulse in the headset for 3 s with a tick
+  (`/api/vr/point`, command `point`, `App.PointAt`), to show someone where to press. Checked with the real headset
+  sending its panels and taking the command; the pulse itself not yet seen in the headset.
 - Windows didn't see the Quest again until it was replugged (only the XRSP/Crosswind interfaces show errors, the
   ADB one is fine).
 

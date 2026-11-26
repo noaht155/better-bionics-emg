@@ -284,6 +284,12 @@ class VrSpawn(BaseModel):
     kind: str
 
 
+class VrPoint(BaseModel):
+    panel: Literal["menu", "card", "dock"]
+    page: str = Field("", max_length=40)
+    name: str = Field(..., min_length=1, max_length=80)
+
+
 class ObjectPlace(BaseModel):
     pos: list[float] = Field(min_length=3, max_length=3)
 
@@ -1096,6 +1102,14 @@ def make_app(recorder, band, camera, tools, lan=True, serving=False):
         if spawn.kind not in sim.OBJECTS:
             refuse(f"no object {spawn.kind}")
         tools.contact.quest_command("spawn", spawn.kind)
+        return {"ok": True}
+
+    @app.post("/api/vr/point")
+    def vr_point(point: VrPoint):
+        """Makes a control on a headset panel pulse, to show the user where to press (App.PointAt)."""
+        if "	" in point.page + point.name:
+            refuse("no tabs in the names")
+        tools.contact.quest_command("point", f"{point.panel}	{point.page}	{point.name}")
         return {"ok": True}
 
     @app.post("/api/vr/clear")

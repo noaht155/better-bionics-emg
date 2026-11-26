@@ -45,9 +45,35 @@ public class Ui
         public bool primary;
         public MeshFilter face, edge, fill, knob, bar;
         public TextMeshPro label;
-        public float hover, press, slide = -1, hold;
+        public float hover, press, slide = -1, hold, pulse;
         public bool fired;
+        // What the laptop's VR tab calls it: a toggle's or slider's row label, otherwise the button's text
+        public string name;
     }
+
+    // The panel as the laptop's VR tab draws it (vr.js drawPanel): its controls and section titles on the page shown,
+    // in metres from the panel's top centre, x right and y up
+    [Serializable]
+    public class ItemOut
+    {
+        public string n, k, t;
+        public float x, y, w, h, lx, v;
+        public bool on;
+    }
+
+    [Serializable]
+    public class PanelOut
+    {
+        public string name, page;
+        public float w, h;
+        public float[] pos = new float[3], right = new float[3], up = new float[3];
+        public ItemOut[] items;
+        public int hover = -1, press = -1;
+        public float hold;
+    }
+
+    // While the laptop points at a control, it pulses this long
+    const float PulseS = 3;
 
     public class Page
     {
@@ -69,7 +95,8 @@ public class Ui
     readonly List<Page> pages = new List<Page>();
     Page shown;
     MeshFilter back, backEdge, topStrip;
-    Element pressed, handle;
+    Element pressed, handle, hovered;
+    readonly List<(Page page, TextMeshPro label, string title)> sectionLabels = new List<(Page, TextMeshPro, string)>();
     float height;
     float tabsY;
     MeshFilter tabBar;
@@ -88,6 +115,9 @@ public class Ui
 
     public bool Visible => root.gameObject.activeSelf;
     public bool Grabbed => handle != null && pressed == handle;
+    // The last Interact moved onto a control it wasn't on before, for a hover tick
+    public bool HoverChanged { get; private set; }
+    public string PageName => shown != null ? shown.root.name : "";
 
     readonly bool header;
     // A wide panel has two columns of Width; long pages flow into the second so the panel stays short enough to clear
@@ -119,7 +149,7 @@ public class Ui
         word.colorGradient = new VertexGradient(Orange, Magenta, Orange, Magenta);
         // Close in the corner, as on a window (Noah, 2026-11-24: closing by the hand gesture again was a chore)
         var close = new Element { kind = Kind.Button, centre = new Vector2(panelW / 2 - Pad - 0.008f, -Pad - 0.008f),
-            size = new Vector2(0.03f, 0.03f), click = Close };
+            size = new Vector2(0.03f, 0.03f), click = Close, name = "Close" };
         close.label = Label(body, new Vector3(close.centre.x, close.centre.y, 0), "×", 0.022f, Muted, inter,
             TextAlignmentOptions.Center);
         close.label.rectTransform.sizeDelta = close.size;
@@ -148,7 +178,7 @@ public class Ui
         page.root.SetParent(body, false);
         pages.Add(page);
         if (!header) return page;
-        var tab = new Element { kind = Kind.Button, size = new Vector2(0.06f, 0.03f), click = () => Show(page) };
+        var tab = new Element { kind = Kind.Button, size = new Vector2(0.06f, 0.03f), click = () => Show(page), name = title };
         tab.label = Label(body, Vector3.zero, title.ToUpperInvariant(), 0.011f, Muted, mono, TextAlignmentOptions.Center);
         tab.label.characterSpacing = 10;
         elements.Add(tab);
@@ -205,7 +235,7 @@ public class Ui
             back = Shape(body, LBack, Vector3.zero, Vector2.one, Corner, new Color(Bg.r, Bg.g, Bg.b, 0.9f));
             backEdge = Shape(body, LBack, Vector3.zero, Vector2.one, Corner, LineStrong);
             topStrip = Shape(body, LEdge, Vector3.zero, Vector2.one, 0, Accent, true);
-            var grip = new Element { kind = Kind.Handle, size = new Vector2(0.1f, 0.025f) };
+            var grip = new Element { kind = Kind.Handle, size = new Vector2(0.1f, 0.025f), name = "Move bar" };
             grip.face = Shape(root, LControl, Vector3.zero, new Vector2(0.08f, 0.008f), 0.004f, LineStrong);
             elements.Add(grip);
             handle = grip;
@@ -238,6 +268,7 @@ public class Ui
         var t = Label(page.root, new Vector3(-Width / 2 + Pad, y, 0), $"<color=#ff3d8b>{page.sections:00}</color>  /  {title.ToUpperInvariant()}",
             0.0105f, Muted, mono, TextAlignmentOptions.Left);
         t.characterSpacing = 12;
+        sectionLabels.Add((page, t, $"{page.sections:00}  /  {title.ToUpperInvariant()}"));
         float start = -Width / 2 + Pad + t.preferredWidth + 0.01f, end = Width / 2 - Pad - 0.006f;
         for (float x = start; x < end - 0.004f; x += 0.006f)
             Shape(page.root, LEdge, new Vector3(x + 0.0015f, y, 0), new Vector2(0.003f, 0.0007f), 0, LineStrong);
@@ -282,7 +313,7 @@ public class Ui
         var e = new Element
         {
             kind = Kind.Slider, page = page, centre = new Vector2(0.045f, y), size = new Vector2(0.17f, 0.03f),
-            get = get, set = set, min = min, max = max, step = step
+            get = get, set = set, min = min, max = max, step = step, name = label
         };
         e.face = Shape(page.root, LControl, new Vector3(e.centre.x, y, 0), new Vector2(e.size.x, 0.006f), 0.003f, Raised);
         e.fill = Shape(page.root, LFill, Vector3.zero, Vector2.one, 0.003f, Accent, true);
@@ -300,7 +331,7 @@ public class Ui
         var e = new Element
         {
             kind = Kind.Toggle, page = page, centre = new Vector2(Width / 2 - Pad - 0.02f, y), size = new Vector2(0.04f, 0.022f),
-            on = on, click = flip
+            on = on, click = flip, name = label
         };
         e.face = Shape(page.root, LControl, new Vector3(e.centre.x, y, 0), e.size, 0.011f, Raised);
         e.fill = Shape(page.root, LFill, new Vector3(e.centre.x, y, -0.0005f), e.size, 0.011f, Accent, true);
@@ -400,7 +431,12 @@ public class Ui
         bool holdRay = false, bool holdAll = false, Action holdStarted = null)
     {
         clicked = false;
-        if (!Visible) return 0;
+        if (!Visible)
+        {
+            hovered = null;
+            HoverChanged = false;
+            return 0;
+        }
         Vector2 at = default;
         bool inFront = false, touching = false;
         float length = 0;
@@ -510,6 +546,8 @@ public class Ui
             if (!still) pressed = null;
         }
         wasTouching = touching;
+        HoverChanged = hit != null && hit != hovered;
+        hovered = hit;
         Draw(hit);
         // A ray anywhere on the panel counts, not only on a control, so its line doesn't blink off between buttons
         bool onPanel = viaRay && Mathf.Abs(at.x) <= panelW / 2 + 0.01f && at.y <= 0.01f && at.y >= -height - 0.04f;
@@ -517,6 +555,64 @@ public class Ui
     }
 
     static float Ease(float t) => 1 - (1 - t) * (1 - t);
+
+    static string NameOf(Element e) => e.name ?? (e.label != null ? e.label.text : "");
+
+    bool OnShownPage(Element e) => e.page == null || e.page == shown;
+
+    // The laptop points at a control on the page shown (or a tab, the close button, the move bar): it pulses for a
+    // few seconds. False when nothing there has that name
+    public bool Pulse(string page, string name)
+    {
+        if (!Visible || page != PageName) return false;
+        var e = elements.Find(x => OnShownPage(x) && NameOf(x) == name);
+        if (e == null) return false;
+        e.pulse = PulseS;
+        return true;
+    }
+
+    public void Describe(PanelOut o, string name)
+    {
+        o.name = name;
+        o.page = PageName;
+        o.w = panelW;
+        o.h = height;
+        var items = new List<ItemOut>();
+        o.hover = o.press = -1;
+        o.hold = 0;
+        foreach (var (page, label, title) in sectionLabels)
+            if (page == shown)
+                items.Add(new ItemOut { n = title, k = "section", x = label.transform.localPosition.x, y = label.transform.localPosition.y });
+        foreach (var e in elements)
+        {
+            if (!OnShownPage(e)) continue;
+            var c = e.kind == Kind.Handle ? new Vector2(e.centre.x, e.centre.y - body.localPosition.y) : e.centre;
+            string kind = e.kind == Kind.Toggle ? "toggle" : e.kind == Kind.Slider ? "slider" : e.kind == Kind.Handle ? "handle"
+                : e == closeButton ? "close" : e.edge == null ? "tab" : e.primary ? "primary" : "button";
+            var item = new ItemOut { n = NameOf(e), k = kind, x = c.x, y = c.y, w = e.size.x, h = e.size.y };
+            // Toggles and sliders have their name at the left of their column
+            if (e.kind == Kind.Toggle) item.lx = c.x + 0.02f + 2 * Pad - Width;
+            if (e.kind == Kind.Slider)
+            {
+                item.lx = c.x - 0.045f - Width / 2 + Pad;
+                item.v = Mathf.InverseLerp(e.min, e.max, e.get());
+                item.t = e.label.text;
+            }
+            if (e.kind == Kind.Toggle) item.on = e.on();
+            if (kind == "tab") item.on = tabs.Exists(t => t.tab == e && t.page == shown);
+            if (e == hovered) o.hover = items.Count;
+            if (e == pressed)
+            {
+                o.press = items.Count;
+                o.hold = e.fired ? 0 : e.hold / HoldS;
+            }
+            items.Add(item);
+        }
+        o.items = items.ToArray();
+    }
+
+    // The panel's top centre and its axes in the world, scaled with it
+    public Transform Body => body;
 
     void Draw(Element hit)
     {
@@ -532,6 +628,10 @@ public class Ui
         {
             if (e.page != null && e.page != shown) continue;
             e.hover = Mathf.MoveTowards(e.hover, e == hit ? 1 : 0, dt / 0.12f);
+            // Pointed at from the laptop: lights up as on hover, on and off 1.5 times a second
+            e.pulse = Mathf.MoveTowards(e.pulse, 0, dt);
+            float glow = e.pulse > 0 ? 0.5f - 0.5f * Mathf.Cos((PulseS - e.pulse) * 3 * Mathf.PI) : 0;
+            float lit = Mathf.Max(e.hover, glow);
             if (e.bar != null)
             {
                 bool holding = e == pressed && !e.fired && e.hold > 0;
@@ -549,14 +649,17 @@ public class Ui
             switch (e.kind)
             {
                 case Kind.Button:
-                    if (e.edge != null) Recolor(e.edge.sharedMesh, Color.Lerp(LineStrong, Accent, e.hover));
+                    if (e.edge != null) Recolor(e.edge.sharedMesh, Color.Lerp(LineStrong, Accent, lit));
                     if (e.face != null)
                     {
-                        var face = e.primary ? Color.Lerp(Ui.Text, Accent, e.press * 0.6f) : Color.Lerp(Bg, Raised, e.hover);
+                        var face = e.primary ? Color.Lerp(Ui.Text, Accent, Mathf.Max(e.press, glow) * 0.6f)
+                            : Color.Lerp(Bg, Raised, lit);
                         Recolor(e.face.sharedMesh, Color.Lerp(face, Accent, e.primary ? 0 : e.press * 0.35f));
                         e.face.transform.localPosition = new Vector3(e.centre.x, e.centre.y, 0.002f * e.press);
                     }
-                    if (e == closeButton) e.label.color = Color.Lerp(Muted, Accent, e.hover);
+                    if (e == closeButton) e.label.color = Color.Lerp(Muted, Accent, lit);
+                    else if (e.edge == null && e.label != null)
+                        e.label.color = Color.Lerp(tabs.Exists(t => t.tab == e && t.page == shown) ? Text : Muted, Accent, glow);
                     // Tabs (no box) keep the colour Show gives them
                     if (e.edge != null && e.label != null && !e.primary) e.label.color = Ui.Text;
                     break;
@@ -564,7 +667,7 @@ public class Ui
                 {
                     float target = e.on() ? 1 : 0, was = e.slide;
                     e.slide = e.slide < 0 ? target : Mathf.MoveTowards(e.slide, target, dt / SlideS);
-                    Recolor(e.face.sharedMesh, Color.Lerp(Raised, LineStrong, e.hover));
+                    Recolor(e.face.sharedMesh, Color.Lerp(Raised, glow > e.hover ? Accent : LineStrong, lit));
                     float s = Ease(e.slide), travel = e.size.x / 2 - 0.011f;
                     float x = e.centre.x + Mathf.Lerp(-travel, travel, s);
                     e.knob.transform.localPosition = new Vector3(x, e.centre.y, -0.001f);
@@ -585,11 +688,11 @@ public class Ui
                     e.fill.sharedMesh = GradientBar(new Vector2(w, 0.006f), 0.003f);
                     e.fill.transform.localPosition = new Vector3(left + w / 2, e.centre.y, -0.0005f);
                     e.knob.transform.localPosition = new Vector3(left + e.size.x * t, e.centre.y, -0.001f);
-                    e.knob.transform.localScale = Vector3.one * (1 + 0.25f * e.hover);
+                    e.knob.transform.localScale = Vector3.one * (1 + 0.25f * lit);
                     break;
                 }
                 case Kind.Handle:
-                    Recolor(e.face.sharedMesh, Color.Lerp(LineStrong, Accent, Mathf.Max(e.hover, e.press)));
+                    Recolor(e.face.sharedMesh, Color.Lerp(LineStrong, Accent, Mathf.Max(lit, e.press)));
                     break;
             }
         }

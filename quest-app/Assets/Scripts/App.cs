@@ -83,6 +83,9 @@ public class App : MonoBehaviour
         public bool[] parked;
         public int[] held;
         public bool menu;
+        // The panels in view and the pointing ray (start and end), for the laptop's VR tab, in sim coordinates
+        public Ui.PanelOut[] panels;
+        public float[] ray;
     }
 
     [Serializable] class ViewMessage { public View view; }
@@ -147,6 +150,9 @@ public class App : MonoBehaviour
     readonly double[] simPos = new double[3], simQuat = new double[4], headSim = new double[3];
     readonly float[] freeAngles = new float[Sim.Joints], ghostAngles = new float[Sim.Joints];
     readonly View viewOut = new View { head = new float[9], held = new int[2] };
+    readonly Ui.PanelOut[] panelsOut = { new Ui.PanelOut(), new Ui.PanelOut(), new Ui.PanelOut() };
+    readonly float[] rayOut = new float[6];
+    bool rayOn;
     bool grabbing, prevMenuButton, movingDesk, deskDragging, adjusting, adjustDragging, showControllers, wasConnected;
     Vector3 dragStart, deskStart, adjustOffsetPos;
     Quaternion adjustOffsetRot;
@@ -626,10 +632,50 @@ public class App : MonoBehaviour
             {
                 if (c.kind == "spawn") Spawn(c.arg);
                 else if (c.kind == "clear") ClearDesk();
+                else if (c.kind == "point") PointAt(c.arg);
             }
             newest = Math.Max(newest, c.id);
         }
         lastCommand = Math.Max(newest, 0);
+    }
+
+    // The laptop points at a control to show the user where to press: "panel	page	name"
+    void PointAt(string arg)
+    {
+        var parts = (arg ?? "").Split('	');
+        if (parts.Length != 3) return;
+        var panel = parts[0] == "menu" ? menu : parts[0] == "card" ? card : parts[0] == "dock" ? dock : null;
+        if (panel != null && panel.Pulse(parts[1], parts[2])) sounds.Play(Sounds.Kind.Tick, panel.root.position);
+    }
+
+    void ToSimFloats(Vector3 world, float[] to, int at)
+    {
+        SimView.ToSim(deskRoot.InverseTransformPoint(world), headSim);
+        for (int k = 0; k < 3; k++) to[at + k] = (float)headSim[k];
+    }
+
+    void ToSimVector(Vector3 world, float[] to)
+    {
+        SimView.ToSim(deskRoot.InverseTransformVector(world), headSim);
+        for (int k = 0; k < 3; k++) to[k] = (float)headSim[k];
+    }
+
+    Ui.PanelOut[] PanelsInView()
+    {
+        var shown = new List<Ui.PanelOut>();
+        var all = new[] { (menu, "menu"), (card, "card"), (dock, "dock") };
+        for (int i = 0; i < all.Length; i++)
+        {
+            var (ui, name) = all[i];
+            if (!ui.Visible) continue;
+            var o = panelsOut[i];
+            ui.Describe(o, name);
+            ToSimFloats(ui.Body.position, o.pos, 0);
+            ToSimVector(ui.Body.TransformVector(Vector3.right), o.right);
+            ToSimVector(ui.Body.TransformVector(Vector3.up), o.up);
+            shown.Add(o);
+        }
+        return shown.ToArray();
     }
 
     // Objects
@@ -888,7 +934,10 @@ public class App : MonoBehaviour
             float shown = length > 0.0001f ? length : 0.6f;
             ray.SetPositionAndRotation(r.origin + r.direction * (shown / 2), Quaternion.LookRotation(r.direction) * Quaternion.Euler(90, 0, 0));
             ray.localScale = new Vector3(0.0015f, shown, 1);
+            ToSimFloats(r.origin, rayOut, 0);
+            ToSimFloats(r.origin + r.direction * shown, rayOut, 3);
         }
+        rayOn = showRay;
         bool busy = length > 0 || menu.Grabbed || card.Grabbed;
         // Height by hand: the hand held out flat where the desk should be, set with a pinch or trigger pull away
         // from the panels. Waits for the press that started it to end first
@@ -1177,6 +1226,8 @@ public class App : MonoBehaviour
         viewOut.held[0] = (int)readout[8];
         viewOut.held[1] = (int)readout[9];
         viewOut.menu = menu.Visible;
+        viewOut.panels = PanelsInView();
+        viewOut.ray = rayOn ? rayOut : new float[0];
         link.View = JsonUtility.ToJson(new ViewMessage { view = viewOut });
     }
 

@@ -2,6 +2,7 @@
 // then poses and head at 30 Hz), with its settings and objects beside it. From their eyes, or an orbit view.
 import { THREE, color, createView, geometryFor, orbit, placeMesh } from "./scene3d.js";
 import { CONTACT_PARAMS, frictionColor } from "./contact.js";
+import { createCopies, createOverlay } from "./vrpanels.js";
 
 // A finger pressing this hard shows fully in the effort colour, as on the contact page
 const TINT_FULL_N = 10;
@@ -17,6 +18,8 @@ const HAND = color("--hand-solid"), FREE = color("--sim-free-hand");
 const surfaceColor = (g) => (typeof g.friction === "number" ? frictionColor(g.friction)
   : color(g.surface ? `--surface-${g.surface}` : "--sim-object"));
 const PRESSED = color("--effort"), HELD = color("--accent-orange");
+const showOverlay = createOverlay(world);
+const showCopies = createCopies($("vr-panels"), "vr-error", postShowing);
 const vr = { open: false, ws: null, meshes: [], params: {}, lastView: 0, mode: "eyes", turning: null };
 // Headset video (/ws/vr-video): the Quest's screen is both eyes side by side, the left one is drawn
 const videoCanvas = $("vr-video");
@@ -100,6 +103,10 @@ function applyFrame(msg) {
     showParams(CONTACT_PARAMS, "vr-", vr.params);
   }
   if (msg.view && vr.meshes.length) applyView(msg.view, msg.readout);
+  showOverlay(msg.view?.panels, msg.view?.ray);
+  const shown = showCopies(msg.view?.panels);
+  $("vr-panels-note").textContent = !msg.view ? "" : !msg.view.panels ? "The headset runs a build from before the menu was sent."
+    : shown ? "Click a control to make it pulse in the headset." : "";
   showReadout(msg.readout);
   if (vr.mode !== "video") $("vr-status").textContent = !msg.view
     ? "Waiting for the headset: plug the Quest in over USB and open BB Contact."
