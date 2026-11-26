@@ -25,6 +25,7 @@ public class QuestBuild : IPostGenerateGradleAndroidProject
     const string ScenePath = "Assets/Scenes/Main.unity";
     const string MaterialPath = "Assets/Materials/Sim.mat";
     const string UiMaterialPath = "Assets/Materials/Ui.mat";
+    const string IconPath = "Assets/Icon/icon.png";
     const string Apk = "Build/bb-contact.apk";
     public const string Package = "com.betterbionics.contact";
 
@@ -61,11 +62,25 @@ public class QuestBuild : IPostGenerateGradleAndroidProject
         // Unity 6 lets the splash go without a paid licence; Intro.cs opens the app with the logo instead
         PlayerSettings.SplashScreen.show = false;
         PlayerSettings.SplashScreen.showUnityLogo = false;
+        ConfigureIcon();
         ConfigureXR();
         ConfigurePlugins();
         ConfigureQuality();
         MakeScene();
         AssetDatabase.SaveAssets();
+    }
+
+    // The web app's logo as the launcher icon
+    static void ConfigureIcon()
+    {
+        var icon = AssetDatabase.LoadAssetAtPath<Texture2D>(IconPath);
+        if (icon == null) return;
+        foreach (var kind in new[] { AndroidPlatformIconKind.Legacy, AndroidPlatformIconKind.Round })
+        {
+            var icons = PlayerSettings.GetPlatformIcons(NamedBuildTarget.Android, kind);
+            foreach (var i in icons) i.SetTexture(icon);
+            PlayerSettings.SetPlatformIcons(NamedBuildTarget.Android, kind, icons);
+        }
     }
 
     static void ConfigureXR()

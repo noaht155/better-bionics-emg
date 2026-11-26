@@ -2722,6 +2722,8 @@ levels: r 0.995 to 0.999 per session, mean difference 0.005 to 0.013, a clench l
   wordmark, then what it waits for (the sim, the laptop). The room shows once the sim runs and the laptop answers,
   or after 6 s without one. It waits 0.8 s first, as long as the Quest's own loading view takes to fade. Checked in
   the headset's video.
+- App icon: the favicon at 512 px (`quest-app/Assets/Icon/icon.png`), set by `QuestBuild.ConfigureIcon` as the
+  Android legacy and round icon. Not yet checked where the Quest shows it for an app from unknown sources.
 - Menu: a faint tick and the lightest controller buzz when the ray or a fingertip moves onto a control, ignoring
   drops at a control's edge shorter than 0.3 s.
 - Windows didn't see the Quest again until it was replugged (only the XRSP/Crosswind interfaces show errors, the
