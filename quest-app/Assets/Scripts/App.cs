@@ -30,7 +30,8 @@ public class App : MonoBehaviour
     const float ReachShowM = 0.05f, ReachHideM = 0.03f;
     // Quit takes a second press within this long, so a stray touch doesn't close the app
     const float QuitConfirmS = 3;
-    const float HelpAfterS = 1.5f;
+    // The Help page opens this long after the intro on the first start
+    const float HelpAfterS = 0.5f;
 
     [Serializable]
     class Meta
@@ -125,6 +126,8 @@ public class App : MonoBehaviour
     string boardClasses;
     Link.Frame controlFrame;
     readonly Sounds sounds = new Sounds();
+    Intro intro;
+    float introDoneAt = float.PositiveInfinity;
     // The bare hand's ray, smoothed: hand tracking shakes a few mm, which a 1 m ray turns into cm
     Vector3 rayOrigin, rayDir;
     bool rayWarm;
@@ -215,6 +218,10 @@ public class App : MonoBehaviour
         BuildControls();
         BuildGhost();
         SetPassthrough(settings.passthrough);
+        // The room, desk and hands appear once the intro is done
+        intro = new Intro(uiMaterial);
+        deskRoot.gameObject.SetActive(false);
+        room.SetVisible(false);
 
         sim = new Sim();
         LoadScene();
@@ -842,7 +849,7 @@ public class App : MonoBehaviour
     void Update()
     {
         // Once, on the first start: the controls, in front of the user once the head is tracked
-        if (!settings.helpSeen && Time.time > HelpAfterS)
+        if (!settings.helpSeen && Time.time > introDoneAt + HelpAfterS)
         {
             menu.Show(help);
             menu.Open(head);
@@ -856,6 +863,14 @@ public class App : MonoBehaviour
         }
         TrackHead();
         if (!settings.deskPlaced && head.position.y > 0.3f) DeskToMe();
+        if (!intro.Done)
+        {
+            intro.Update(head, sim.Geoms != null, link.Connected);
+            if (!intro.Done) return;
+            deskRoot.gameObject.SetActive(true);
+            room.SetVisible(!settings.passthrough);
+            introDoneAt = Time.time;
+        }
 
         tracked.Update(FreeIsRight);
         bool hasP = Pose(ProstheticNode, out var pp, out var pq);

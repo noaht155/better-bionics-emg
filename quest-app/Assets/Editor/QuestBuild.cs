@@ -58,6 +58,9 @@ public class QuestBuild : IPostGenerateGradleAndroidProject
         PlayerSettings.SetUseDefaultGraphicsAPIs(BuildTarget.Android, false);
         PlayerSettings.SetGraphicsAPIs(BuildTarget.Android, new[] { GraphicsDeviceType.Vulkan });
         PlayerSettings.colorSpace = ColorSpace.Linear;
+        // Unity 6 lets the splash go without a paid licence; Intro.cs opens the app with the logo instead
+        PlayerSettings.SplashScreen.show = false;
+        PlayerSettings.SplashScreen.showUnityLogo = false;
         ConfigureXR();
         ConfigurePlugins();
         ConfigureQuality();

@@ -2717,6 +2717,13 @@ levels: r 0.995 to 0.999 per session, mean difference 0.005 to 0.013, a clench l
   (`web/vrpanels.js`). Clicking a control on a copy makes it pulse in the headset for 3 s with a tick
   (`/api/vr/point`, command `point`, `App.PointAt`), to show someone where to press. Checked with the real headset
   sending its panels and taking the command; the pulse itself not yet seen in the headset.
+- Quest opening (Noah: replace Unity's): Unity's splash is off (allowed on Personal since Unity 6) and `Intro.cs`
+  draws the favicon in front of the user on black: the gradient ring, the white pulse line through it, the
+  wordmark, then what it waits for (the sim, the laptop). The room shows once the sim runs and the laptop answers,
+  or after 6 s without one. It waits 0.8 s first, as long as the Quest's own loading view takes to fade. Checked in
+  the headset's video.
+- Menu: a faint tick and the lightest controller buzz when the ray or a fingertip moves onto a control, ignoring
+  drops at a control's edge shorter than 0.3 s.
 - Windows didn't see the Quest again until it was replugged (only the XRSP/Crosswind interfaces show errors, the
   ADB one is fine).
 
