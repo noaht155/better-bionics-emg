@@ -18,6 +18,9 @@ const surfaceColor = (g) => (typeof g.friction === "number" ? frictionColor(g.fr
   : color(g.surface ? `--surface-${g.surface}` : "--sim-object"));
 const PRESSED = color("--effort"), HELD = color("--accent-orange");
 const vr = { open: false, ws: null, meshes: [], params: {}, lastView: 0, mode: "eyes", turning: null };
+// Headset video (/ws/vr-video): the Quest's screen is both eyes side by side, the left one is drawn
+const videoCanvas = $("vr-video");
+const video = { ws: null, decoder: null, codec: null, frames: 0, at: 0, error: "" };
 // Behind the user's seat, looking over the desk
 const orbitView = { yaw: 90, pitch: 32, dist: 1.1, target: new THREE.Vector3(0, -0.1, 0.05) };
 
@@ -98,7 +101,7 @@ function applyFrame(msg) {
   }
   if (msg.view && vr.meshes.length) applyView(msg.view, msg.readout);
   showReadout(msg.readout);
-  $("vr-status").textContent = !msg.view
+  if (vr.mode !== "video") $("vr-status").textContent = !msg.view
     ? "Waiting for the headset: plug the Quest in over USB and open BB Contact."
     : `Headset sim ${msg.readout ? msg.readout.speed.toFixed(1) : "?"}x real time${msg.view.menu ? ", menu open" : ""}.`;
 }
@@ -110,8 +113,80 @@ function connect() {
   ws.onclose = () => { if (vr.ws === ws && vr.open) setTimeout(connect, 1000); };
 }
 
+function closeVideo() {
+  const { ws, decoder } = video;
+  video.ws = video.decoder = video.codec = null;
+  ws?.close();
+  if (decoder && decoder.state !== "closed") decoder.close();
+}
+
+function drawVideoFrame(frame) {
+  const w = videoCanvas.clientWidth, h = videoCanvas.clientHeight;
+  if (videoCanvas.width !== w || videoCanvas.height !== h) Object.assign(videoCanvas, { width: w, height: h });
+  const ctx = videoCanvas.getContext("2d");
+  const eyeW = frame.displayWidth / 2, eyeH = frame.displayHeight;
+  const scale = Math.min(w / eyeW, h / eyeH);
+  ctx.clearRect(0, 0, w, h);
+  ctx.drawImage(frame, 0, 0, eyeW, eyeH, (w - eyeW * scale) / 2, (h - eyeH * scale) / 2, eyeW * scale, eyeH * scale);
+  frame.close();
+  video.frames += 1;
+  video.at = performance.now();
+}
+
+// A decoder error or a stream that stalls starts a new capture, which begins with a key frame
+function openVideo() {
+  closeVideo();
+  if (!("VideoDecoder" in window)) {
+    video.error = "This browser can't decode video (no WebCodecs), use Chrome or Edge.";
+    return;
+  }
+  const ws = new WebSocket(`ws://${location.host}/ws/vr-video`);
+  ws.binaryType = "arraybuffer";
+  video.ws = ws;
+  video.at = performance.now();
+  let waitKey = true;
+  ws.onmessage = (e) => {
+    if (video.ws !== ws) return;
+    if (typeof e.data === "string") {
+      const msg = JSON.parse(e.data);
+      video.error = msg.error || "";
+      if (msg.codec) {
+        if (video.decoder && video.decoder.state !== "closed") video.decoder.close();
+        video.decoder = new VideoDecoder({
+          output: drawVideoFrame,
+          error: () => { if (video.ws === ws) setTimeout(openVideo, 500); },
+        });
+        video.decoder.configure({ codec: msg.codec, optimizeForLatency: true });
+        video.codec = msg.codec;
+        waitKey = true;
+      }
+      return;
+    }
+    const bytes = new Uint8Array(e.data);
+    const key = bytes[0] === 1;
+    if (!video.decoder || video.decoder.state !== "configured" || (waitKey && !key)) return;
+    waitKey = false;
+    // Frames behind in the queue are dropped rather than shown late
+    if (video.decoder.decodeQueueSize > 2 && !key) return;
+    video.decoder.decode(new EncodedVideoChunk({ type: key ? "key" : "delta", timestamp: performance.now() * 1000,
+      data: bytes.subarray(1) }));
+  };
+  ws.onclose = () => { if (video.ws === ws && vr.open && vr.mode === "video") setTimeout(openVideo, 1000); };
+}
+
+function videoStatus() {
+  if (video.error) return video.error;
+  if (!video.frames || performance.now() - video.at > 3000) return "Waiting for the headset's picture over USB.";
+  return "The headset's own picture, left eye, about 0.1 s behind. It only changes when the picture does.";
+}
+
 function tick() {
   if (!vr.open) return;
+  if (vr.mode === "video") {
+    $("vr-status").textContent = videoStatus();
+    requestAnimationFrame(tick);
+    return;
+  }
   if (vr.mode === "orbit") orbit(camera, orbitView);
   if (performance.now() - vr.lastView > 2000 && vr.ws?.readyState === WebSocket.OPEN) {
     $("vr-status").textContent = "Waiting for the headset: plug the Quest in over USB and open BB Contact.";
@@ -122,6 +197,14 @@ function tick() {
 
 function setMode(mode) {
   vr.mode = mode;
+  canvas.hidden = mode === "video";
+  videoCanvas.hidden = mode !== "video";
+  if (mode === "video" && vr.open) {
+    if (!video.ws) openVideo();
+    return;
+  }
+  closeVideo();
+  if (vr.open) resize();
   camera.fov = mode === "eyes" ? EYES_FOV : ORBIT_FOV;
   camera.up.set(0, 0, 1);
   camera.updateProjectionMatrix();
@@ -135,6 +218,7 @@ document.addEventListener("tabshown", (e) => {
     const ws = vr.ws;
     vr.ws = null;
     ws?.close();
+    closeVideo();
     return;
   }
   resize();

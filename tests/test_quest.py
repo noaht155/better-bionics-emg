@@ -184,3 +184,22 @@ def test_headset_calibrations_are_the_newest_calibrated_networks(tmp_path, monke
         os.utime(tmp_path / name, (i, i))
     monkeypatch.setattr(app, "NETWORK_DIR", tmp_path)
     assert app.headset_calibrations() == ["a_signs_cal_2026-11-24_141429.pt", "a_signs_cal_2026-11-20_100000.pt"]
+
+
+def test_video_splits_into_frames_with_the_codec():
+    import quest_video
+    sps = b"\x00\x00\x00\x01\x67\x64\x00\x2a\xac"
+    pps = b"\x00\x00\x00\x01\x68\xee\x06"
+    idr = b"\x00\x00\x00\x01\x65\xb8\x40\x00\x01\x02"
+    delta = b"\x00\x00\x01\x41\x9a\x00\x00\x02"
+    stream = sps + pps + idr + delta + delta + sps
+    splitter = quest_video.Splitter()
+    frames = []
+    # Fed in small pieces, as adb hands them over, start codes split across reads
+    for i in range(0, len(stream), 3):
+        frames += splitter.feed(stream[i:i + 3])
+    assert [key for key, _, _ in frames] == [True, False, False]
+    assert all(codec == "avc1.64002a" for _, codec, _ in frames)
+    assert frames[0][2] == sps + pps + idr
+    # Each frame decodes on its own: a 4-byte start code in front of every unit
+    assert frames[1][2] == b"\x00" + delta

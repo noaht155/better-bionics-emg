@@ -242,6 +242,7 @@ Skips without mujoco.
 | `test_quest_gets_the_control_output_and_shared_settings` | `/ws/quest`'s frame has the control layer's angles, effort, lock and whether a model drives it, plus the contact settings; a settings change raises `params_seq` |
 | `test_quest_touch_drives_the_haptics_while_fresh` | The headset's touch (force and surface) drives the haptics while its readouts keep coming, not once they stop |
 | `test_link_maps_the_quest_once_and_leaves_another_live_copy` | `adb reverse` is set once per plugged-in Quest, an unauthorized one is left alone, and a second app copy only takes the mapping once the first stops answering |
+| `test_video_splits_into_frames_with_the_codec` | The headset video's H.264 from `adb screenrecord`, fed in small pieces, comes out as one frame per slice with SPS and PPS in the key frame, the codec string from the SPS, and 4-byte start codes |
 
 ### Protocols (`tests/test_protocols.py`)
 

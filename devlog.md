@@ -2704,6 +2704,16 @@ levels: r 0.995 to 0.999 per session, mean difference 0.005 to 0.013, a clench l
   (white over the threshold), and the Control tab's title line ("pinch 100 %", "locked, closure") with effort,
   closure, starts, releases, open hand picked and distance (`Contact._quest_control`). Needs app.py restarted.
 
+## 2026-11-26: coaching from the laptop, Quest polish
+
+- Headset video on the VR tab (Noah: to teach people the menus): `adb exec-out screenrecord` over the USB cable,
+  raw H.264 split into frames (`quest_video.py`, `/ws/vr-video`) and decoded in the page with WebCodecs, left eye
+  only. Measured on the Quest 3: 1280x720 at 3.7 to 3.9 Mbit/s, about 63 fps, first frame 0.13 s after the page
+  connects. It shows passthrough too, with the lens warp. Only runs while a page watches it; screenrecord stops
+  after 3 min and is started again. A sleeping headset (taken off) gives no picture.
+- Windows didn't see the Quest again until it was replugged (only the XRSP/Crosswind interfaces show errors, the
+  ADB one is fine).
+
 ## Open
 
 Perfboard: replace the motors on positions 3 and 4 and buzz-test them (the rest checked 2026-11-18).

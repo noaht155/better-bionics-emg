@@ -35,6 +35,7 @@ import devices
 import hub
 import hum_test
 import quest_link
+import quest_video
 from armband import Armband, Replay
 from calibrate import load_calibration
 from camera import Camera
@@ -1708,6 +1709,41 @@ def make_app(recorder, band, camera, tools, lan=True, serving=False):
                 await asyncio.sleep(1 / CONTACT_HZ)
         except WebSocketDisconnect:
             pass
+
+    @app.websocket("/ws/vr-video")
+    async def vr_video(ws: WebSocket):
+        """The VR tab's Headset video: the Quest's screen over USB (quest_video), a text message with the codec when
+        it starts or changes, then one binary message per frame: a byte that is 1 for a key frame, then the frame.
+        The capture runs only while this page is connected and starts again when screenrecord stops."""
+        await ws.accept()
+        proc = None
+        try:
+            while True:
+                proc = quest_video.start_capture()
+                if proc is None:
+                    await ws.send_json({"error": "no adb on this computer"})
+                    return
+                splitter, codec, frames = quest_video.Splitter(), None, 0
+                while True:
+                    data = await asyncio.to_thread(proc.stdout.read, quest_video.READ_BYTES)
+                    if not data:
+                        break
+                    for key, unit_codec, frame in splitter.feed(data):
+                        if unit_codec and unit_codec != codec:
+                            codec = unit_codec
+                            await ws.send_json({"codec": codec})
+                        if codec:
+                            await ws.send_bytes(bytes([1 if key else 0]) + frame)
+                            frames += 1
+                proc.wait()
+                if frames == 0:
+                    await ws.send_json({"error": "no picture from the headset: plug the Quest in over USB"})
+                    await asyncio.sleep(2)
+        except WebSocketDisconnect:
+            pass
+        finally:
+            if proc is not None and proc.poll() is None:
+                proc.kill()
 
     @app.websocket("/ws/signals")
     async def signals(ws: WebSocket):
