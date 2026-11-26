@@ -9,6 +9,7 @@ import threading
 import time
 
 import quest_link
+from hand_angles import JOINTS
 from session import DATA_DIR
 
 # Wide enough to read the menu, small enough for USB and the headset's encoder next to the sim
@@ -180,6 +181,8 @@ class SessionVideo(threading.Thread):
         self.recorder, self.connected = recorder, connected
         self.folder = None
         self._session_folder = None
+        self._lock = threading.Lock()
+        self._hands = None
 
     def run(self):
         sub = None
@@ -214,6 +217,9 @@ class SessionVideo(threading.Thread):
         self.folder.mkdir(parents=True, exist_ok=True)
         self._frames = open(self.folder / "frames.csv", "a")
         self._frames.write("segment,frame,time,key\n")
+        with self._lock:
+            self._hands = open(self.folder / "hands.csv", "a")
+            self._hands.write("time,hand," + ",".join(JOINTS) + "\n")
         self._file, self._seg, self._n = None, -1, 0
         print(f"recording the headset's picture into {self.folder}")
         return capture().subscribe()
@@ -225,9 +231,33 @@ class SessionVideo(threading.Thread):
         self._n = 0
         self._file = open(self.folder / f"{self._seg:03d}.h264", "wb")
 
+    def add_hands(self, view):
+        """Both real hands' angles from the headset's view, beside the picture: hands.csv with the arrival time,
+        which hand (free, or other: the prosthetic side), and its 20 angles; untracked hands are left out."""
+        with self._lock:
+            if self._hands is None:
+                return
+            now = time.time()
+            for side in ("free", "other"):
+                angles = view.get(f"{side}_angles")
+                if view.get(f"{side}_tracked") and isinstance(angles, list) and len(angles) == len(JOINTS):
+                    self._hands.write(f"{now:.3f},{side}," + ",".join(f"{a:.1f}" for a in angles) + "\n")
+
     def _stop(self, sub):
         capture().unsubscribe(sub)
+        with self._lock:
+            self._hands.close()
+            self._hands = None
         if self._file is not None:
             self._file.close()
         self._frames.close()
         self._file = self._session_folder = None
+
+
+SESSION_VIDEO = None
+
+
+def log_hands(view):
+    """Passes a headset view's hand angles to the session recording, when one runs."""
+    if SESSION_VIDEO is not None:
+        SESSION_VIDEO.add_hands(view)

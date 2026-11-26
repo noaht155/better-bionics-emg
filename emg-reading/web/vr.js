@@ -131,7 +131,7 @@ function applyFrame(msg) {
   $("vr-panels-note").textContent = !msg.view ? "" : !msg.view.panels ? "The headset runs a build from before the menu was sent."
     : shown ? "Click a control to make it pulse in the headset." : "";
   showReadout(msg.readout);
-  vr.battery = batteryText(msg.headset);
+  vr.battery = batteryText(msg.headset) + (msg.rtt_ms != null ? ` Link ${Math.round(msg.rtt_ms)} ms round trip.` : "");
   showMenuPages(msg.view?.menu_pages);
   if (vr.mode !== "video") $("vr-status").textContent = !msg.view
     ? "Waiting for the headset: plug the Quest in over USB and open BB Contact."

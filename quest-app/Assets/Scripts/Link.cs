@@ -55,6 +55,8 @@ public class Link
         public Params @params;
         public int params_seq;
         public Command[] commands;
+        // The laptop's clock when it sent this frame (ms), echoed back in the readout for the round trip
+        public double sent;
         public Record record;
         public Haptics haptics;
         public Train train;

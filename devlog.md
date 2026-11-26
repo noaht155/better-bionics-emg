@@ -2748,6 +2748,15 @@ levels: r 0.995 to 0.999 per session, mean difference 0.005 to 0.013, a clench l
   card behind the desk, each ticked off by what the user does (menu open, Objects tab, a cube spawned, picked up,
   the menu moved by its bar, closed), with the control it needs pulsing every 4 s. A recording ends it. Checked in
   the headset over the video: opened from the laptop, it went past the first two steps and pulsed Cube.
+- Link round trip on the VR tab: the laptop stamps each /ws/quest frame (`sent`, ms) and the headset echoes the
+  newest one it applied in its readout; smoothed, 40 to 42 ms on the desktop with the headset idle. That includes up
+  to 33 ms waiting for the headset's next send, so one way is roughly 5 to 20 ms. Only the link part of EMG to
+  hand: the EMG window and the model come before it.
+- Quest hand angles beside sessions: the headset tracks both real hands (a second `TrackedHand` for the prosthetic
+  side) and sends their 20 angles (`HandAngles`, the camera's definitions) with its view; while a session records
+  they go to `data/headset-video/<session>/hands.csv` (arrival time, free or other, angles; untracked left out).
+  Nothing reads them yet: kept to compare with the webcam's labels if the angles work comes back. Not yet checked
+  with a person in the headset.
 - Windows didn't see the Quest again until it was replugged (only the XRSP/Crosswind interfaces show errors, the
   ADB one is fine).
 

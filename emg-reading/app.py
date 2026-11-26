@@ -1677,6 +1677,7 @@ def make_app(recorder, band, camera, tools, lan=True, serving=False):
                     tools.contact.quest_scene = msg["scene"]
                 if isinstance(msg.get("view"), dict):
                     tools.contact.quest_view = msg["view"]
+                    quest_video.log_hands(msg["view"])
                 record = msg.get("record")
                 if isinstance(record, dict):
                     action = record.get("action")
@@ -1698,8 +1699,16 @@ def make_app(recorder, band, camera, tools, lan=True, serving=False):
                 readout = msg.get("readout")
                 if isinstance(readout, dict) and isinstance(readout.get("grip_force"), (int, float))                         and np.isfinite(readout["grip_force"]):
                     tools.contact.set_quest_readout(readout)
+                    echo = readout.get("echo")
+                    if isinstance(echo, (int, float)) and echo > 0:
+                        rtt = time.monotonic() * 1000 - echo
+                        if 0 < rtt < 5000:
+                            # Smoothed: each value also holds up to one headset send interval (33 ms) of waiting
+                            link_rtt[0] = rtt if link_rtt[0] is None else 0.9 * link_rtt[0] + 0.1 * rtt
+                            tools.contact.quest_rtt_ms = link_rtt[0]
 
         record_error = [""]
+        link_rtt = [None]
         record_state, record_at = {"running": False}, 0.0
         train_state = dict(headset_train_state(headset_cal, recorder.last_summary, tools),
                            calibrations=headset_calibrations())
@@ -1715,6 +1724,7 @@ def make_app(recorder, band, camera, tools, lan=True, serving=False):
                 frame["record"] = dict(record_state, error=record_error[0])
                 frame["haptics"] = headset_haptics_state(tools.haptics, tools.contact.test is not None)
                 frame["train"] = train_state
+                frame["sent"] = round(time.monotonic() * 1000, 1)
                 await ws.send_json(frame)
                 await asyncio.sleep(1 / QUEST_HZ)
         except WebSocketDisconnect:
@@ -1738,7 +1748,8 @@ def make_app(recorder, band, camera, tools, lan=True, serving=False):
                     sent = scene
                 await ws.send_json({"view": contact.quest_view, "readout": contact.quest_readout(),
                                     "params": contact.quest_frame()["params"],
-                                    "headset": quest_link.LINK.headset if quest_link.LINK else None})
+                                    "headset": quest_link.LINK.headset if quest_link.LINK else None,
+                                    "rtt_ms": contact.quest_rtt_ms if contact.quest_view is not None else None})
                 await asyncio.sleep(1 / CONTACT_HZ)
         except WebSocketDisconnect:
             pass
@@ -1848,7 +1859,8 @@ def main():
         print(f"EMG from {band.source}, open http://localhost:{args.port}")
         quest = None if args.no_quest or args.hub else quest_link.start(args.port)
         if quest is not None:
-            quest_video.SessionVideo(recorder, lambda: tools.contact.quest_view is not None).start()
+            quest_video.SESSION_VIDEO = quest_video.SessionVideo(recorder, lambda: tools.contact.quest_view is not None)
+            quest_video.SESSION_VIDEO.start()
         if args.hub:
             print(f"hub for {', '.join(hub.devices()) or 'no devices yet (python hub.py add-device NAME)'}, "
                   f"at http://{socket.gethostname()}:{args.port}")

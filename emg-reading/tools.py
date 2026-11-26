@@ -821,6 +821,8 @@ class Contact(Tool):
         # head), and commands for it (spawn, clear) numbered so it runs each once
         self.quest_scene = None
         self.quest_view = None
+        # Laptop to headset and back over the link, smoothed (app's /ws/quest), None before the first echo
+        self.quest_rtt_ms = None
         self._commands = []
         self._command_id = 0
         # Test touch (dict: pressure 0 to 1, pos a section number along the rail, slide, gradient): the hand grips the

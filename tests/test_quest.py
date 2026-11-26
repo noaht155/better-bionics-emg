@@ -264,9 +264,16 @@ def test_session_video_records_beside_the_session_while_the_quest_is_connected(m
                 ("codec", "avc1.64002a"), ("frame", True, b"key2")]:
         feed.put(msg)
     time.sleep(0.2)
+    # Both hands' angles beside it, an untracked hand left out
+    video.add_hands({"free_tracked": True, "free_angles": [1.0] * len(JOINTS), "other_tracked": False,
+                     "other_angles": [2.0] * len(JOINTS)})
     recorder.session = None
     time.sleep(0.1)
+    video.add_hands({"free_tracked": True, "free_angles": [3.0] * len(JOINTS)})
     folder = tmp_path / "2026-11-26_120000_a"
+    hands = (folder / "hands.csv").read_text().splitlines()
+    assert hands[0] == "time,hand," + ",".join(JOINTS)
+    assert len(hands) == 2 and hands[1].split(",")[1:3] == ["free", "1.0"]
     assert (folder / "000.h264").read_bytes() == b"keyd1"
     assert (folder / "001.h264").read_bytes() == b"key2"
     rows = [line.split(",") for line in (folder / "frames.csv").read_text().splitlines()[1:]]

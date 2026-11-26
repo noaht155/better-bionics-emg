@@ -57,6 +57,7 @@ public class App : MonoBehaviour
         public float grip_force, palm_force, free_grip_force, speed, touch_force, touch_friction;
         public float[] finger_force;
         public int blowups, touch_surface;
+        public double echo;
     }
 
     [Serializable] class ReadoutMessage { public Readout readout; }
@@ -92,6 +93,10 @@ public class App : MonoBehaviour
         public Ui.PanelOut[] panels;
         public float[] ray;
         public string[] menu_pages;
+        // Both real hands' joint angles while the headset tracks them (HandAngles, the camera's definitions), for
+        // the laptop to keep beside a session: the free hand and the one on the prosthetic side
+        public bool free_tracked, other_tracked;
+        public float[] free_angles, other_angles;
     }
 
     [Serializable] class ViewMessage { public View view; }
@@ -162,6 +167,7 @@ public class App : MonoBehaviour
     Tour tour;
     // What the tour's steps wait for
     bool cubeSpawned, menuMoved, menuWasGrabbed;
+    TrackedHand otherHand;
     readonly float[] rayOut = new float[6];
     bool rayOn;
     bool grabbing, prevMenuButton, movingDesk, deskDragging, adjusting, adjustDragging, showControllers, wasConnected;
@@ -201,6 +207,7 @@ public class App : MonoBehaviour
         string[] fingers = { "thumb", "index", "middle", "ring", "pinky" };
         for (int j = 0; j < Sim.Joints; j++) fingerOf[j] = Array.IndexOf(fingers, meta.joints[j].Split('_')[0]);
         tracked = new TrackedHand(ghostLeft, ghostRight);
+        otherHand = new TrackedHand(ghostLeft, ghostRight);
         grabber = new GameObject("grabber").transform;
 
         deskRoot = new GameObject("desk root").transform;
@@ -955,6 +962,7 @@ public class App : MonoBehaviour
         }
 
         tracked.Update(FreeIsRight);
+        otherHand.Update(!FreeIsRight);
         bool hasP = Pose(ProstheticNode, out var pp, out var pq);
         Vector3 fp = default;
         Quaternion fq = Quaternion.identity;
@@ -1294,6 +1302,7 @@ public class App : MonoBehaviour
             touch_force = (float)readout[14], touch_friction = (float)readout[15], touch_surface = (int)readout[16]
         };
         for (int i = 0; i < 5; i++) r.finger_force[i] = (float)readout[1 + i];
+        r.echo = link.Latest?.sent ?? 0;
         link.Readout = JsonUtility.ToJson(new ReadoutMessage { readout = r });
     }
 
@@ -1337,6 +1346,10 @@ public class App : MonoBehaviour
         viewOut.panels = PanelsInView();
         viewOut.ray = rayOn ? rayOut : new float[0];
         viewOut.menu_pages = menu.PageNames;
+        viewOut.free_tracked = tracked.Tracked;
+        viewOut.free_angles = tracked.Angles;
+        viewOut.other_tracked = otherHand.Tracked;
+        viewOut.other_angles = otherHand.Angles;
         link.View = JsonUtility.ToJson(new ViewMessage { view = viewOut });
     }
 
