@@ -2742,6 +2742,12 @@ levels: r 0.995 to 0.999 per session, mean difference 0.005 to 0.013, a clench l
   refuses folders with extra files. About 22 MB a minute at 3 Mbit/s. Arrival time is about 0.1 s after the
   headset showed the frame. Checked with the real headset and a stand-in session: two segments when a page joined
   partway, both decode.
+- Laptop opens the headset menu on a page or closes it (VR tab buttons, `/api/vr/menu`, `App.OpenMenuAt`), and
+  starts the tour (`/api/vr/tour`).
+- Tour (`Tour.cs`) on the first start in place of opening Help, and from Help's "Start the tour": six steps on a
+  card behind the desk, each ticked off by what the user does (menu open, Objects tab, a cube spawned, picked up,
+  the menu moved by its bar, closed), with the control it needs pulsing every 4 s. A recording ends it. Checked in
+  the headset over the video: opened from the laptop, it went past the first two steps and pulsed Cube.
 - Windows didn't see the Quest again until it was replugged (only the XRSP/Crosswind interfaces show errors, the
   ADB one is fine).
 

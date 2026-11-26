@@ -97,6 +97,25 @@ function batteryText(h) {
   return h ? ` Battery ${h.level} %${h.charging ? " charging" : ""}, ${Math.round(h.temp_c)} °C.` : "";
 }
 
+// Open the headset's menu on a page, close it, or start the tour, from the buttons the headset's pages make
+function showMenuPages(pages) {
+  const key = pages ? pages.join("|") : "";
+  if (key === vr.menuPages) return;
+  vr.menuPages = key;
+  const box = $("vr-menu-pages");
+  box.innerHTML = "";
+  if (!pages) return;
+  const add = (text, fn) => {
+    const b = document.createElement("button");
+    b.textContent = text;
+    b.addEventListener("click", fn);
+    box.append(b);
+  };
+  for (const page of pages) add(`Open ${page}`, () => postShowing("/api/vr/menu", { page }, "vr-error"));
+  add("Close the menu", () => postShowing("/api/vr/menu", { page: "" }, "vr-error"));
+  add("Start the tour", () => postShowing("/api/vr/tour", null, "vr-error"));
+}
+
 function applyFrame(msg) {
   if (msg.scene) {
     buildScene(msg.scene);
@@ -113,6 +132,7 @@ function applyFrame(msg) {
     : shown ? "Click a control to make it pulse in the headset." : "";
   showReadout(msg.readout);
   vr.battery = batteryText(msg.headset);
+  showMenuPages(msg.view?.menu_pages);
   if (vr.mode !== "video") $("vr-status").textContent = !msg.view
     ? "Waiting for the headset: plug the Quest in over USB and open BB Contact."
     : `Headset sim ${msg.readout ? msg.readout.speed.toFixed(1) : "?"}x real time${msg.view.menu ? ", menu open" : ""}.`

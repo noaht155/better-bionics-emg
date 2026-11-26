@@ -285,8 +285,13 @@ class VrSpawn(BaseModel):
     kind: str
 
 
+class VrMenu(BaseModel):
+    # Empty closes it
+    page: str = Field("", max_length=40)
+
+
 class VrPoint(BaseModel):
-    panel: Literal["menu", "card", "dock"]
+    panel: Literal["menu", "card", "dock", "tour"]
     page: str = Field("", max_length=40)
     name: str = Field(..., min_length=1, max_length=80)
 
@@ -1111,6 +1116,18 @@ def make_app(recorder, band, camera, tools, lan=True, serving=False):
         if "	" in point.page + point.name:
             refuse("no tabs in the names")
         tools.contact.quest_command("point", f"{point.panel}	{point.page}	{point.name}")
+        return {"ok": True}
+
+    @app.post("/api/vr/menu")
+    def vr_menu(menu: VrMenu):
+        """Opens the headset's menu on a page, or closes it (App.OpenMenuAt)."""
+        tools.contact.quest_command("menu", menu.page)
+        return {"ok": True}
+
+    @app.post("/api/vr/tour")
+    def vr_tour():
+        """Starts the headset's tour from its first step (Tour.cs)."""
+        tools.contact.quest_command("tour")
         return {"ok": True}
 
     @app.post("/api/vr/clear")

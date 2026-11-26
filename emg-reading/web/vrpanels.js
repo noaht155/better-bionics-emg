@@ -8,7 +8,7 @@ const BAR_M = 0.05;
 const PX_PER_M = 1400;
 const MAX_COPY_PX_PER_M = 1300;
 const PULSE_MS = 3000;
-const PANEL_NAMES = { menu: "Menu", card: "Cue card", dock: "Menu button" };
+const PANEL_NAMES = { menu: "Menu", card: "Cue card", dock: "Menu button", tour: "Tour" };
 
 const css = (name) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
 const C = {

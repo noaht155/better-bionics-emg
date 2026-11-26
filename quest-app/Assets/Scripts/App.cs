@@ -91,6 +91,7 @@ public class App : MonoBehaviour
         // The panels in view and the pointing ray (start and end), for the laptop's VR tab, in sim coordinates
         public Ui.PanelOut[] panels;
         public float[] ray;
+        public string[] menu_pages;
     }
 
     [Serializable] class ViewMessage { public View view; }
@@ -157,7 +158,10 @@ public class App : MonoBehaviour
     readonly double[] simPos = new double[3], simQuat = new double[4], headSim = new double[3];
     readonly float[] freeAngles = new float[Sim.Joints], ghostAngles = new float[Sim.Joints];
     readonly View viewOut = new View { head = new float[9], held = new int[2] };
-    readonly Ui.PanelOut[] panelsOut = { new Ui.PanelOut(), new Ui.PanelOut(), new Ui.PanelOut() };
+    readonly Ui.PanelOut[] panelsOut = { new Ui.PanelOut(), new Ui.PanelOut(), new Ui.PanelOut(), new Ui.PanelOut() };
+    Tour tour;
+    // What the tour's steps wait for
+    bool cubeSpawned, menuMoved, menuWasGrabbed;
     readonly float[] rayOut = new float[6];
     bool rayOn;
     bool grabbing, prevMenuButton, movingDesk, deskDragging, adjusting, adjustDragging, showControllers, wasConnected;
@@ -220,6 +224,7 @@ public class App : MonoBehaviour
         BuildCard();
         BuildDock();
         BuildControls();
+        BuildTour();
         BuildGhost();
         SetPassthrough(settings.passthrough);
         // The room, desk and hands appear once the intro is done
@@ -322,6 +327,11 @@ public class App : MonoBehaviour
         freeText = menu.Paragraph(setup, "", 0.013f, true, 2);
 
         help = menu.AddPage("Help");
+        menu.Primary(help, "Start the tour", () =>
+        {
+            menu.Close();
+            StartTour();
+        });
         menu.Section(help, "This menu");
         menu.Paragraph(help, "Open and close it with B or Y on the free hand's controller, the Menu button at the " +
                              "desk's corner, or with your bare hand: palm towards your face, thumb on the middle fingertip.",
@@ -644,6 +654,8 @@ public class App : MonoBehaviour
                 if (c.kind == "spawn") Spawn(c.arg);
                 else if (c.kind == "clear") ClearDesk();
                 else if (c.kind == "point") PointAt(c.arg);
+                else if (c.kind == "menu") OpenMenuAt(c.arg);
+                else if (c.kind == "tour") StartTour();
             }
             newest = Math.Max(newest, c.id);
         }
@@ -655,8 +667,74 @@ public class App : MonoBehaviour
     {
         var parts = (arg ?? "").Split('	');
         if (parts.Length != 3) return;
-        var panel = parts[0] == "menu" ? menu : parts[0] == "card" ? card : parts[0] == "dock" ? dock : null;
+        var panel = parts[0] == "menu" ? menu : parts[0] == "card" ? card : parts[0] == "dock" ? dock
+            : parts[0] == "tour" ? tour.card : null;
         if (panel != null && panel.Pulse(parts[1], parts[2])) sounds.Play(Sounds.Kind.Tick, panel.root.position);
+    }
+
+    // The laptop opens the menu on a page, or closes it with an empty one
+    void OpenMenuAt(string page)
+    {
+        if (string.IsNullOrEmpty(page))
+        {
+            menu.Close();
+            return;
+        }
+        if (!menu.ShowPage(page)) return;
+        if (!menu.Visible) menu.Open(head);
+        sounds.Play(Sounds.Kind.Tick, menu.root.position);
+    }
+
+    void StartTour()
+    {
+        cubeSpawned = menuMoved = false;
+        tour.Start();
+    }
+
+    void BuildTour()
+    {
+        var steps = new[]
+        {
+            new Tour.Step
+            {
+                text = "Open the menu: press B or Y on the controller in your free hand, or turn your palm to your " +
+                       "face and touch your thumb to your middle fingertip.",
+                done = () => menu.Visible, point = () => dock.Pulse("", "Menu")
+            },
+            new Tour.Step
+            {
+                text = "Pick the Objects tab at the top of the menu: touch it, or point at it and pull the trigger or " +
+                       "pinch.",
+                done = () => menu.Visible && menu.PageName == "Objects", point = () => menu.Pulse(menu.PageName, "Objects")
+            },
+            new Tour.Step
+            {
+                text = "Put a cube on the desk: hold Cube until the bar under it fills.",
+                done = () => cubeSpawned, point = () => menu.Pulse("Objects", "Cube")
+            },
+            new Tour.Step
+            {
+                text = "Pick the cube up with your free hand: grip the controller, or close your real hand round it.",
+                done = () => readout[9] >= 0
+            },
+            new Tour.Step
+            {
+                text = "Move the menu: grab the bar under it with a fist or a pinch, drag it and let go.",
+                done = () => menuMoved, point = () => menu.Pulse(menu.PageName, "Move bar")
+            },
+            new Tour.Step
+            {
+                text = "Close the menu with the × in its corner.",
+                done = () => !menu.Visible, point = () => menu.Pulse(menu.PageName, "Close")
+            },
+        };
+        // Where the cue card goes, behind the desk; the card only shows while recording, which ends the tour
+        tour = new Tour(uiMaterial, steps, ui =>
+        {
+            ui.root.SetParent(deskRoot, false);
+            ui.root.SetLocalPositionAndRotation(card.root.localPosition, card.root.localRotation);
+            ui.root.localScale = card.root.localScale;
+        });
     }
 
     void ToSimFloats(Vector3 world, float[] to, int at)
@@ -674,7 +752,7 @@ public class App : MonoBehaviour
     Ui.PanelOut[] PanelsInView()
     {
         var shown = new List<Ui.PanelOut>();
-        var all = new[] { (menu, "menu"), (card, "card"), (dock, "dock") };
+        var all = new[] { (menu, "menu"), (card, "card"), (dock, "dock"), (tour.card, "tour") };
         for (int i = 0; i < all.Length; i++)
         {
             var (ui, name) = all[i];
@@ -727,6 +805,7 @@ public class App : MonoBehaviour
         var (i, pos) = SpawnSpot(kind);
         if (i < 0) return;
         parked[i] = false;
+        if (kind == "small cube") cubeSpawned = true;
         sim.Do(w => Native.bb_place_object(w, i, pos, new double[] { 1, 0, 0, 0 }, 0));
     }
 
@@ -852,11 +931,10 @@ public class App : MonoBehaviour
 
     void Update()
     {
-        // Once, on the first start: the controls, in front of the user once the head is tracked
+        // Once, on the first start: the tour, once the intro is done
         if (!settings.helpSeen && Time.time > introDoneAt + HelpAfterS)
         {
-            menu.Show(help);
-            menu.Open(head);
+            StartTour();
             settings.helpSeen = true;
             settings.Save();
         }
@@ -931,7 +1009,7 @@ public class App : MonoBehaviour
         bool grabHandle = tracked.Tracked ? tracked.Pinching : grip > GrabOn;
         float length = 0;
         bool clicked = false, hovered = false;
-        foreach (var panel in new[] { menu, card, dock })
+        foreach (var panel in new[] { menu, card, dock, tour.card })
         {
             float l = panel.Interact(tip, pointer, down, grabHandle, grabber, out bool c, true, false, HoldStarted);
             if (l > 0 && length == 0) length = l;
@@ -1030,6 +1108,9 @@ public class App : MonoBehaviour
         if (link.Connected && !wasConnected) sceneSent = -1;
         wasConnected = link.Connected;
         if (!link.Connected) lastCommand = -1;
+        if (menu.Grabbed) menuWasGrabbed = true;
+        else if (menuWasGrabbed) (menuWasGrabbed, menuMoved) = (false, true);
+        if (tour.Update()) sounds.Play(Sounds.Kind.Click, head.position);
         ShowRecording();
         ShowLabels(frame);
     }
@@ -1118,6 +1199,7 @@ public class App : MonoBehaviour
     void ShowRecording()
     {
         bool running = record != null && record.running;
+        if (running && tour.Running) tour.End();
         ShowControl(!running && controlFrame != null && controlFrame.driven ? controlFrame : null);
         if (running != card.Visible)
         {
@@ -1254,6 +1336,7 @@ public class App : MonoBehaviour
         viewOut.menu = menu.Visible;
         viewOut.panels = PanelsInView();
         viewOut.ray = rayOn ? rayOut : new float[0];
+        viewOut.menu_pages = menu.PageNames;
         link.View = JsonUtility.ToJson(new ViewMessage { view = viewOut });
     }
 

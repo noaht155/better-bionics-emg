@@ -119,6 +119,16 @@ public class Ui
     // The last Interact moved onto a control it wasn't on before, for a hover tick
     public bool HoverChanged { get; private set; }
     public string PageName => shown != null ? shown.root.name : "";
+    public string[] PageNames => pages.ConvertAll(p => p.root.name).ToArray();
+
+    // Shows the page with this name; false when there is none
+    public bool ShowPage(string name)
+    {
+        var page = pages.Find(p => p.root.name == name);
+        if (page == null) return false;
+        Show(page);
+        return true;
+    }
 
     readonly bool header;
     // A wide panel has two columns of Width; long pages flow into the second so the panel stays short enough to clear
