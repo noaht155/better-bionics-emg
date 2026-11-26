@@ -171,7 +171,8 @@ def capture():
 
 
 class SessionVideo(threading.Thread):
-    """Records the headset's picture while a session records with the Quest app connected, into
+    """When turned on (on, off at every start: Noah, 2026-11-26), records the headset's picture while a session
+    records with the Quest app connected, into
     data/headset-video/<session name>/, outside the session folder so the hub's session files stay as they are:
     one .h264 per capture (each starts with a key frame) and frames.csv with each frame's arrival time (time.time(),
     about 0.1 s after the headset showed it), to line the picture up with the session's events."""
@@ -180,6 +181,7 @@ class SessionVideo(threading.Thread):
         super().__init__(daemon=True, name="session-video")
         self.recorder, self.connected = recorder, connected
         self.folder = None
+        self.on = False
         self._session_folder = None
         self._lock = threading.Lock()
         self._hands = None
@@ -188,7 +190,7 @@ class SessionVideo(threading.Thread):
         sub = None
         while True:
             session = self.recorder.session
-            want = (session is not None and session.folder is not None and self.connected()) \
+            want = (self.on and session is not None and session.folder is not None and self.connected()) \
                 or (sub is not None and session is not None and session.folder == self._session_folder)
             if want and sub is None:
                 sub = self._start(session.folder)

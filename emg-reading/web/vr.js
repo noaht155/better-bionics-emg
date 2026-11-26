@@ -133,6 +133,7 @@ function applyFrame(msg) {
   showReadout(msg.readout);
   vr.battery = batteryText(msg.headset) + (msg.rtt_ms != null ? ` Link ${Math.round(msg.rtt_ms)} ms round trip.` : "");
   showMenuPages(msg.view?.menu_pages);
+  if (msg.keep_video !== undefined && document.activeElement !== $("vr-keep-video")) $("vr-keep-video").checked = msg.keep_video;
   if (vr.mode !== "video") $("vr-status").textContent = !msg.view
     ? "Waiting for the headset: plug the Quest in over USB and open BB Contact."
     : `Headset sim ${msg.readout ? msg.readout.speed.toFixed(1) : "?"}x real time${msg.view.menu ? ", menu open" : ""}.`
@@ -323,6 +324,8 @@ $("vr-spawn").addEventListener("click", (e) => {
   const kind = e.target.dataset?.kind;
   if (kind) postShowing("/api/vr/spawn", { kind }, "vr-error");
 });
+$("vr-keep-video").addEventListener("change", (e) =>
+  postShowing("/api/vr/keep-video", { on: e.target.checked }, "vr-error"));
 $("vr-snap").addEventListener("click", () => videoCanvas.toBlob((b) => b && download(b, "png")));
 $("vr-clip").addEventListener("click", toggleClip);
 $("vr-clear").addEventListener("click", () => postShowing("/api/vr/clear", null, "vr-error"));

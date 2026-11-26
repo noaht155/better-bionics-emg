@@ -2757,6 +2757,8 @@ levels: r 0.995 to 0.999 per session, mean difference 0.005 to 0.013, a clench l
   they go to `data/headset-video/<session>/hands.csv` (arrival time, free or other, angles; untracked left out).
   Nothing reads them yet: kept to compare with the webcam's labels if the angles work comes back. Not yet checked
   with a person in the headset.
+- Headset video and hand angles beside sessions now off by default (Noah): a switch on the VR tab
+  (`/api/vr/keep-video`) turns it on until the app restarts. Nothing had been saved before that.
 - Windows didn't see the Quest again until it was replugged (only the XRSP/Crosswind interfaces show errors, the
   ADB one is fine).
 

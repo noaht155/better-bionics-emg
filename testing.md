@@ -244,7 +244,7 @@ Skips without mujoco.
 | `test_link_maps_the_quest_once_and_leaves_another_live_copy` | `adb reverse` is set once per plugged-in Quest, an unauthorized one is left alone, and a second app copy only takes the mapping once the first stops answering |
 | `test_link_reads_the_battery_warns_and_closes_the_app_it_links` | The link reads the headset's battery every 30 s, warns when it is low and not charging or hot, and closes the Quest app when it stops only if the headset is linked to this copy |
 | `test_video_splits_into_frames_with_the_codec` | The headset video's H.264 from `adb screenrecord`, fed in small pieces, comes out as one frame per slice with SPS and PPS in the key frame, the codec string from the SPS, and 4-byte start codes |
-| `test_session_video_records_beside_the_session_while_the_quest_is_connected` | While a session records and the Quest app is connected, the headset's picture goes into `data/headset-video/<session>/`, a new .h264 per capture, with each frame's segment, number, arrival time and key flag in frames.csv, and the tracked hands' angles in hands.csv; nothing is written without the Quest |
+| `test_session_video_records_beside_the_session_while_the_quest_is_connected` | Off by default; once turned on, while a session records and the Quest app is connected, the headset's picture goes into `data/headset-video/<session>/`, a new .h264 per capture, with each frame's segment, number, arrival time and key flag in frames.csv, and the tracked hands' angles in hands.csv; nothing is written without the Quest |
 
 ### Protocols (`tests/test_protocols.py`)
 

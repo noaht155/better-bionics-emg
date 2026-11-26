@@ -285,6 +285,10 @@ class VrSpawn(BaseModel):
     kind: str
 
 
+class Switch(BaseModel):
+    on: bool
+
+
 class VrMenu(BaseModel):
     # Empty closes it
     page: str = Field("", max_length=40)
@@ -1124,6 +1128,14 @@ def make_app(recorder, band, camera, tools, lan=True, serving=False):
         tools.contact.quest_command("menu", menu.page)
         return {"ok": True}
 
+    @app.post("/api/vr/keep-video")
+    def vr_keep_video(switch: Switch):
+        """Turns keeping the headset's picture and hand angles beside sessions on or off (quest_video.SessionVideo)."""
+        if quest_video.SESSION_VIDEO is None:
+            refuse("no Quest link in this copy of the app")
+        quest_video.SESSION_VIDEO.on = switch.on
+        return {"ok": True}
+
     @app.post("/api/vr/tour")
     def vr_tour():
         """Starts the headset's tour from its first step (Tour.cs)."""
@@ -1749,7 +1761,8 @@ def make_app(recorder, band, camera, tools, lan=True, serving=False):
                 await ws.send_json({"view": contact.quest_view, "readout": contact.quest_readout(),
                                     "params": contact.quest_frame()["params"],
                                     "headset": quest_link.LINK.headset if quest_link.LINK else None,
-                                    "rtt_ms": contact.quest_rtt_ms if contact.quest_view is not None else None})
+                                    "rtt_ms": contact.quest_rtt_ms if contact.quest_view is not None else None,
+                                    "keep_video": bool(quest_video.SESSION_VIDEO and quest_video.SESSION_VIDEO.on)})
                 await asyncio.sleep(1 / CONTACT_HZ)
         except WebSocketDisconnect:
             pass

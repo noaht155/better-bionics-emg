@@ -257,9 +257,12 @@ def test_session_video_records_beside_the_session_while_the_quest_is_connected(m
     video = quest_video.SessionVideo(recorder, lambda: connected[0])
     video.start()
     time.sleep(0.1)
-    # Not recorded without the Quest app connected
+    # Not recorded without the Quest app connected, nor while it's turned off (the default)
     assert not (tmp_path / "2026-11-26_120000_a").exists()
     connected[0] = True
+    time.sleep(0.1)
+    assert not (tmp_path / "2026-11-26_120000_a").exists()
+    video.on = True
     for msg in [("codec", "avc1.64002a"), ("frame", True, b"key"), ("frame", False, b"d1"),
                 ("codec", "avc1.64002a"), ("frame", True, b"key2")]:
         feed.put(msg)
