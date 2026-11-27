@@ -2957,10 +2957,11 @@ Now: haptics
   pausing a recording, desk height by hand, touch haptics and the grip squeeze; from 2026-11-26 the laptop's point
   pulse, the hover tick and buzz, the link coming back after the headset was off, and the icon. The VR tab's
   Headset video shows the headset's picture live (`adb logcat` for the log).
-- Quest strapped controller (2026-11-27): try the detached controller build (`DetachedControllers.cs`) with the
-  current mount: the Setup page's Tracking line should say "tracked (not held)" for it, and `[track]` lines in
-  `adb logcat -s Unity` show held and detached state. If it still drops out, the mount (it covers the face's top
-  and the handle's base, where the Touch Plus IR LEDs are) comes next. Then Adjust with the controller.
+- Quest (2026-11-27): strapped controller tracking (detached controllers), Adjust with the controller and the finish
+  card work on the headset (`[finish]` log: shown after a session it saw running). Still open: one
+  XR_ERROR_LAYER_INVALID from xrEndFrame at 15:29 that day (probably the passthrough layer, the app carried on);
+  the headset video stays flat but cropped and tilted (Noah dropped it for the 3D view; the tilt measurement in
+  Measure the lens was never run); whether the 2D cue sounds fixed the uneven sounds.
 - Motor pickup: run `diagnostics/motor_pickup.py` with the motor band below the pads, relaxed and with a steady
   clench.
 - Haptics: decide on LRAs vs coin motors. LRAs need an AC drive at their resonance (about 170 to 235 Hz), which is
