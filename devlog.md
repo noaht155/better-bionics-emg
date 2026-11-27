@@ -2841,7 +2841,12 @@ levels: r 0.995 to 0.999 per session, mean difference 0.005 to 0.013, a clench l
   view box is the part the dots cover. Saved in `data/quest-lens.json` (`/api/vr/lens`). On synthetic warps it
   recovers k1 -0.16 / -0.22 within 0.005. On Noah's Quest 3: 161 dots in 22 rows and columns, 7.4 % of the
   spacing off straight with the old K, 2.4 % fitted: k1 -0.221, k2 0.031, lens centre 28.7 % across and 50.8 % down
-  (not 25.4 % as guessed), view box -1.13 to 0.71 by -0.95 to 1.10 lens radii. The page's default now.
+  (not 25.4 % as guessed). The page's default now.
+- The view was cropped: its box came from the dots, which don't fill the view. Now out to the eye picture's own
+  edges through the lens centre (`eyeBox`: -1.54 to 0.88 by -1.44 to 1.54 lens radii), checked on a frame against
+  the raw eye: same desk, hands, menu and walls, straight edges, black only in the corners past the lens. Noah's
+  screenshot that "didn't look the same" was the 3D view: after a reload Chrome kept the switch on Headset video
+  without telling the page; the view now follows the switch at load.
 
 ## Open
 

@@ -191,10 +191,10 @@ function closeVideo() {
 // The headset records what goes to its lenses: each eye pre-warped (barrel) so the lens undoes it. The left eye is
 // flattened back on the GPU: an output point u (in lens radii, R half the frame's height, from the lens centre at
 // x, y of the frame, y up) comes from the recording at centre + u (1 + k1 r^2 + k2 r^4) R. box is the part of u shown
-// (left, right, bottom, top), letterboxed in the canvas. measureLens fits all of it from the headset's dot grid and
-// saves it; until then Noah's Quest 3 as measured on 2026-11-27 (161 dots, rows 7.4 % of their spacing off straight
-// before, 2.4 % after)
-let lens = { k1: -0.221, k2: 0.031, x: 0.2868, y: 0.5076, box: [-1.125, 0.712, -0.953, 1.103] };
+// (left, right, bottom, top): out to the eye picture's edges (eyeBox), letterboxed in the canvas. measureLens fits the
+// warp from the headset's dot grid and saves it; until then Noah's Quest 3 as measured on 2026-11-27 (161 dots, rows
+// 7.4 % of their spacing off straight before, 2.4 % after)
+let lens = { k1: -0.221, k2: 0.031, x: 0.2868, y: 0.5076, box: [-1.535, 0.882, -1.438, 1.538] };
 const LENS_R = 0.5;
 fetch("/api/vr/lens").then((r) => r.json()).then((l) => { if (l.k1 != null) lens = l; }).catch(() => {});
 const FLAT_SHADER = `precision mediump float;
@@ -404,6 +404,14 @@ function nelderMead(f, x0, scale, steps = 400) {
   return pts[0];
 }
 
+// The view out to where the left eye's picture ends, through the lens centre: its left edge, the middle of the
+// frame (the other eye starts there), the top and the bottom. Not the dots' extent: the grid doesn't fill the view
+// and the picture came out cropped (Noah, 2026-11-27). The corners past the round edge stay black
+function eyeBox(l, w, h) {
+  return [toU(l, [6, l.y * h], w, h)[0], toU(l, [w / 2 - 4, l.y * h], w, h)[0],
+    toU(l, [l.x * w, h - 4], w, h)[1], toU(l, [l.x * w, 4], w, h)[1]];
+}
+
 async function measureLens() {
   const say = (text) => { $("vr-lens-status").textContent = text; };
   $("vr-error").textContent = "";
@@ -440,20 +448,7 @@ async function measureLens() {
       l = { ...l, k1: v[0], k2: v[1], x: v[2], y: v[3] };
     }
     const after = cost([l.k1, l.k2, l.x, l.y]);
-    // The view: the dots' extent, pulled in until every corner has a dot near it (the eye's edge is round)
-    const u = dots.map((d) => toU(l, d, w, h));
-    const xs = u.map((p) => p[0]), ys = u.map((p) => p[1]);
-    let box = [Math.min(...xs), Math.max(...xs), Math.min(...ys), Math.max(...ys)];
-    const stepU = grouped.step / (LENS_R * h);
-    const covered = (x, y) => u.some((p) => Math.hypot(p[0] - x, p[1] - y) < stepU);
-    for (let shrink = 1; shrink > 0.5; shrink -= 0.02) {
-      const b = box.map((v) => v * shrink);
-      if (covered(b[0], b[2]) && covered(b[0], b[3]) && covered(b[1], b[2]) && covered(b[1], b[3])) {
-        box = b;
-        break;
-      }
-    }
-    l.box = box;
+    l.box = eyeBox(l, w, h);
     l.lines = grouped.lines.length;
     l.error = after;
     if (!(await postShowing("/api/vr/lens", l, "vr-error"))) return;
@@ -591,6 +586,9 @@ document.addEventListener("tabshown", (e) => {
 });
 
 document.querySelectorAll("[name=vr-camera]").forEach((r) => r.addEventListener("change", () => setMode(r.value)));
+// A reload keeps the switch where it was without a change event (Chrome restores form state): the view follows it,
+// or the switch shows Headset video over the 3D view (Noah, 2026-11-27)
+setMode(document.querySelector("[name=vr-camera]:checked")?.value ?? "eyes");
 canvas.addEventListener("contextmenu", (e) => e.preventDefault());
 canvas.addEventListener("pointerdown", (e) => {
   if (e.button !== 2 || vr.mode !== "orbit") return;
