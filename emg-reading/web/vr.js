@@ -191,9 +191,10 @@ function closeVideo() {
 // The headset records what goes to its lenses: each eye pre-warped (barrel) so the lens undoes it. The left eye is
 // flattened back on the GPU: an output point u (in lens radii, R half the frame's height, from the lens centre at
 // x, y of the frame, y up) comes from the recording at centre + u (1 + k1 r^2 + k2 r^4) R. box is the part of u shown
-// (left, right, bottom, top), letterboxed in the canvas. measureLens fits all of it from the headset's dot grid; until
-// then a fit by eye near the middle (2026-11-27), which still bends at the edges
-let lens = { k1: -0.12, k2: 0, x: 0.254, y: 0.5, box: [-0.9, 0.9, -0.72, 0.72] };
+// (left, right, bottom, top), letterboxed in the canvas. measureLens fits all of it from the headset's dot grid and
+// saves it; until then Noah's Quest 3 as measured on 2026-11-27 (161 dots, rows 7.4 % of their spacing off straight
+// before, 2.4 % after)
+let lens = { k1: -0.221, k2: 0.031, x: 0.2868, y: 0.5076, box: [-1.125, 0.712, -0.953, 1.103] };
 const LENS_R = 0.5;
 fetch("/api/vr/lens").then((r) => r.json()).then((l) => { if (l.k1 != null) lens = l; }).catch(() => {});
 const FLAT_SHADER = `precision mediump float;

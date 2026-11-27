@@ -2839,7 +2839,9 @@ levels: r 0.995 to 0.999 per session, mean difference 0.005 to 0.013, a clench l
   them in the left eye of one frame, traces rows and columns through neighbouring dots and fits k1, k2 and the lens
   centre (Nelder-Mead) until they're straight, scored as a share of the dot spacing so shrinking can't cheat. The
   view box is the part the dots cover. Saved in `data/quest-lens.json` (`/api/vr/lens`). On synthetic warps it
-  recovers k1 -0.16 / -0.22 within 0.005; not yet run on the headset.
+  recovers k1 -0.16 / -0.22 within 0.005. On Noah's Quest 3: 161 dots in 22 rows and columns, 7.4 % of the
+  spacing off straight with the old K, 2.4 % fitted: k1 -0.221, k2 0.031, lens centre 28.7 % across and 50.8 % down
+  (not 25.4 % as guessed), view box -1.13 to 0.71 by -0.95 to 1.10 lens radii. The page's default now.
 
 ## Open
 
