@@ -2762,6 +2762,11 @@ levels: r 0.995 to 0.999 per session, mean difference 0.005 to 0.013, a clench l
 - Windows didn't see the Quest again until it was replugged (only the XRSP/Crosswind interfaces show errors, the
   ADB one is fine).
 
+## 2026-11-27: Quest hand placing by ray, desk at every start
+- The desk and room now go in front of the user at every start (after the intro) and after a recenter (holding the
+  Meta button), not only the first time: the saved spot is in tracking space, which the headset sets up anew each
+  start, so it could end up behind or beside them. The height stays saved.
+
 ## Open
 
 Perfboard: replace the motors on positions 3 and 4 and buzz-test them (the rest checked 2026-11-18).

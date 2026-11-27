@@ -173,9 +173,11 @@ public class App : MonoBehaviour
     bool grabbing, prevMenuButton, movingDesk, deskDragging, adjusting, adjustDragging, showControllers, wasConnected;
     Vector3 dragStart, deskStart, adjustOffsetPos;
     Quaternion adjustOffsetRot;
+    float adjustDistance;
+    bool adjustHover, adjustArmed;
     float dragYaw, deskYawStart;
     readonly List<XRInputSubsystem> inputs = new List<XRInputSubsystem>();
-    bool floorSet;
+    bool floorSet, recentered;
 
     TextMeshPro linkText, simText, hapticsText, trainText, trainError, calText, massText, forceText, heightText, sideText, freeText, recordText, recordError;
     TextMeshPro[] readouts, sessionButtons, quitButton;
@@ -831,7 +833,6 @@ public class App : MonoBehaviour
         var yaw = Quaternion.LookRotation(forward.normalized, Vector3.up);
         settings.deskPos = head.position + yaw * new Vector3(0, 0, DeskAhead);
         settings.deskYaw = yaw.eulerAngles.y;
-        settings.deskPlaced = true;
         settings.Save();
         PlaceDeskFromSettings();
     }
@@ -949,16 +950,25 @@ public class App : MonoBehaviour
         {
             SubsystemManager.GetSubsystems(inputs);
             foreach (var s in inputs) floorSet |= s.TrySetTrackingOriginMode(TrackingOriginModeFlags.Floor);
+            // Holding the Meta button recenters the tracking space: the desk comes along
+            if (floorSet) foreach (var s in inputs) s.trackingOriginUpdated += _ => recentered = true;
         }
         TrackHead();
-        if (!settings.deskPlaced && head.position.y > 0.3f) DeskToMe();
         if (!intro.Done)
         {
             intro.Update(head, sim.Geoms != null, link.Connected);
             if (!intro.Done) return;
+            // In front of the user at every start: the saved spot is in tracking space, which the headset sets up
+            // anew each time, so it can be behind or beside them
+            DeskToMe();
             deskRoot.gameObject.SetActive(true);
             room.SetVisible(!settings.passthrough);
             introDoneAt = Time.time;
+        }
+        if (recentered)
+        {
+            recentered = false;
+            DeskToMe();
         }
 
         tracked.Update(FreeIsRight);

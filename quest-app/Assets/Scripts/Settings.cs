@@ -17,7 +17,6 @@ public class Settings
     public bool prostheticLeft = true;
     public Offset prosthetic = new Offset { pos = HeldPos }, free = new Offset { pos = HeldPos };
     public float deskHeight = 0.74f;
-    public bool deskPlaced;
     public Vector3 deskPos;
     public float deskYaw;
     public bool passthrough;
@@ -33,7 +32,6 @@ public class Settings
         s.prosthetic = LoadOffset("prosthetic", s.prosthetic);
         s.free = LoadOffset("free", s.free);
         s.deskHeight = PlayerPrefs.GetFloat("desk_height", s.deskHeight);
-        s.deskPlaced = PlayerPrefs.GetInt("desk_placed", 0) == 1;
         s.deskPos = LoadVector("desk_pos", Vector3.zero);
         s.deskYaw = PlayerPrefs.GetFloat("desk_yaw", 0);
         s.passthrough = PlayerPrefs.GetInt("passthrough", 0) == 1;
@@ -48,7 +46,6 @@ public class Settings
         SaveOffset("prosthetic", prosthetic);
         SaveOffset("free", free);
         PlayerPrefs.SetFloat("desk_height", deskHeight);
-        PlayerPrefs.SetInt("desk_placed", deskPlaced ? 1 : 0);
         SaveVector("desk_pos", deskPos);
         PlayerPrefs.SetFloat("desk_yaw", deskYaw);
         PlayerPrefs.SetInt("passthrough", passthrough ? 1 : 0);
