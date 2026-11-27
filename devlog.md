@@ -2807,6 +2807,12 @@ levels: r 0.995 to 0.999 per session, mean difference 0.005 to 0.013, a clench l
   (its signs set off pinches); paused or on a cue waiting for Continue it works as before. Cue sounds (Record page
   switch, on by default): rising notes when a sign starts, falling for rest or a break, soft pips over a timed cue's
   last 3 s (cues of 4 s or more), a low tone on a pause, three notes at the end. Not yet heard on the headset.
+- Little out and thumb out confused in live use (Noah, "not the case in the past"). The recordings don't show it:
+  `diagnostics/signs_pair.py` (local, not in git) over every sign session, the sign network calibrated on round 1 as the app does and
+  tested on the later rounds, reads little out as thumb out 0 to 7 % of windows (0 % today, 2026-11-27_130442) and
+  thumb out as little out 0 to 5 % (17 % once, 2026-11-16); a two-sign LDA on channel levels 75 to 99 % on unseen
+  rounds (95 % today). So the confusion comes from live use, not the recorded signs: still to find whether it's
+  the posture in the headset (arm out with the strapped controller), the live path or the control layer's rules.
 
 ## Open
 
