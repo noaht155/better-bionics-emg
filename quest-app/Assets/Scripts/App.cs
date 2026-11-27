@@ -24,6 +24,8 @@ public class App : MonoBehaviour
     const float AdjustReach = 0.06f, HandLength = 0.18f;
     // The thumbstick pushes the carried hand away or pulls it in this fast (m/s)
     const float AdjustPushSpeed = 0.4f;
+    // A tracked wrist this close to the free controller holds it (m)
+    const float HeldM = 0.15f;
     // The ghost hand comes in from rest to the cue's pose over this long, as the page's target hand does
     const float FollowInS = 1.0f;
     // The prosthetic palm this far from the controller's hand pose (m, readout 17) shows a ghost hand there, so it is
@@ -99,6 +101,7 @@ public class App : MonoBehaviour
         // the laptop to keep beside a session: the free hand and the one on the prosthetic side
         public bool free_tracked, other_tracked;
         public float[] free_angles, other_angles;
+        public Tracking.Out tracking;
     }
 
     [Serializable] class ViewMessage { public View view; }
@@ -176,7 +179,10 @@ public class App : MonoBehaviour
     Vector3 dragStart, deskStart, adjustOffsetPos;
     Quaternion adjustOffsetRot;
     float adjustDistance;
-    bool adjustHover, adjustArmed;
+    bool adjustHover, adjustArmed, freeBare;
+    string adjustText = "";
+    readonly Tracking tracking = new Tracking();
+    TextMeshPro trackingText;
     float dragYaw, deskYawStart;
     readonly List<XRInputSubsystem> inputs = new List<XRInputSubsystem>();
     bool floorSet, recentered;
@@ -337,6 +343,8 @@ public class App : MonoBehaviour
         menu.Buttons(setup, ("Reset the hand", ResetOffset));
         menu.Section(setup, "Free hand");
         freeText = menu.Paragraph(setup, "", 0.013f, true, 2);
+        menu.Section(setup, "Tracking");
+        trackingText = menu.Paragraph(setup, "", 0.012f, true, 4);
 
         help = menu.AddPage("Help");
         menu.Primary(help, "Start the tour", () =>
@@ -979,7 +987,12 @@ public class App : MonoBehaviour
         bool hasP = Pose(ProstheticNode, out var pp, out var pq);
         Vector3 fp = default;
         Quaternion fq = Quaternion.identity;
-        bool hasF = !tracked.Tracked && Pose(FreeNode, out fp, out fq);
+        // The free hand goes by its controller while it holds one. With hands and controllers tracked together
+        // (Multimodal) the headset can report the hand holding a controller as tracked too, so a controller at the
+        // wrist wins over the hand
+        bool hasF = Pose(FreeNode, out fp, out fq)
+                    && (!tracked.Tracked || Vector3.Distance(tracked.WristPos, fp) < HeldM);
+        freeBare = tracked.Tracked && !hasF;
         controllerModels[0].gameObject.SetActive(hasP && showControllers);
         controllerModels[1].gameObject.SetActive(hasF && showControllers);
         if (hasP) controllerModels[0].SetPositionAndRotation(pp, pq);
@@ -987,7 +1000,7 @@ public class App : MonoBehaviour
 
         // The free hand: the tracked hand if it's seen, the controller otherwise
         float grip = 0, trigger = 0;
-        if (tracked.Tracked)
+        if (freeBare)
         {
             grabber.SetPositionAndRotation(tracked.WristPos, tracked.WristRot);
             PlaceHand(Sim.Free, tracked.WristPos, tracked.WristRot);
@@ -1008,26 +1021,26 @@ public class App : MonoBehaviour
         prevMenuButton = menuButton;
         // With the tracked hand: palm turned to the face and the thumb on the middle fingertip. The index pinch there is
         // the headset's own menu
-        bool menuGesture = tracked.Tracked && tracked.MiddlePinching
+        bool menuGesture = freeBare && tracked.MiddlePinching
                            && Vector3.Dot(tracked.PalmNormal, (head.position - tracked.WristPos).normalized) > 0.5f;
         if (menuGesture && !prevMenuGesture) ToggleMenu();
         prevMenuGesture = menuGesture;
-        Vector3? tip = tracked.Tracked ? tracked.IndexTip : (Vector3?)null;
+        Vector3? tip = freeBare ? tracked.IndexTip : (Vector3?)null;
         // Pointing: the controller's ray, or with the bare hand a ray from about the shoulder through the pinch, as
         // the Quest's own menus do, selected by pinching
         Ray? pointer = null;
         // Pulled past 0.7, let go under 0.4, so a trigger held near one level doesn't flicker
         bool down = triggerDown = triggerDown ? trigger > 0.4f : trigger > 0.7f;
         if (hasF) pointer = new Ray(fp, fq * Vector3.forward);
-        else if (tracked.Tracked)
+        else if (freeBare)
         {
             var side = Vector3.ProjectOnPlane(head.right, Vector3.up).normalized * (FreeIsRight ? 1 : -1);
             var shoulder = head.position + Vector3.down * 0.15f + side * 0.15f;
             pointer = SteadyRay(tracked.IndexKnuckle, (tracked.IndexKnuckle - shoulder).normalized);
             down = tracked.Pinching;
         }
-        if (hasF || !tracked.Tracked) rayWarm = false;
-        bool grabHandle = tracked.Tracked ? tracked.Pinching : grip > GrabOn;
+        if (hasF || !freeBare) rayWarm = false;
+        bool grabHandle = freeBare ? tracked.Pinching : grip > GrabOn;
         float length = 0;
         bool clicked = false, hovered = false;
         // Carrying the prosthetic hand on the ray takes it off the panels
@@ -1056,14 +1069,20 @@ public class App : MonoBehaviour
         if (adjusting && hasP && pointer.HasValue)
         {
             var pointerRot = hasF ? fq : Quaternion.LookRotation(pointer.Value.direction, Vector3.up);
-            float onHand = AdjustProsthetic(pp, pq, pointer.Value, pointerRot, down, length, hasF);
+            float onHand = AdjustProsthetic(pp, pq, pointer.Value, pointerRot, down, length, hasF, out float miss);
             if (onHand > 0) length = onHand;
+            adjustText = adjustDragging ? "Adjusting: carrying the hand" : onHand > 0 ? "Adjusting: the ray is on the hand"
+                : miss < 1 ? $"Adjusting: the ray passes {miss * 100:0} cm from the hand" : "Adjusting: the ray points away";
         }
         else
         {
             if (adjustDragging) settings.Save();
             adjustDragging = adjustHover = false;
+            adjustText = !adjusting ? "" : !hasP ? "Adjusting: the prosthetic controller isn't tracked"
+                : "Adjusting: nothing to point with";
         }
+        tracking.Update(FreeIsRight ? otherHand : tracked, FreeIsRight ? tracked : otherHand,
+            hasF ? "controller" : freeBare ? "hand" : "none", adjustText);
         // The bare hand's ray only shows while it points at a panel, so it isn't always in view
         // Kept a moment after it leaves a panel, so a shaky hand at the edge doesn't flicker it
         if (length > 0.0001f) rayShownUntil = Time.time + 0.3f;
@@ -1084,11 +1103,11 @@ public class App : MonoBehaviour
         // from the panels. Waits for the press that started it to end first
         if (handHeight)
         {
-            bool set = tracked.Tracked ? tracked.Pinching : hasF && trigger > 0.7f;
+            bool set = freeBare ? tracked.Pinching : hasF && trigger > 0.7f;
             if (!set) handHeightArmed = true;
             else if (handHeightArmed && length == 0)
             {
-                float y = tracked.Tracked ? tracked.WristPos.y : fp.y;
+                float y = freeBare ? tracked.WristPos.y : fp.y;
                 SetDeskHeight(y - 0.03f);
                 handHeight = false;
                 sounds.Play(Sounds.Kind.Click, head.position);
@@ -1119,7 +1138,7 @@ public class App : MonoBehaviour
         record = frame?.record;
         controlFrame = frame;
 
-        if (movingDesk && (tracked.Tracked || hasF)) DragDesk(grabber.position, grabber.rotation, fist && !busy);
+        if (movingDesk && (freeBare || hasF)) DragDesk(grabber.position, grabber.rotation, fist && !busy);
         FreeHandInput(grip, trigger, busy || movingDesk || adjustDragging);
 
         bool heldBack = reach.Root.gameObject.activeSelf ? readout[17] > ReachHideM : readout[17] > ReachShowM;
@@ -1152,12 +1171,13 @@ public class App : MonoBehaviour
     // The ray's length to the prosthetic hand while it points at it or carries it, 0 otherwise. A press has to start
     // on the hand, so a trigger already held while sweeping across it doesn't pick it up
     float AdjustProsthetic(Vector3 cp, Quaternion cq, Ray r, Quaternion pointerRot, bool down, float panelLength,
-        bool controller)
+        bool controller, out float miss)
     {
         HandPose(cp, cq, settings.prostheticLeft, settings.prosthetic, out var handPos, out var handRot);
+        miss = 0;
         if (!adjustDragging)
         {
-            float d = HandHit(r, handPos, handRot);
+            float d = HandHit(r, handPos, handRot, out miss);
             bool onHand = d > 0 && (panelLength == 0 || d < panelLength);
             if (onHand && !adjustHover)
             {
@@ -1196,19 +1216,21 @@ public class App : MonoBehaviour
         return adjustDistance;
     }
 
-    // Along the ray to the hand, from its wrist to its fingertips (the sim hand's +y, Unity's back), 0 when it misses
-    static float HandHit(Ray r, Vector3 wrist, Quaternion rot)
+    // Along the ray to the hand, from its wrist to its fingertips (the sim hand's +y, Unity's back), 0 when it misses;
+    // miss: how far the ray passes from it
+    static float HandHit(Ray r, Vector3 wrist, Quaternion rot, out float miss)
     {
-        float best = AdjustReach, at = 0;
+        float best = float.MaxValue, at = 0;
         for (int i = 0; i <= 6; i++)
         {
             var p = wrist + rot * Vector3.back * (HandLength * i / 6);
             float t = Vector3.Dot(p - r.origin, r.direction);
             if (t <= 0) continue;
-            float miss = Vector3.Distance(p, r.origin + r.direction * t);
-            if (miss < best) (best, at) = (miss, t);
+            float d = Vector3.Distance(p, r.origin + r.direction * t);
+            if (d < best) (best, at) = (d, t);
         }
-        return at;
+        miss = best;
+        return best < AdjustReach ? at : 0;
     }
 
     // The free hand's fingers: the tracked hand's own angles, or from the controller (grip closes the middle, ring and
@@ -1216,7 +1238,7 @@ public class App : MonoBehaviour
     // except while it works the menu, moves the desk or places the other hand
     void FreeHandInput(float grip, float trigger, bool busy)
     {
-        if (tracked.Tracked)
+        if (freeBare)
         {
             Array.Copy(tracked.Angles, freeAngles, Sim.Joints);
         }
@@ -1327,7 +1349,8 @@ public class App : MonoBehaviour
             : $"{settings.deskHeight * 100:0} cm";
         sideText.text = settings.prostheticLeft ? "Left: the controller strapped to the left forearm"
             : "Right: the controller strapped to the right forearm";
-        freeText.text = tracked.Tracked ? "Tracked from your real hand, nothing to set."
+        trackingText.text = tracking.Text();
+        freeText.text = freeBare ? "Tracked from your real hand, nothing to set."
             : "Not seen. Hold it in view, or hold a controller in it.";
         recordText.text = record == null ? "Laptop not connected"
             : recording ? $"Cue {record.index + 1} of {record.count}" + (record.paused ? ", paused" : "")
@@ -1411,6 +1434,7 @@ public class App : MonoBehaviour
         viewOut.panels = PanelsInView();
         viewOut.ray = rayOn ? rayOut : new float[0];
         viewOut.menu_pages = menu.PageNames;
+        viewOut.tracking = tracking.State;
         viewOut.free_tracked = tracked.Tracked;
         viewOut.free_angles = tracked.Angles;
         viewOut.other_tracked = otherHand.Tracked;

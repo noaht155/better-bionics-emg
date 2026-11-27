@@ -2771,6 +2771,14 @@ levels: r 0.995 to 0.999 per session, mean difference 0.005 to 0.013, a clench l
   virtual hand, which broke: the two sim hands collide (palm contype 5 against finger conaffinity 6, meant for a
   hand's own fingers on its palm), so a fist pressed into the other hand fought the contact. The ray keeps the
   hands apart. Not tried in the headset yet.
+- Adjusting with the controller didn't work for Noah, and the left controller seemed to lose tracking. Likely cause
+  of the first (not confirmed on the headset): with hands and controllers tracked together, the hand holding the
+  free controller can still report as tracked, and the app took a tracked free hand over its controller, so the
+  ray was the pinch ray and the trigger did nothing. A controller with the tracked wrist within 15 cm of it now wins
+  (`App.HeldM`). Tracking readout to find the rest (`Tracking.cs`): each controller tracked, rotation only, lost or
+  off, how often and how long it lost tracking, each real hand and its wrist's distance to the controller, what the
+  free hand goes by and where the adjusting ray points. On the Setup page and on the VR tab, which also lists each
+  controller change with its time.
 
 ## Open
 

@@ -93,6 +93,38 @@ function showReadout(readout) {
     <div class="contact-force"><b>${(readout.free_grip_force ?? 0).toFixed(1)} N</b><span>free hand grip</span></div>`;
 }
 
+// The headset's tracking (Tracking.cs): each controller and real hand, what the free hand goes by, and a list of the
+// controllers' changes with the time they happened, newest first
+function trackingSide(name, s) {
+  const lost = s.lost_s > 0 ? ` for ${s.lost_s.toFixed(1)} s` : "";
+  const last = s.losses ? ` (last ${s.last_loss_s.toFixed(1)} s)` : "";
+  const hand = s.hand ? `seen${s.wrist_cm >= 0 ? `, ${Math.round(s.wrist_cm)} cm from it` : ""}` : "not seen";
+  return `${name} controller ${s.controller}${lost}, lost ${s.losses}x${last}, hand ${hand}.`;
+}
+
+function showTracking(view) {
+  const t = view?.tracking;
+  if (!t) {
+    $("vr-tracking").textContent = view ? "The headset runs a build from before tracking was sent." : "";
+    return;
+  }
+  $("vr-tracking").textContent = [trackingSide("Left", t.left), trackingSide("Right", t.right),
+    `Free hand goes by: ${t.free}.`, t.adjust && `${t.adjust}.`, `Hands and controllers together: ${t.multimodal}.`].filter(Boolean).join(" ");
+  const log = vr.trackingLog || (vr.trackingLog = []);
+  for (const [name, s] of [["Left", t.left], ["Right", t.right]]) {
+    const before = vr.trackingWas?.[name];
+    if (before !== undefined && before !== s.controller) {
+      log.unshift(`${new Date().toLocaleTimeString()}  ${name} controller ${before} to ${s.controller}`);
+    }
+  }
+  vr.trackingWas = { Left: t.left.controller, Right: t.right.controller };
+  log.length = Math.min(log.length, 12);
+  const list = $("vr-tracking-log");
+  if (list.childElementCount !== log.length || list.firstChild?.textContent !== log[0]) {
+    list.replaceChildren(...log.map((line) => Object.assign(document.createElement("li"), { textContent: line })));
+  }
+}
+
 function batteryText(h) {
   return h ? ` Battery ${h.level} %${h.charging ? " charging" : ""}, ${Math.round(h.temp_c)} °C.` : "";
 }
@@ -133,6 +165,7 @@ function applyFrame(msg) {
   showReadout(msg.readout);
   vr.battery = batteryText(msg.headset) + (msg.rtt_ms != null ? ` Link ${Math.round(msg.rtt_ms)} ms round trip.` : "");
   showMenuPages(msg.view?.menu_pages);
+  showTracking(msg.view);
   if (msg.keep_video !== undefined && document.activeElement !== $("vr-keep-video")) $("vr-keep-video").checked = msg.keep_video;
   if (vr.mode !== "video") $("vr-status").textContent = !msg.view
     ? "Waiting for the headset: plug the Quest in over USB and open BB Contact."
