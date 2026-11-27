@@ -189,17 +189,19 @@ function closeVideo() {
 }
 
 // The headset records what goes to its lenses: each eye pre-warped (barrel) so the lens undoes it. The left eye is
-// flattened back on the GPU: an output point u (in lens radii from the lens centre) comes from u (1 + K r^2) in the
-// recording. K, the lens centre and the radius were fitted by eye on a 1280x720 recording until the room's straight
-// edges came out straight (2026-11-27: -0.10 to -0.14 straight, -0.18 bends the other way). SPAN_X and SPAN_Y are how
-// far the view goes out, in lens radii: the whole eye (Noah: show as much as it can), wider meets the gap between the
-// eyes, taller the eye's edge. Letterboxed in the canvas, so nothing is cut to fit its shape
-const LENS = { K: -0.12, X: 0.254, Y: 0.5, R: 0.5, SPAN_X: 0.9, SPAN_Y: 0.72 };
+// flattened back on the GPU: an output point u (in lens radii, R half the frame's height, from the lens centre at
+// x, y of the frame, y up) comes from the recording at centre + u (1 + k1 r^2 + k2 r^4) R. box is the part of u shown
+// (left, right, bottom, top), letterboxed in the canvas. measureLens fits all of it from the headset's dot grid; until
+// then a fit by eye near the middle (2026-11-27), which still bends at the edges
+let lens = { k1: -0.12, k2: 0, x: 0.254, y: 0.5, box: [-0.9, 0.9, -0.72, 0.72] };
+const LENS_R = 0.5;
+fetch("/api/vr/lens").then((r) => r.json()).then((l) => { if (l.k1 != null) lens = l; }).catch(() => {});
 const FLAT_SHADER = `precision mediump float;
-  varying vec2 p; uniform sampler2D tex; uniform vec2 size, centre, extent; uniform float radius, k;
+  varying vec2 p; uniform sampler2D tex; uniform vec2 size, centre; uniform vec4 box; uniform float radius, k1, k2;
   void main() {
-    vec2 u = p * extent;
-    vec2 s = centre + vec2(u.x, -u.y) * (1.0 + k * dot(u, u)) * radius;
+    vec2 u = vec2(mix(box.x, box.y, p.x * 0.5 + 0.5), mix(box.z, box.w, p.y * 0.5 + 0.5));
+    float r2 = dot(u, u);
+    vec2 s = centre + vec2(u.x, -u.y) * (1.0 + k1 * r2 + k2 * r2 * r2) * radius;
     gl_FragColor = texture2D(tex, s / size);
   }`;
 let flat = null;
@@ -226,7 +228,7 @@ function flatView(gl) {
   for (const [k, v] of [[gl.TEXTURE_MIN_FILTER, gl.LINEAR], [gl.TEXTURE_MAG_FILTER, gl.LINEAR],
     [gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE], [gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE]]) gl.texParameteri(gl.TEXTURE_2D, k, v);
   const at = (name) => gl.getUniformLocation(prog, name);
-  return { gl, size: at("size"), centre: at("centre"), extent: at("extent"), radius: at("radius"), k: at("k") };
+  return { gl, size: at("size"), centre: at("centre"), box: at("box"), radius: at("radius"), k1: at("k1"), k2: at("k2") };
 }
 
 function drawVideoFrame(frame) {
@@ -245,18 +247,221 @@ function drawVideoFrame(frame) {
   gl.viewport(0, 0, w, h);
   gl.clearColor(0, 0, 0, 1);
   gl.clear(gl.COLOR_BUFFER_BIT);
-  const aspect = LENS.SPAN_X / LENS.SPAN_Y;
+  const [left, right, bottom, top] = lens.box;
+  const aspect = (right - left) / (top - bottom);
   const vw = Math.min(w, h * aspect), vh = vw / aspect;
   gl.viewport((w - vw) / 2, (h - vh) / 2, vw, vh);
   gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, flat.copy);
   gl.uniform2f(flat.size, fw, fh);
-  gl.uniform2f(flat.centre, LENS.X * fw, LENS.Y * fh);
-  gl.uniform1f(flat.radius, LENS.R * fh);
-  gl.uniform1f(flat.k, LENS.K);
-  gl.uniform2f(flat.extent, LENS.SPAN_X, LENS.SPAN_Y);
+  gl.uniform2f(flat.centre, lens.x * fw, lens.y * fh);
+  gl.uniform1f(flat.radius, LENS_R * fh);
+  gl.uniform1f(flat.k1, lens.k1);
+  gl.uniform1f(flat.k2, lens.k2);
+  gl.uniform4f(flat.box, left, right, bottom, top);
   gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
   video.frames += 1;
   video.at = performance.now();
+}
+
+// Measuring the lens warp: the headset shows white dots on a flat square in front of the eyes (App.ShowGrid), so in
+// the picture each eye gets they lie in straight rows and columns. The dots are found in the left eye of one frame
+// and the warp fitted (Nelder-Mead) until every row and column of them is straight again. box is then the part the
+// dots cover: all of the eye the recording shows
+function findDots(img, w, h) {
+  const seen = new Uint8Array(w * h), dots = [];
+  const bright = (i) => img[4 * i] + img[4 * i + 1] + img[4 * i + 2] > 450;
+  // The left eye only, the right half is the other eye
+  for (let y = 0; y < h; y++) for (let x = 0; x < w / 2; x++) {
+    const start = y * w + x;
+    if (seen[start] || !bright(start)) continue;
+    let n = 0, sx = 0, sy = 0;
+    const stack = [start];
+    seen[start] = 1;
+    while (stack.length) {
+      const i = stack.pop(), px = i % w, py = (i - px) / w;
+      n++;
+      sx += px;
+      sy += py;
+      for (const j of [i - 1, i + 1, i - w, i + w]) {
+        const jx = j % w;
+        if (j < 0 || j >= w * h || Math.abs(jx - px) > 1 || jx >= w / 2 || seen[j] || !bright(j)) continue;
+        seen[j] = 1;
+        stack.push(j);
+      }
+    }
+    if (n >= 3 && n <= 2500) dots.push([sx / n, sy / n]);
+  }
+  return dots;
+}
+
+// Recording pixels to u for lens l: the warp undone by fixed-point steps
+function toU(l, d, w, h) {
+  const R = LENS_R * h, ux0 = (d[0] - l.x * w) / R, uy0 = -(d[1] - l.y * h) / R;
+  let ux = ux0, uy = uy0;
+  for (let i = 0; i < 20; i++) {
+    const r2 = ux * ux + uy * uy, f = Math.max(0.2, 1 + l.k1 * r2 + l.k2 * r2 * r2);
+    ux = ux0 / f;
+    uy = uy0 / f;
+  }
+  return [ux, uy];
+}
+
+// Rows and columns of the dots (lists of indices), traced in the recording itself: each dot's nearest neighbour to the
+// right and below, kept only when that dot has it as its own nearest to the left and above. Locally the warp is
+// small, so this follows the curved rows without knowing the warp. step: the median distance to a neighbour (px)
+function groupDots(dots) {
+  const near = (i, dir) => {
+    let best = -1, bestD = Infinity;
+    const [x, y] = dots[i];
+    dots.forEach(([qx, qy], j) => {
+      const dx = qx - x, dy = qy - y, along = dir === 0 ? dx : dir === 1 ? dy : dir === 2 ? -dx : -dy;
+      const across = dir % 2 === 0 ? Math.abs(dy) : Math.abs(dx);
+      const d = Math.hypot(dx, dy);
+      if (j !== i && along > 0 && across < along && d < bestD) { best = j; bestD = d; }
+    });
+    return [best, bestD];
+  };
+  const next = [[], []], has = [[], []], gaps = [];
+  dots.forEach((_, i) => {
+    for (const axis of [0, 1]) {
+      const [j, d] = near(i, axis);
+      if (j >= 0 && near(j, axis + 2)[0] === i) {
+        next[axis][i] = j;
+        has[axis][j] = true;
+        gaps.push(d);
+      }
+    }
+  });
+  const lines = [];
+  for (const axis of [0, 1]) dots.forEach((_, i) => {
+    if (has[axis][i]) return;
+    // A sharp turn or a step much longer or shorter than the last is a jump to another row: the line ends there
+    let line = [i];
+    for (let j = next[axis][i]; j !== undefined; j = next[axis][j]) {
+      if (line.length >= 2) {
+        const [a, b] = [dots[line[line.length - 2]], dots[line[line.length - 1]]], c = dots[j];
+        const d1 = [b[0] - a[0], b[1] - a[1]], d2 = [c[0] - b[0], c[1] - b[1]];
+        const l1 = Math.hypot(...d1), l2 = Math.hypot(...d2);
+        const turn = Math.acos(Math.min(1, (d1[0] * d2[0] + d1[1] * d2[1]) / (l1 * l2)));
+        if (turn > 0.35 || l2 / l1 > 1.5 || l2 / l1 < 0.67) {
+          if (line.length >= 5) lines.push(line);
+          line = [line[line.length - 1]];
+        }
+      }
+      line.push(j);
+    }
+    if (line.length >= 5) lines.push(line);
+  });
+  gaps.sort((a, b) => a - b);
+  return { lines, step: gaps[Math.floor(gaps.length / 2)] || 1 };
+}
+
+// How far the dots sit off a straight line through each row and column, as a share of the spacing between them in u
+// (so shrinking the picture doesn't look straighter)
+function bend(l, dots, lines, w, h) {
+  const u = dots.map((d) => toU(l, d, w, h));
+  let sum = 0, n = 0, gap = 0, gaps = 0;
+  for (const line of lines) {
+    const p = line.map((i) => u[i]);
+    for (let k = 1; k < p.length; k++) { gap += Math.hypot(p[k][0] - p[k - 1][0], p[k][1] - p[k - 1][1]); gaps++; }
+    const mx = p.reduce((a, q) => a + q[0], 0) / p.length, my = p.reduce((a, q) => a + q[1], 0) / p.length;
+    let xx = 0, yy = 0, xy = 0;
+    for (const [x, y] of p) {
+      xx += (x - mx) ** 2;
+      yy += (y - my) ** 2;
+      xy += (x - mx) * (y - my);
+    }
+    // The smaller eigenvalue of the spread: the squared distances off the best line
+    const small = (xx + yy) / 2 - Math.sqrt(((xx - yy) / 2) ** 2 + xy * xy);
+    sum += Math.max(small, 0);
+    n += p.length;
+  }
+  return Math.sqrt(sum / Math.max(n, 1)) / (gap / Math.max(gaps, 1));
+}
+
+function nelderMead(f, x0, scale, steps = 400) {
+  const shrinkTo = (best, x) => x.map((v, j) => best[j] + 0.5 * (v - best[j]));
+  let pts = [x0, ...x0.map((_, i) => x0.map((v, j) => v + (i === j ? scale[i] : 0)))].map((x) => [x, f(x)]);
+  for (let s = 0; s < steps; s++) {
+    pts.sort((a, b) => a[1] - b[1]);
+    const n = x0.length, best = pts[0], worst = pts[n];
+    const c = x0.map((_, j) => pts.slice(0, n).reduce((a, p) => a + p[0][j], 0) / n);
+    const at = (t) => c.map((v, j) => v + t * (worst[0][j] - v));
+    const r = at(-1), fr = f(r);
+    if (fr < best[1]) {
+      const e = at(-2), fe = f(e);
+      pts[n] = fe < fr ? [e, fe] : [r, fr];
+    } else if (fr < pts[n - 1][1]) {
+      pts[n] = [r, fr];
+    } else {
+      const k = at(0.5), fk = f(k);
+      if (fk < worst[1]) pts[n] = [k, fk];
+      else pts = pts.map((p, i) => (i === 0 ? p : [shrinkTo(best[0], p[0]), f(shrinkTo(best[0], p[0]))]));
+    }
+  }
+  pts.sort((a, b) => a[1] - b[1]);
+  return pts[0];
+}
+
+async function measureLens() {
+  const say = (text) => { $("vr-lens-status").textContent = text; };
+  $("vr-error").textContent = "";
+  if (!flat?.copy?.width) {
+    say("Turn on Headset video first, with the headset on.");
+    return;
+  }
+  $("vr-lens").disabled = true;
+  try {
+    say("Showing the grid in the headset, keep your head still");
+    if (!(await postShowing("/api/vr/grid", { on: true }, "vr-error"))) return;
+    await new Promise((r) => setTimeout(r, 2000));
+    const w = flat.copy.width, h = flat.copy.height;
+    const img = flat.copy.getContext("2d").getImageData(0, 0, w, h).data;
+    await postShowing("/api/vr/grid", { on: false }, "vr-error");
+    const dots = findDots(img, w, h);
+    if (dots.length < 40) {
+      say(`Found only ${dots.length} dots: is the headset on, Headset video running and the app in front?`);
+      return;
+    }
+    let l = { ...lens };
+    const grouped = groupDots(dots);
+    if (grouped.lines.length < 8) {
+      say(`Found ${dots.length} dots but only ${grouped.lines.length} rows and columns: keep your hands out of the view`);
+      return;
+    }
+    // The centre stays within the left eye's half
+    const cost = (v) => (v[2] < 0.1 || v[2] > 0.4 || v[3] < 0.3 || v[3] > 0.7 ? 1e9
+      : bend({ k1: v[0], k2: v[1], x: v[2], y: v[3] }, dots, grouped.lines, w, h));
+    const before = cost([l.k1, l.k2, l.x, l.y]);
+    // From where the last fit ended, twice, so a stall on the first pass gets another start
+    for (let round = 0; round < 2; round++) {
+      const [v] = nelderMead(cost, [l.k1, l.k2, l.x, l.y], [0.05, 0.05, 0.01, 0.01]);
+      l = { ...l, k1: v[0], k2: v[1], x: v[2], y: v[3] };
+    }
+    const after = cost([l.k1, l.k2, l.x, l.y]);
+    // The view: the dots' extent, pulled in until every corner has a dot near it (the eye's edge is round)
+    const u = dots.map((d) => toU(l, d, w, h));
+    const xs = u.map((p) => p[0]), ys = u.map((p) => p[1]);
+    let box = [Math.min(...xs), Math.max(...xs), Math.min(...ys), Math.max(...ys)];
+    const stepU = grouped.step / (LENS_R * h);
+    const covered = (x, y) => u.some((p) => Math.hypot(p[0] - x, p[1] - y) < stepU);
+    for (let shrink = 1; shrink > 0.5; shrink -= 0.02) {
+      const b = box.map((v) => v * shrink);
+      if (covered(b[0], b[2]) && covered(b[0], b[3]) && covered(b[1], b[2]) && covered(b[1], b[3])) {
+        box = b;
+        break;
+      }
+    }
+    l.box = box;
+    l.lines = grouped.lines.length;
+    l.error = after;
+    if (!(await postShowing("/api/vr/lens", l, "vr-error"))) return;
+    lens = l;
+    say(`Measured from ${dots.length} dots in ${grouped.lines.length} rows and columns: they sat ${pct(before)} of the `
+      + `spacing between dots off straight before, ${pct(after)} now. Saved, used from now on.`);
+  } finally {
+    $("vr-lens").disabled = false;
+  }
 }
 
 // A decoder error or a stream that stalls starts a new capture, which begins with a key frame
@@ -417,6 +622,7 @@ $("vr-spawn").addEventListener("click", (e) => {
 });
 $("vr-keep-video").addEventListener("change", (e) =>
   postShowing("/api/vr/keep-video", { on: e.target.checked }, "vr-error"));
+$("vr-lens").addEventListener("click", measureLens);
 $("vr-snap").addEventListener("click", () => videoCanvas.toBlob((b) => b && download(b, "png")));
 $("vr-clip").addEventListener("click", toggleClip);
 $("vr-clear").addEventListener("click", () => postShowing("/api/vr/clear", null, "vr-error"));

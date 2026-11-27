@@ -689,10 +689,57 @@ public class App : MonoBehaviour
                 else if (c.kind == "point") PointAt(c.arg);
                 else if (c.kind == "menu") OpenMenuAt(c.arg);
                 else if (c.kind == "tour") StartTour();
+                else if (c.kind == "grid") ShowGrid(c.arg == "1");
             }
             newest = Math.Max(newest, c.id);
         }
         lastCommand = Math.Max(newest, 0);
+    }
+
+    // The laptop's lens measurement (vr.js measureLens): white dots on black on a flat square fixed in front of the
+    // eyes. Any straight row of them is straight in the picture each eye gets, so the curve they show in the recording
+    // is the warp the headset adds for its lenses. Big enough to fill the view (65 degrees each way from 0.35 m)
+    const float GridM = 0.35f, GridHalf = 0.75f, GridDot = 0.012f;
+    const int GridDots = 25;
+    Transform grid;
+
+    void ShowGrid(bool on)
+    {
+        if (grid == null)
+        {
+            grid = new GameObject("lens grid", typeof(MeshFilter), typeof(MeshRenderer)).transform;
+            grid.SetParent(head, false);
+            grid.localPosition = new Vector3(0, 0, GridM);
+            var v = new List<Vector3>();
+            var colors = new List<Color>();
+            var tris = new List<int>();
+            void Quad(Vector2 c, float half, float z, Color color)
+            {
+                int i = v.Count;
+                v.Add(new Vector3(c.x - half, c.y - half, z));
+                v.Add(new Vector3(c.x + half, c.y - half, z));
+                v.Add(new Vector3(c.x - half, c.y + half, z));
+                v.Add(new Vector3(c.x + half, c.y + half, z));
+                for (int k = 0; k < 4; k++) colors.Add(color);
+                // Both faces
+                tris.AddRange(new[] { i, i + 2, i + 1, i + 1, i + 2, i + 3, i, i + 1, i + 2, i + 1, i + 3, i + 2 });
+            }
+            Quad(Vector2.zero, GridHalf, 0.002f, Color.black);
+            float step = 2 * GridHalf / (GridDots - 1);
+            for (int y = 0; y < GridDots; y++)
+                for (int x = 0; x < GridDots; x++)
+                    Quad(new Vector2(-GridHalf + x * step, -GridHalf + y * step), GridDot, 0, Color.white);
+            var mesh = new Mesh { indexFormat = UnityEngine.Rendering.IndexFormat.UInt32 };
+            mesh.SetVertices(v);
+            mesh.SetColors(colors);
+            mesh.SetTriangles(tris, 0);
+            grid.GetComponent<MeshFilter>().sharedMesh = mesh;
+            var r = grid.GetComponent<MeshRenderer>();
+            r.sharedMaterial = uiMaterial;
+            r.sortingOrder = 50;
+            r.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+        }
+        grid.gameObject.SetActive(on);
     }
 
     // The laptop points at a control to show the user where to press: "panel	page	name"

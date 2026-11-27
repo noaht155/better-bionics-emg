@@ -64,6 +64,8 @@ PRESET_FILE = gesture_model.MODEL_DIR.parent / "control_presets.json"
 MAPPING_FILE = gesture_model.MODEL_DIR.parent / "control_mappings.json"
 # Surface settings kept from the Control tab while trying them on the motors, one line each (Noah, 2026-11-23)
 SURFACE_LOG = DATA_DIR / "surface-tries.jsonl"
+# The Quest's lens warp as the VR tab measured it from the headset's grid (vr.js measureLens), for flattening its video
+QUEST_LENS = DATA_DIR / "quest-lens.json"
 SEND_HZ = 20
 # The 3D contact page: frames sent per second, and how high above the desk the hand and object can go
 CONTACT_HZ = 30
@@ -287,6 +289,19 @@ class VrSpawn(BaseModel):
 
 class Switch(BaseModel):
     on: bool
+
+
+class QuestLens(BaseModel):
+    """An output point u (in lens radii from the lens centre, R half the frame's height) comes from the recording at
+    centre + u (1 + k1 r^2 + k2 r^4) R; x and y are the centre as a share of the frame's width and height, box the
+    part of u seen (left, right, top, bottom)."""
+    k1: float = Field(ge=-1, le=1)
+    k2: float = Field(ge=-1, le=1)
+    x: float = Field(ge=0, le=1)
+    y: float = Field(ge=0, le=1)
+    box: list[float] = Field(min_length=4, max_length=4)
+    lines: int = Field(ge=0)
+    error: float = Field(ge=0)
 
 
 class VrMenu(BaseModel):
@@ -1146,6 +1161,23 @@ def make_app(recorder, band, camera, tools, lan=True, serving=False):
         if quest_video.SESSION_VIDEO is None:
             refuse("no Quest link in this copy of the app")
         quest_video.SESSION_VIDEO.on = switch.on
+        return {"ok": True}
+
+    @app.post("/api/vr/grid")
+    def vr_grid(switch: Switch):
+        """Shows or hides the headset's grid of dots in front of the eyes, for measuring the lens warp."""
+        tools.contact.quest_command("grid", "1" if switch.on else "0")
+        return {"ok": True}
+
+    @app.get("/api/vr/lens")
+    def vr_lens():
+        """The measured lens warp, {} before one."""
+        return json.loads(QUEST_LENS.read_text()) if QUEST_LENS.exists() else {}
+
+    @app.post("/api/vr/lens")
+    def vr_lens_save(lens: QuestLens):
+        QUEST_LENS.parent.mkdir(parents=True, exist_ok=True)
+        QUEST_LENS.write_text(json.dumps(lens.model_dump(), indent=1))
         return {"ok": True}
 
     @app.post("/api/vr/tour")

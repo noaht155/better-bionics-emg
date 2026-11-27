@@ -2833,6 +2833,13 @@ levels: r 0.995 to 0.999 per session, mean difference 0.005 to 0.013, a clench l
   runs into the gap between the eyes. Corners show a little of the lens edge. Passthrough is in the recording
   too (checked live: real desk and both sim hands). Noah saw only black: the decoded frame went straight into
   WebGL, which his browser drew black; it now goes through a 2D canvas first, as the old view did.
+- Still fisheye at the edges (Noah): the K fitted by eye only held near the middle. Measured instead (Noah's pick
+  over a second render camera, which loses passthrough, or Meta's casting): the VR tab's Measure the lens has the
+  Quest app show white dots on a flat square fixed in front of the eyes (`App.ShowGrid`, command `grid`), finds
+  them in the left eye of one frame, traces rows and columns through neighbouring dots and fits k1, k2 and the lens
+  centre (Nelder-Mead) until they're straight, scored as a share of the dot spacing so shrinking can't cheat. The
+  view box is the part the dots cover. Saved in `data/quest-lens.json` (`/api/vr/lens`). On synthetic warps it
+  recovers k1 -0.16 / -0.22 within 0.005; not yet run on the headset.
 
 ## Open
 

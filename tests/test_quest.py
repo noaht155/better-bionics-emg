@@ -164,6 +164,16 @@ def test_headset_train_follows_its_own_calibration():
     assert not app.headset_train_state(cal, dict(quick, session="later"), tools_)["saved"]
 
 
+def test_measured_lens_is_checked_before_it_is_saved():
+    """The VR tab's lens fit: kept only with four box edges and a centre inside the frame."""
+    import app
+    good = {"k1": -0.18, "k2": -0.03, "x": 0.26, "y": 0.49, "box": [-0.9, 0.95, -0.8, 0.8], "lines": 40, "error": 0.01}
+    assert app.QuestLens(**good).box[1] == 0.95
+    for bad in ({"box": [0, 1]}, {"x": 1.4}, {"k1": -3}):
+        with pytest.raises(ValueError):
+            app.QuestLens(**dict(good, **bad))
+
+
 def test_headset_finish_card_gets_the_last_session():
     """The headset's finish card: nothing before a session, then what the Record tab's card shows, with no nulls."""
     import app
