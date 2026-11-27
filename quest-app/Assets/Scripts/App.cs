@@ -20,8 +20,10 @@ public class App : MonoBehaviour
 
     const float GrabOn = 0.6f, GrabOff = 0.35f;
     const float DeskAhead = 0.4f;
-    // A fist this close to the prosthetic hand grabs it while adjusting (m)
-    const float AdjustReach = 0.12f;
+    // The ray picks up the prosthetic hand within this of the line from its wrist to its fingertips (m)
+    const float AdjustReach = 0.06f, HandLength = 0.18f;
+    // The thumbstick pushes the carried hand away or pulls it in this fast (m/s)
+    const float AdjustPushSpeed = 0.4f;
     // The ghost hand comes in from rest to the cue's pose over this long, as the page's target hand does
     const float FollowInS = 1.0f;
     // The prosthetic palm this far from the controller's hand pose (m, readout 17) shows a ghost hand there, so it is
@@ -325,10 +327,11 @@ public class App : MonoBehaviour
         sideText = menu.Paragraph(setup, "", 0.014f, false);
         menu.Buttons(setup, ("Left arm", () => SetSide(true)), ("Right arm", () => SetSide(false)));
         menu.Section(setup, "Placing its hand");
-        menu.Paragraph(setup, "Turn on passthrough to see your arm. With adjusting on, make a fist inside the virtual " +
-                              "hand with your other hand and move it to where it should sit on the strapped controller.",
-            0.013f, true, 4);
-        menu.Toggle(setup, "Adjust by hand", () => adjusting, () => adjusting = !adjusting);
+        menu.Paragraph(setup, "Turn on passthrough to see your arm. With adjusting on, point the other controller at " +
+                              "the virtual hand, hold the trigger and move it to where it should sit on the strapped " +
+                              "controller. The thumbstick pushes it away or pulls it in.",
+            0.013f, true, 5);
+        menu.Toggle(setup, "Adjust with the controller", () => adjusting, () => adjusting = !adjusting);
         menu.Toggle(setup, "Passthrough", () => settings.passthrough, () => SetPassthrough(!settings.passthrough));
         menu.Toggle(setup, "Show controllers", () => showControllers, () => showControllers = !showControllers);
         menu.Buttons(setup, ("Reset the hand", ResetOffset));
@@ -1027,9 +1030,11 @@ public class App : MonoBehaviour
         bool grabHandle = tracked.Tracked ? tracked.Pinching : grip > GrabOn;
         float length = 0;
         bool clicked = false, hovered = false;
+        // Carrying the prosthetic hand on the ray takes it off the panels
+        var panelRay = adjustDragging ? null : pointer;
         foreach (var panel in new[] { menu, card, dock, tour.card })
         {
-            float l = panel.Interact(tip, pointer, down, grabHandle, grabber, out bool c, true, false, HoldStarted);
+            float l = panel.Interact(tip, panelRay, down, grabHandle, grabber, out bool c, true, false, HoldStarted);
             if (l > 0 && length == 0) length = l;
             clicked |= c;
             hovered |= panel.HoverChanged;
@@ -1045,10 +1050,24 @@ public class App : MonoBehaviour
             if (hasF) Buzz(FreeNode, 0.08f, 0.01f);
             sounds.Play(Sounds.Kind.Hover, head.position);
         }
+        // Placing the prosthetic hand: the other controller's ray (or the bare hand's) picks it up with the trigger
+        // (or pinch) and carries it; its offset from the strapped controller follows. Out of reach of the free hand, so
+        // the two hands don't press into each other in the sim
+        if (adjusting && hasP && pointer.HasValue)
+        {
+            var pointerRot = hasF ? fq : Quaternion.LookRotation(pointer.Value.direction, Vector3.up);
+            float onHand = AdjustProsthetic(pp, pq, pointer.Value, pointerRot, down, length, hasF);
+            if (onHand > 0) length = onHand;
+        }
+        else
+        {
+            if (adjustDragging) settings.Save();
+            adjustDragging = adjustHover = false;
+        }
         // The bare hand's ray only shows while it points at a panel, so it isn't always in view
         // Kept a moment after it leaves a panel, so a shaky hand at the edge doesn't flicker it
         if (length > 0.0001f) rayShownUntil = Time.time + 0.3f;
-        bool showRay = pointer.HasValue && (hasF && menu.Visible || Time.time < rayShownUntil);
+        bool showRay = pointer.HasValue && (hasF && (menu.Visible || adjusting) || Time.time < rayShownUntil);
         ray.gameObject.SetActive(showRay);
         if (showRay)
         {
@@ -1076,10 +1095,7 @@ public class App : MonoBehaviour
             }
         }
 
-        // Placing the prosthetic hand: a fist inside it carries it, its offset from the controller follows
         bool fist = grip > GrabOn;
-        if (adjusting && hasP && (tracked.Tracked || hasF)) AdjustProsthetic(pp, pq, fist && !busy);
-        else adjustDragging = false;
         if (hasP)
         {
             HandPose(pp, pq, settings.prostheticLeft, settings.prosthetic, out var p, out var q);
@@ -1133,27 +1149,66 @@ public class App : MonoBehaviour
         ShowLabels(frame);
     }
 
-    void AdjustProsthetic(Vector3 cp, Quaternion cq, bool fist)
+    // The ray's length to the prosthetic hand while it points at it or carries it, 0 otherwise. A press has to start
+    // on the hand, so a trigger already held while sweeping across it doesn't pick it up
+    float AdjustProsthetic(Vector3 cp, Quaternion cq, Ray r, Quaternion pointerRot, bool down, float panelLength,
+        bool controller)
     {
         HandPose(cp, cq, settings.prostheticLeft, settings.prosthetic, out var handPos, out var handRot);
         if (!adjustDragging)
         {
-            if (!fist || Vector3.Distance(grabber.position, handPos) > AdjustReach) return;
+            float d = HandHit(r, handPos, handRot);
+            bool onHand = d > 0 && (panelLength == 0 || d < panelLength);
+            if (onHand && !adjustHover)
+            {
+                if (controller) Buzz(FreeNode, 0.08f, 0.01f);
+                sounds.Play(Sounds.Kind.Hover, head.position);
+            }
+            adjustHover = onHand;
+            if (!onHand || !down || !adjustArmed)
+            {
+                adjustArmed = !down;
+                return onHand ? d : 0;
+            }
             adjustDragging = true;
-            adjustOffsetPos = Quaternion.Inverse(grabber.rotation) * (handPos - grabber.position);
-            adjustOffsetRot = Quaternion.Inverse(grabber.rotation) * handRot;
-            return;
+            adjustArmed = false;
+            adjustDistance = d;
+            var hit = r.origin + r.direction * d;
+            adjustOffsetPos = Quaternion.Inverse(pointerRot) * (handPos - hit);
+            adjustOffsetRot = Quaternion.Inverse(pointerRot) * handRot;
+            if (controller) Buzz(FreeNode, 0.25f, 0.03f);
+            sounds.Play(Sounds.Kind.Click, head.position);
+            return d;
         }
-        if (!fist)
+        if (!down)
         {
             adjustDragging = false;
             settings.Save();
-            return;
+            return 0;
         }
-        var newPos = grabber.position + grabber.rotation * adjustOffsetPos;
-        var newRot = grabber.rotation * adjustOffsetRot;
+        if (controller && InputDevices.GetDeviceAtXRNode(FreeNode).TryGetFeatureValue(CommonUsages.primary2DAxis, out Vector2 stick)
+                       && Mathf.Abs(stick.y) > 0.2f)
+            adjustDistance = Mathf.Clamp(adjustDistance + stick.y * AdjustPushSpeed * Time.deltaTime, 0.1f, 2f);
+        var newPos = r.origin + r.direction * adjustDistance + pointerRot * adjustOffsetPos;
+        var newRot = pointerRot * adjustOffsetRot;
         settings.prosthetic.pos = Quaternion.Inverse(cq) * (newPos - cp);
         settings.prosthetic.rot = (Quaternion.Inverse(cq) * newRot * Quaternion.Inverse(Held(settings.prostheticLeft))).eulerAngles;
+        return adjustDistance;
+    }
+
+    // Along the ray to the hand, from its wrist to its fingertips (the sim hand's +y, Unity's back), 0 when it misses
+    static float HandHit(Ray r, Vector3 wrist, Quaternion rot)
+    {
+        float best = AdjustReach, at = 0;
+        for (int i = 0; i <= 6; i++)
+        {
+            var p = wrist + rot * Vector3.back * (HandLength * i / 6);
+            float t = Vector3.Dot(p - r.origin, r.direction);
+            if (t <= 0) continue;
+            float miss = Vector3.Distance(p, r.origin + r.direction * t);
+            if (miss < best) (best, at) = (miss, t);
+        }
+        return at;
     }
 
     // The free hand's fingers: the tracked hand's own angles, or from the controller (grip closes the middle, ring and

@@ -2766,6 +2766,11 @@ levels: r 0.995 to 0.999 per session, mean difference 0.005 to 0.013, a clench l
 - The desk and room now go in front of the user at every start (after the intro) and after a recenter (holding the
   Meta button), not only the first time: the saved spot is in tracking space, which the headset sets up anew each
   start, so it could end up behind or beside them. The height stays saved.
+- Placing the prosthetic hand (Setup, "Adjust with the controller", Noah): the other controller's ray picks it up
+  with the trigger and carries it, the thumbstick pushes it away or pulls it in. It used to be a fist inside the
+  virtual hand, which broke: the two sim hands collide (palm contype 5 against finger conaffinity 6, meant for a
+  hand's own fingers on its palm), so a fist pressed into the other hand fought the contact. The ray keeps the
+  hands apart. Not tried in the headset yet.
 
 ## Open
 
