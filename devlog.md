@@ -2824,6 +2824,11 @@ levels: r 0.995 to 0.999 per session, mean difference 0.005 to 0.013, a clench l
   (`Finish.cs`, the ring and line drawing shared with `Intro.cs`). After a quick calibration it stays with Calibrate
   on it (the laptop's quick calibration, its status shown) and Control with it; otherwise it closes after 6 s.
   The laptop sends the last session's summary (`app.headset_last_state`, frame `last`). Not yet seen on the headset.
+- Headset video flattened (Noah: "looks super weird"): the recording is what goes to the lenses, each eye
+  pre-warped into a barrel with an octagon edge. The VR tab now undoes it on the GPU (`vr.js` `LENS`, WebGL): an
+  output point u in lens radii comes from u (1 + K r^2), K -0.12, lens centre at 25.4 % across and half way down,
+  0.8 lens radii shown. Fitted by eye on a frame of the app's room: -0.10 to -0.14 straightens the wall's edge,
+  -0.18 bends it the other way. Saved pictures and clips are the flat view too.
 
 ## Open
 

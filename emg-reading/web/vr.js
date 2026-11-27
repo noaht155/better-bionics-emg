@@ -188,14 +188,62 @@ function closeVideo() {
   if (decoder && decoder.state !== "closed") decoder.close();
 }
 
+// The headset records what goes to its lenses: each eye pre-warped (barrel) so the lens undoes it. The left eye is
+// flattened back on the GPU: an output point u (in lens radii from the lens centre) comes from u (1 + K r^2) in the
+// recording. K, the lens centre and the radius were fitted by eye on a 1280x720 recording until the room's straight
+// edges came out straight (2026-11-27: -0.10 to -0.14 straight, -0.18 bends the other way). SPAN is how far out the
+// view goes, in lens radii, kept inside the round eye image
+const LENS = { K: -0.12, X: 0.254, Y: 0.5, R: 0.5, SPAN: 0.8 };
+const FLAT_SHADER = `precision mediump float;
+  varying vec2 p; uniform sampler2D tex; uniform vec2 size, centre, extent; uniform float radius, k;
+  void main() {
+    vec2 u = p * extent;
+    vec2 s = centre + vec2(u.x, -u.y) * (1.0 + k * dot(u, u)) * radius;
+    gl_FragColor = texture2D(tex, s / size);
+  }`;
+let flat = null;
+
+function flatView(gl) {
+  const shader = (type, text) => {
+    const sh = gl.createShader(type);
+    gl.shaderSource(sh, text);
+    gl.compileShader(sh);
+    if (!gl.getShaderParameter(sh, gl.COMPILE_STATUS)) console.error(gl.getShaderInfoLog(sh));
+    return sh;
+  };
+  const prog = gl.createProgram();
+  gl.attachShader(prog, shader(gl.VERTEX_SHADER, "attribute vec2 a; varying vec2 p; void main() { p = a; gl_Position = vec4(a, 0, 1); }"));
+  gl.attachShader(prog, shader(gl.FRAGMENT_SHADER, FLAT_SHADER));
+  gl.linkProgram(prog);
+  gl.useProgram(prog);
+  gl.bindBuffer(gl.ARRAY_BUFFER, gl.createBuffer());
+  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1]), gl.STATIC_DRAW);
+  const a = gl.getAttribLocation(prog, "a");
+  gl.enableVertexAttribArray(a);
+  gl.vertexAttribPointer(a, 2, gl.FLOAT, false, 0, 0);
+  gl.bindTexture(gl.TEXTURE_2D, gl.createTexture());
+  for (const [k, v] of [[gl.TEXTURE_MIN_FILTER, gl.LINEAR], [gl.TEXTURE_MAG_FILTER, gl.LINEAR],
+    [gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE], [gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE]]) gl.texParameteri(gl.TEXTURE_2D, k, v);
+  const at = (name) => gl.getUniformLocation(prog, name);
+  return { gl, size: at("size"), centre: at("centre"), extent: at("extent"), radius: at("radius"), k: at("k") };
+}
+
 function drawVideoFrame(frame) {
   const w = videoCanvas.clientWidth, h = videoCanvas.clientHeight;
   if (videoCanvas.width !== w || videoCanvas.height !== h) Object.assign(videoCanvas, { width: w, height: h });
-  const ctx = videoCanvas.getContext("2d");
-  const eyeW = frame.displayWidth / 2, eyeH = frame.displayHeight;
-  const scale = Math.min(w / eyeW, h / eyeH);
-  ctx.clearRect(0, 0, w, h);
-  ctx.drawImage(frame, 0, 0, eyeW, eyeH, (w - eyeW * scale) / 2, (h - eyeH * scale) / 2, eyeW * scale, eyeH * scale);
+  // Kept so a picture or a clip can be saved from the canvas
+  flat ??= flatView(videoCanvas.getContext("webgl", { preserveDrawingBuffer: true }));
+  const { gl } = flat;
+  const fw = frame.displayWidth, fh = frame.displayHeight;
+  gl.viewport(0, 0, w, h);
+  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, frame);
+  gl.uniform2f(flat.size, fw, fh);
+  gl.uniform2f(flat.centre, LENS.X * fw, LENS.Y * fh);
+  gl.uniform1f(flat.radius, LENS.R * fh);
+  gl.uniform1f(flat.k, LENS.K);
+  // The wider side gets SPAN, the other its share, so the view keeps the canvas's shape
+  gl.uniform2f(flat.extent, LENS.SPAN * Math.min(1, w / h), LENS.SPAN * Math.min(1, h / w));
+  gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
   frame.close();
   video.frames += 1;
   video.at = performance.now();
