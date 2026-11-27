@@ -2819,6 +2819,11 @@ levels: r 0.995 to 0.999 per session, mean difference 0.005 to 0.013, a clench l
   11-24 one little out as thumb out 17 % (unsure 52 %); today's shows both 100 % right (optimistic, calibrated on
   it). So a calibration from an earlier day, with the band put on differently, mixes these two up; a fresh one
   doesn't. Check which calibration the Control tab runs, and recalibrate whenever the band goes back on.
+- Finish card in the headset (Noah), as the Record tab's: when a recording the headset saw ends, the card's place
+  shows the gradient ring and check (cross when stopped early) drawing in, the title, what was kept and the numbers
+  (`Finish.cs`, the ring and line drawing shared with `Intro.cs`). After a quick calibration it stays with Calibrate
+  on it (the laptop's quick calibration, its status shown) and Control with it; otherwise it closes after 6 s.
+  The laptop sends the last session's summary (`app.headset_last_state`, frame `last`). Not yet seen on the headset.
 
 ## Open
 

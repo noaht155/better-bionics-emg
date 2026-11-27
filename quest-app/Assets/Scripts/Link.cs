@@ -61,6 +61,17 @@ public class Link
         public Haptics haptics;
         public Train train;
         public Control control;
+        public Last last;
+    }
+
+    // The session that ended last, for the finish card (app.headset_last_state); ended is 0 before any
+    [Serializable]
+    public class Last
+    {
+        public double ended;
+        public bool completed, practice, quick, hum_passed;
+        public float seconds;
+        public int cues, cues_done, marked_bad, hum_pauses;
     }
 
     // While control runs, what the board behind the desk shows (tools.Contact._quest_control)

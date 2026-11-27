@@ -643,6 +643,18 @@ def headset_train_state(cal, summary, tools):
     return out
 
 
+def headset_last_state(summary):
+    """The session that ended last, for the headset's finish card (as the Record tab's): ended is the end time, 0
+    before any. No nulls, the headset's JSON reader can't take them."""
+    if not summary:
+        return {"ended": 0.0}
+    return {"ended": float(summary["ended"]), "completed": bool(summary["completed"]),
+            "practice": bool(summary["practice"]), "quick": bool(summary["quick"]),
+            "hum_passed": bool(summary.get("hum_passed")), "seconds": float(summary["seconds"]),
+            "cues": int(summary["cues"]), "cues_done": int(summary["cues_done"]),
+            "marked_bad": int(summary["marked_bad"]), "hum_pauses": int(summary["hum_pauses"])}
+
+
 def headset_calibrations(limit=6):
     """The newest calibrated networks (by when they were saved) for the headset's Train section to pick from. From
     the file names only, so it can run with every refresh."""
@@ -1724,6 +1736,7 @@ def make_app(recorder, band, camera, tools, lan=True, serving=False):
         record_state, record_at = {"running": False}, 0.0
         train_state = dict(headset_train_state(headset_cal, recorder.last_summary, tools),
                            calibrations=headset_calibrations())
+        last_state = headset_last_state(recorder.last_summary)
         task = asyncio.create_task(receive())
         try:
             while not task.done():
@@ -1733,9 +1746,11 @@ def make_app(recorder, band, camera, tools, lan=True, serving=False):
                     record_state, record_at = headset_record_state(recorder), time.monotonic()
                     train_state = dict(headset_train_state(headset_cal, recorder.last_summary, tools),
                                        calibrations=headset_calibrations())
+                    last_state = headset_last_state(recorder.last_summary)
                 frame["record"] = dict(record_state, error=record_error[0])
                 frame["haptics"] = headset_haptics_state(tools.haptics, tools.contact.test is not None)
                 frame["train"] = train_state
+                frame["last"] = last_state
                 frame["sent"] = round(time.monotonic() * 1000, 1)
                 await ws.send_json(frame)
                 await asyncio.sleep(1 / QUEST_HZ)

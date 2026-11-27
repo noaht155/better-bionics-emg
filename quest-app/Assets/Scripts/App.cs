@@ -168,6 +168,11 @@ public class App : MonoBehaviour
     readonly View viewOut = new View { head = new float[9], held = new int[2] };
     readonly Ui.PanelOut[] panelsOut = { new Ui.PanelOut(), new Ui.PanelOut(), new Ui.PanelOut(), new Ui.PanelOut() };
     Tour tour;
+    // The card at the end of a recording (Finish.cs): shown when a recording this headset saw running ends, once per
+    // session (the laptop's last session's end time)
+    Finish finish;
+    bool sawRecording;
+    double lastEnded = -1;
     // What the tour's steps wait for
     bool cubeSpawned, menuMoved, menuWasGrabbed;
     TrackedHand otherHand;
@@ -388,6 +393,11 @@ public class App : MonoBehaviour
         card.Show(page);
         card.root.SetParent(deskRoot, false);
         card.Close();
+        finish = new Finish(uiMaterial, () => SendTrain("calibrate"), () =>
+        {
+            SendTrain("control", controlFrame?.train?.saved ?? "");
+            finish.Close();
+        });
         BuildBoard(new string[0]);
     }
 
@@ -1061,7 +1071,7 @@ public class App : MonoBehaviour
         bool clicked = false, hovered = false;
         // Carrying the prosthetic hand on the ray takes it off the panels
         var panelRay = adjustDragging ? null : pointer;
-        foreach (var panel in new[] { menu, card, dock, tour.card })
+        foreach (var panel in new[] { menu, card, dock, tour.card, finish.ui })
         {
             float l = panel.Interact(tip, panelRay, down, grabHandle, grabber, out bool c, true, false, HoldStarted);
             if (l > 0 && length == 0) length = l;
@@ -1355,6 +1365,19 @@ public class App : MonoBehaviour
     {
         CueSounds();
         bool running = record != null && record.running;
+        var last = controlFrame?.last;
+        if (running)
+        {
+            sawRecording = true;
+            if (finish.Visible) finish.Close();
+        }
+        if (last != null && last.ended != lastEnded)
+        {
+            if (sawRecording && !running && last.ended > 0) finish.Show(last, card.root);
+            lastEnded = last.ended;
+            if (!running) sawRecording = false;
+        }
+        finish.Update(controlFrame?.train);
         if (running && tour.Running) tour.End();
         ShowControl(!running && controlFrame != null && controlFrame.driven ? controlFrame : null);
         if (running != card.Visible)

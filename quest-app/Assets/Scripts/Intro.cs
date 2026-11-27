@@ -46,6 +46,8 @@ public class Intro
     // Logo units (0 to 32, y down) to metres round the logo's centre
     static Vector3 At(Vector2 u) => new Vector3((u.x - 16) / 32 * Size, -(u.y - 16) / 32 * Size, 0);
 
+    static readonly Vector3[] PulseAt = System.Array.ConvertAll(Pulse, At);
+
     public void Update(Transform head, bool simReady, bool linked)
     {
         if (Done) return;
@@ -63,8 +65,8 @@ public class Intro
             placed = true;
         }
 
-        Replace(ring, Arc(Ease(Mathf.Clamp01(t / RingS)), 3f / 32 * Size));
-        Replace(line, Polyline(Ease(Mathf.Clamp01((t - LineFrom) / LineS)), 2.2f / 32 * Size));
+        Replace(ring, Arc(Ease(Mathf.Clamp01(t / RingS)), 12f / 32 * Size, 3f / 32 * Size, Size));
+        Replace(line, Polyline(PulseAt, Ease(Mathf.Clamp01((t - LineFrom) / LineS)), 2.2f / 32 * Size, Ui.Text));
         float wordA = Mathf.Clamp01((t - WordFrom) / WordS);
         if (fadeAt < 0 && t > MinS && simReady && (linked || t > LaptopWaitS)) fadeAt = t;
         status.text = t < StatusFrom ? "" : !simReady ? "Starting the hand"
@@ -81,13 +83,13 @@ public class Intro
         }
     }
 
-    static void Replace(MeshFilter mf, Mesh mesh)
+    public static void Replace(MeshFilter mf, Mesh mesh)
     {
         if (mf.sharedMesh != null) Object.Destroy(mf.sharedMesh);
         mf.sharedMesh = mesh;
     }
 
-    static float Ease(float x) => 1 - (1 - x) * (1 - x) * (1 - x);
+    public static float Ease(float x) => 1 - (1 - x) * (1 - x) * (1 - x);
 
     void SetAlpha(float a, float wordA = 0)
     {
@@ -103,12 +105,12 @@ public class Intro
         status.alpha = a;
     }
 
-    // The ring from the top, clockwise, done of the way round; coloured across x like the site's gradient
-    Mesh Arc(float done, float width)
+    // A ring of radius r from the top, clockwise, done of the way round; coloured across x like the site's gradient,
+    // over span (m). Also the finish card's (Finish.cs)
+    public static Mesh Arc(float done, float r, float width, float span)
     {
         var v = new List<Vector3>();
         int n = Mathf.Max(2, Mathf.CeilToInt(96 * done) + 1);
-        float r = 12f / 32 * Size;
         for (int i = 0; i < n; i++)
         {
             float a = Mathf.PI / 2 - 2 * Mathf.PI * done * i / (n - 1);
@@ -116,31 +118,31 @@ public class Intro
             v.Add(d * (r - width / 2));
             v.Add(d * (r + width / 2));
         }
-        return Strip(v);
+        return Strip(v, span);
     }
 
-    // The pulse line drawn from the left, done of its length: a quad per segment and a round joint at each point
-    // reached, like the favicon's round line joins
-    Mesh Polyline(float done, float width)
+    // A line through points (m) drawn from the first, done of its length: a quad per segment and a round joint at
+    // each point reached, like the favicon's round line joins. Also the finish card's check and cross
+    public static Mesh Polyline(Vector3[] points, float done, float width, Color color)
     {
         float total = 0;
-        for (int i = 1; i < Pulse.Length; i++) total += Vector2.Distance(Pulse[i - 1], Pulse[i]);
+        for (int i = 1; i < points.Length; i++) total += Vector3.Distance(points[i - 1], points[i]);
         float left = total * done;
         var v = new List<Vector3>();
         var tris = new List<int>();
-        for (int i = 1; i < Pulse.Length && left > 0; i++)
+        for (int i = 1; i < points.Length && left > 0; i++)
         {
-            var a = Pulse[i - 1];
-            float len = Vector2.Distance(a, Pulse[i]);
-            var b = Vector2.Lerp(a, Pulse[i], Mathf.Min(1, left / len));
+            var a = points[i - 1];
+            float len = Vector3.Distance(a, points[i]);
+            var b = Vector3.Lerp(a, points[i], Mathf.Min(1, left / len));
             left -= len;
-            var dir = (At(b) - At(a)).normalized;
+            var dir = (b - a).normalized;
             var side = new Vector3(-dir.y, dir.x, 0) * (width / 2);
             int s = v.Count;
-            v.AddRange(new[] { At(a) - side, At(a) + side, At(b) - side, At(b) + side });
+            v.AddRange(new[] { a - side, a + side, b - side, b + side });
             tris.AddRange(new[] { s, s + 1, s + 2, s + 1, s + 3, s + 2 });
-            Disc(v, tris, At(a), width / 2);
-            Disc(v, tris, At(b), width / 2);
+            Disc(v, tris, a, width / 2);
+            Disc(v, tris, b, width / 2);
         }
         var mesh = new Mesh();
         mesh.SetVertices(v);
@@ -149,7 +151,7 @@ public class Intro
         for (int i = 0; i < n; i += 3) tris.AddRange(new[] { tris[i], tris[i + 2], tris[i + 1] });
         mesh.SetTriangles(tris, 0);
         var colors = new Color[v.Count];
-        for (int i = 0; i < colors.Length; i++) colors[i] = Ui.Text;
+        for (int i = 0; i < colors.Length; i++) colors[i] = color;
         mesh.colors = colors;
         return mesh;
     }
@@ -168,7 +170,7 @@ public class Intro
     }
 
     // A strip of quads as a mesh, two vertices per step (the ring). Both faces, coloured by x
-    static Mesh Strip(List<Vector3> v)
+    static Mesh Strip(List<Vector3> v, float span)
     {
         var mesh = new Mesh();
         if (v.Count < 4) return mesh;
@@ -179,7 +181,7 @@ public class Intro
         mesh.SetTriangles(tris, 0);
         var colors = new Color[v.Count];
         for (int i = 0; i < colors.Length; i++)
-            colors[i] = Ui.GradientAt(Mathf.InverseLerp(-Size / 2, Size / 2, v[i].x));
+            colors[i] = Ui.GradientAt(Mathf.InverseLerp(-span / 2, span / 2, v[i].x));
         mesh.colors = colors;
         return mesh;
     }

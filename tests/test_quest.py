@@ -164,6 +164,17 @@ def test_headset_train_follows_its_own_calibration():
     assert not app.headset_train_state(cal, dict(quick, session="later"), tools_)["saved"]
 
 
+def test_headset_finish_card_gets_the_last_session():
+    """The headset's finish card: nothing before a session, then what the Record tab's card shows, with no nulls."""
+    import app
+    assert app.headset_last_state(None) == {"ended": 0.0}
+    summary = {"ended": 1764250000.5, "completed": True, "practice": False, "quick": True, "hum_passed": None,
+               "seconds": 251.2, "cues": 24, "cues_done": 24, "marked_bad": 1, "hum_pauses": 0, "folder": "x"}
+    state = app.headset_last_state(summary)
+    assert state["ended"] == 1764250000.5 and state["quick"] and state["marked_bad"] == 1
+    assert not state["hum_passed"] and None not in state.values()
+
+
 def test_headset_shows_held_wrist_bends():
     """A held wrist bend has a target for the ghost hands (the rest pose, bent at the wrist), a sign has no bend."""
     import app
