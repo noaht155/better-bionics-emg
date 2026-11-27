@@ -2830,8 +2830,9 @@ levels: r 0.995 to 0.999 per session, mean difference 0.005 to 0.013, a clench l
   0.8 lens radii shown. Fitted by eye on a frame of the app's room: -0.10 to -0.14 straightens the wall's edge,
   -0.18 bends it the other way. Saved pictures and clips are the flat view too.
 - Wider (Noah: show as much as it can): the whole eye, 0.95 x 0.8 lens radii, letterboxed in the canvas; wider
-  runs into the gap between the eyes. Corners show a little of the lens edge. The headset video can't show
-  passthrough: the recording only has the app's own picture, so where passthrough shows the real room it's black.
+  runs into the gap between the eyes. Corners show a little of the lens edge. Passthrough is in the recording
+  too (checked live: real desk and both sim hands). Noah saw only black: the decoded frame went straight into
+  WebGL, which his browser drew black; it now goes through a 2D canvas first, as the old view did.
 
 ## Open
 

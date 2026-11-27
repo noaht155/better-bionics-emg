@@ -232,24 +232,29 @@ function flatView(gl) {
 function drawVideoFrame(frame) {
   const w = videoCanvas.clientWidth, h = videoCanvas.clientHeight;
   if (videoCanvas.width !== w || videoCanvas.height !== h) Object.assign(videoCanvas, { width: w, height: h });
-  // Kept so a picture or a clip can be saved from the canvas
-  flat ??= flatView(videoCanvas.getContext("webgl", { preserveDrawingBuffer: true }));
-  const { gl } = flat;
   const fw = frame.displayWidth, fh = frame.displayHeight;
+  // The frame goes through a 2D canvas first: a decoded frame handed straight to WebGL came out black on Noah's
+  // browser (2026-11-27), drawing it on a 2D canvas is what worked before
+  flat ??= { copy: document.createElement("canvas") };
+  if (flat.copy.width !== fw || flat.copy.height !== fh) Object.assign(flat.copy, { width: fw, height: fh });
+  flat.copy.getContext("2d").drawImage(frame, 0, 0);
+  frame.close();
+  // Kept so a picture or a clip can be saved from the canvas
+  if (!flat.gl) Object.assign(flat, flatView(videoCanvas.getContext("webgl", { preserveDrawingBuffer: true })));
+  const { gl } = flat;
   gl.viewport(0, 0, w, h);
   gl.clearColor(0, 0, 0, 1);
   gl.clear(gl.COLOR_BUFFER_BIT);
   const aspect = LENS.SPAN_X / LENS.SPAN_Y;
   const vw = Math.min(w, h * aspect), vh = vw / aspect;
   gl.viewport((w - vw) / 2, (h - vh) / 2, vw, vh);
-  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, frame);
+  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, flat.copy);
   gl.uniform2f(flat.size, fw, fh);
   gl.uniform2f(flat.centre, LENS.X * fw, LENS.Y * fh);
   gl.uniform1f(flat.radius, LENS.R * fh);
   gl.uniform1f(flat.k, LENS.K);
   gl.uniform2f(flat.extent, LENS.SPAN_X, LENS.SPAN_Y);
   gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
-  frame.close();
   video.frames += 1;
   video.at = performance.now();
 }
