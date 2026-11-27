@@ -23,6 +23,8 @@ public class Tracking
         public float lost_s, last_loss_s;
         // From the tracked wrist to the controller, -1 without both (cm)
         public float wrist_cm = -1;
+        // The same controller while no hand holds it (DetachedControllers), in the same words
+        public string detached = "off";
         // The device the hand's node resolves to and its raw flags, for the log
         public string device = "";
         [NonSerialized] public bool isTracked;
@@ -70,19 +72,10 @@ public class Tracking
     static void Read(XRNode node, TrackedHand hand, Side side, ref float lostAt)
     {
         var d = InputDevices.GetDeviceAtXRNode(node);
-        string state = "off";
-        Vector3 p = default;
-        side.isTracked = false;
-        side.flags = 0;
-        if (d.isValid)
-        {
-            d.TryGetFeatureValue(CommonUsages.isTracked, out bool on);
-            d.TryGetFeatureValue(CommonUsages.trackingState, out InputTrackingState flags);
-            bool position = (flags & InputTrackingState.Position) != 0 && d.TryGetFeatureValue(CommonUsages.devicePosition, out p);
-            state = position ? on ? "tracked" : "estimated" : (flags & InputTrackingState.Rotation) != 0 ? "rotation only" : "lost";
-            side.isTracked = on;
-            side.flags = (int)flags;
-        }
+        string state = StateOf(d, out var p, out side.isTracked, out side.flags);
+        side.detached = StateOf(DetachedControllers.Device(node == XRNode.LeftHand), out var dp, out _, out _);
+        // Held or detached, it's the same controller: tracked if either has it
+        if (state != "tracked" && side.detached == "tracked") (state, p) = ("tracked", dp);
         side.device = d.isValid ? d.name : "";
         side.pos = p;
         bool ok = state == "tracked";
@@ -102,12 +95,25 @@ public class Tracking
         side.wrist_cm = (ok || state == "estimated") && hand.Tracked ? Vector3.Distance(hand.WristPos, p) * 100 : -1;
     }
 
+    static string StateOf(InputDevice d, out Vector3 p, out bool on, out int raw)
+    {
+        p = default;
+        on = false;
+        raw = 0;
+        if (!d.isValid) return "off";
+        d.TryGetFeatureValue(CommonUsages.isTracked, out on);
+        d.TryGetFeatureValue(CommonUsages.trackingState, out InputTrackingState flags);
+        raw = (int)flags;
+        bool position = (flags & InputTrackingState.Position) != 0 && d.TryGetFeatureValue(CommonUsages.devicePosition, out p);
+        return position ? on ? "tracked" : "estimated" : (flags & InputTrackingState.Rotation) != 0 ? "rotation only" : "lost";
+    }
+
     void Log(bool hasP, bool hasF)
     {
-        string key = $"L {State.left.controller} '{State.left.device}' hand {State.left.hand} | " +
-                     $"R {State.right.controller} '{State.right.device}' hand {State.right.hand} | " +
+        string key = $"L {State.left.controller} '{State.left.device}' detached {State.left.detached} hand {State.left.hand} | " +
+                     $"R {State.right.controller} '{State.right.device}' detached {State.right.detached} hand {State.right.hand} | " +
                      $"prosthetic used {hasP}, free controller used {hasF}, free by {State.free}, " +
-                     $"multimodal {State.multimodal}, focused {Application.isFocused}";
+                     $"multimodal {State.multimodal}, detached {DetachedControllers.Status}, focused {Application.isFocused}";
         bool changed = key != lastKey;
         if (!changed && Time.time - loggedAt < 1) return;
         loggedAt = Time.time;
@@ -132,7 +138,7 @@ public class Tracking
         + (State.adjust != "" ? "\n" + State.adjust : "");
 
     static string Line(string name, Side s) =>
-        $"{name} controller {s.controller}" + (s.lost_s > 0 ? $" for {s.lost_s:0.0} s" : "")
+        $"{name} controller {s.controller}" + (s.detached == "tracked" ? " (not held)" : "") + (s.lost_s > 0 ? $" for {s.lost_s:0.0} s" : "")
         + $", lost {s.losses}x" + (s.losses > 0 ? $" (last {s.last_loss_s:0.0} s)" : "")
         + ", hand " + (s.hand ? "seen" + (s.wrist_cm >= 0 ? $", {s.wrist_cm:0} cm from it" : "") : "not seen");
 }

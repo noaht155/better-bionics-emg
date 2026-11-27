@@ -896,9 +896,16 @@ public class App : MonoBehaviour
 
     // Tracking
 
-    static bool Pose(XRNode node, out Vector3 p, out Quaternion q, bool eye = false)
+    static bool Pose(XRNode node, out Vector3 p, out Quaternion q, bool eye = false) =>
+        Pose(InputDevices.GetDeviceAtXRNode(node), out p, out q, eye);
+
+    // The strapped controller: on its hand's node while a hand holds it, otherwise the headset reports it detached
+    // (DetachedControllers), as it does whenever hands are tracked too and its own hand isn't on it
+    bool ProstheticPose(out Vector3 p, out Quaternion q) =>
+        Pose(ProstheticNode, out p, out q) || Pose(DetachedControllers.Device(settings.prostheticLeft), out p, out q);
+
+    static bool Pose(InputDevice d, out Vector3 p, out Quaternion q, bool eye = false)
     {
-        var d = InputDevices.GetDeviceAtXRNode(node);
         p = default;
         q = Quaternion.identity;
         if (!d.isValid) return false;
@@ -988,7 +995,7 @@ public class App : MonoBehaviour
 
         tracked.Update(FreeIsRight);
         otherHand.Update(!FreeIsRight);
-        bool hasP = Pose(ProstheticNode, out var pp, out var pq);
+        bool hasP = ProstheticPose(out var pp, out var pq);
         Vector3 fp = default;
         Quaternion fq = Quaternion.identity;
         // The free hand goes by its controller while it holds one. With hands and controllers tracked together

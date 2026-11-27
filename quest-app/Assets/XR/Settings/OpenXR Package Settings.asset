@@ -476,6 +476,28 @@ MonoBehaviour:
   targetOpenXRApiVersion: 
   required: 0
   customRuntimeLoaderName: 
+--- !u!114 &-1838186041764070995
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 346dc7d7e1b60db4dbb9d73ad2510bf4, type: 3}
+  m_Name: DetachedControllers Android
+  m_EditorClassIdentifier: Assembly-CSharp::DetachedControllers
+  m_enabled: 1
+  nameUi: Detached controllers
+  version: 1.0.0
+  featureIdInternal: com.betterbionics.detachedcontrollers
+  openxrExtensionStrings: XR_META_detached_controllers XR_META_touch_controller_plus
+  company: Better Bionics
+  priority: 0
+  targetOpenXRApiVersion: 
+  required: 0
+  customRuntimeLoaderName: 
 --- !u!114 &-1711866455217933360
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -693,6 +715,7 @@ MonoBehaviour:
   - {fileID: -7383991649838508751}
   - {fileID: 1444211467244464372}
   - {fileID: -1711866455217933360}
+  - {fileID: -1838186041764070995}
   customLoaderName: 
   m_renderMode: 0
   m_latencyOptimization: 0

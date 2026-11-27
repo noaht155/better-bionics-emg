@@ -113,6 +113,7 @@ public class QuestBuild : IPostGenerateGradleAndroidProject
         openxr.GetFeature<OculusTouchControllerProfile>().enabled = true;
         openxr.GetFeature<HandTracking>().enabled = true;
         openxr.GetFeature<Multimodal>().enabled = true;
+        openxr.GetFeature<DetachedControllers>().enabled = true;
         // Passthrough, through ARFoundation's camera on Meta's OpenXR runtime
         openxr.GetFeature<ARSessionFeature>().enabled = true;
         openxr.GetFeature<ARCameraFeature>().enabled = true;

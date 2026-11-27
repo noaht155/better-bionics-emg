@@ -2788,6 +2788,14 @@ levels: r 0.995 to 0.999 per session, mean difference 0.005 to 0.013, a clench l
   (`App.Pose`), and the readout shows them as "estimated"; and hand tracking of the free left hand beside its
   controller (Multimodal), now a Setup switch, "Hands with controllers" (kept on the headset; off pauses
   `XR_META_simultaneous_hands_and_controllers`, so the free hand needs its controller).
+- Likely real cause (Noah: covering the face with his hand doesn't lose it, so not the mount): with hands and
+  controllers tracked together, Meta reports a controller its own hand doesn't hold as detached
+  (`XR_META_detached_controllers`), under `/user/detached_controller_meta/left` instead of `/user/hand/left`, and
+  only one of the two is filled at a time. The strapped controller is never held, so the Touch profile's device
+  (the only one the app read) lost it; a hand on it makes it held again. The system menus don't use that mode.
+  `DetachedControllers.cs` binds the detached paths (Touch Plus profile, so no clash with the Touch profile on the
+  hand paths) and `App.ProstheticPose` falls back to it. The log (`[track]` in `adb logcat -s Unity`) shows held and
+  detached state, the devices and raw flags each second. Not yet run on the headset.
 
 ## Open
 
