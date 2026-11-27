@@ -2813,6 +2813,12 @@ levels: r 0.995 to 0.999 per session, mean difference 0.005 to 0.013, a clench l
   thumb out as little out 0 to 5 % (17 % once, 2026-11-16); a two-sign LDA on channel levels 75 to 99 % on unseen
   rounds (95 % today). So the confusion comes from live use, not the recorded signs: still to find whether it's
   the posture in the headset (arm out with the strapped controller), the live path or the control layer's rules.
+  Noah: it's the Control tab's predicted sign. The live path matches training (same causal filter, mirroring,
+  window). Today's session replayed through the live predictor (vote, threshold) with each calibration
+  (`diagnostics/live_replay_pair.py`, local): the 11-20 calibration shows thumb out as little out 33 %, the second
+  11-24 one little out as thumb out 17 % (unsure 52 %); today's shows both 100 % right (optimistic, calibrated on
+  it). So a calibration from an earlier day, with the band put on differently, mixes these two up; a fresh one
+  doesn't. Check which calibration the Control tab runs, and recalibrate whenever the band goes back on.
 
 ## Open
 
