@@ -194,7 +194,7 @@ function closeVideo() {
 // edges came out straight (2026-11-27: -0.10 to -0.14 straight, -0.18 bends the other way). SPAN_X and SPAN_Y are how
 // far the view goes out, in lens radii: the whole eye (Noah: show as much as it can), wider meets the gap between the
 // eyes, taller the eye's edge. Letterboxed in the canvas, so nothing is cut to fit its shape
-const LENS = { K: -0.12, X: 0.254, Y: 0.5, R: 0.5, SPAN_X: 0.95, SPAN_Y: 0.8 };
+const LENS = { K: -0.12, X: 0.254, Y: 0.5, R: 0.5, SPAN_X: 0.9, SPAN_Y: 0.72 };
 const FLAT_SHADER = `precision mediump float;
   varying vec2 p; uniform sampler2D tex; uniform vec2 size, centre, extent; uniform float radius, k;
   void main() {
