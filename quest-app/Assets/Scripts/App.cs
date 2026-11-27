@@ -1085,8 +1085,9 @@ public class App : MonoBehaviour
             adjustText = !adjusting ? "" : !hasP ? "Adjusting: the prosthetic controller isn't tracked"
                 : "Adjusting: nothing to point with";
         }
+        tracking.Extra = $"sim hand held back {readout[17] * 100:0} cm, sim {sim.Speed:0.0}x";
         tracking.Update(FreeIsRight ? otherHand : tracked, FreeIsRight ? tracked : otherHand,
-            hasF ? "controller" : freeBare ? "hand" : "none", adjustText);
+            hasF ? "controller" : freeBare ? "hand" : "none", adjustText, hasP, hasF);
         // The bare hand's ray only shows while it points at a panel, so it isn't always in view
         // Kept a moment after it leaves a panel, so a shaky hand at the edge doesn't flicker it
         if (length > 0.0001f) rayShownUntil = Time.time + 0.3f;

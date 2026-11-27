@@ -1,17 +1,21 @@
 using System;
+using System.Collections.Generic;
+using System.Text;
 using UnityEngine;
 using UnityEngine.XR;
 
 // What the headset tracks, for finding tracking trouble: each controller's state and how often and how long it lost
 // tracking, each real hand, what the free hand goes by and what the adjusting ray does. Shown on the Setup page and
-// sent with the view to the laptop's VR tab
+// sent with the view to the laptop's VR tab. Also written to the log under "[track]" (adb logcat -s Unity), so it
+// can be followed over USB while someone wears the headset: every change, the devices coming and going, and once a
+// second the raw state with positions
 public class Tracking
 {
     [Serializable]
     public class Side
     {
-        // "tracked", "estimated" (position only estimated, e.g. part of the ring hidden), "rotation only" (position
-        // lost, turning still followed), "lost" or "off" (not connected or asleep)
+        // "tracked", "estimated" (position only estimated), "rotation only" (position lost, turning still followed),
+        // "lost" or "off" (not connected or asleep)
         public string controller = "off";
         public bool hand;
         public int losses;
@@ -19,6 +23,11 @@ public class Tracking
         public float lost_s, last_loss_s;
         // From the tracked wrist to the controller, -1 without both (cm)
         public float wrist_cm = -1;
+        // The device the hand's node resolves to and its raw flags, for the log
+        public string device = "";
+        [NonSerialized] public bool isTracked;
+        [NonSerialized] public int flags;
+        [NonSerialized] public Vector3 pos;
     }
 
     [Serializable]
@@ -31,15 +40,31 @@ public class Tracking
     }
 
     public readonly Out State = new Out();
-    float leftLostAt = -1, rightLostAt = -1;
+    // More of the app's state for the once a second log line
+    public string Extra = "";
+    float leftLostAt = -1, rightLostAt = -1, loggedAt;
+    string lastKey = "";
+    readonly List<InputDevice> devices = new List<InputDevice>();
+    readonly StringBuilder line = new StringBuilder();
 
-    public void Update(TrackedHand left, TrackedHand right, string free, string adjust)
+    public Tracking()
+    {
+        InputDevices.deviceConnected += d => Debug.Log($"[track] {Time.time:0.00} connected {Describe(d)}");
+        InputDevices.deviceDisconnected += d => Debug.Log($"[track] {Time.time:0.00} disconnected {Describe(d)}");
+        InputDevices.deviceConfigChanged += d => Debug.Log($"[track] {Time.time:0.00} changed {Describe(d)}");
+    }
+
+    static string Describe(InputDevice d) => $"'{d.name}' ({d.characteristics})";
+
+    // hasP, hasF: whether the app used the prosthetic and free controllers this frame
+    public void Update(TrackedHand left, TrackedHand right, string free, string adjust, bool hasP, bool hasF)
     {
         Read(XRNode.LeftHand, left, State.left, ref leftLostAt);
         Read(XRNode.RightHand, right, State.right, ref rightLostAt);
         State.free = free;
         State.adjust = adjust;
         State.multimodal = Multimodal.Status;
+        Log(hasP, hasF);
     }
 
     static void Read(XRNode node, TrackedHand hand, Side side, ref float lostAt)
@@ -47,13 +72,19 @@ public class Tracking
         var d = InputDevices.GetDeviceAtXRNode(node);
         string state = "off";
         Vector3 p = default;
+        side.isTracked = false;
+        side.flags = 0;
         if (d.isValid)
         {
             d.TryGetFeatureValue(CommonUsages.isTracked, out bool on);
             d.TryGetFeatureValue(CommonUsages.trackingState, out InputTrackingState flags);
             bool position = (flags & InputTrackingState.Position) != 0 && d.TryGetFeatureValue(CommonUsages.devicePosition, out p);
             state = position ? on ? "tracked" : "estimated" : (flags & InputTrackingState.Rotation) != 0 ? "rotation only" : "lost";
+            side.isTracked = on;
+            side.flags = (int)flags;
         }
+        side.device = d.isValid ? d.name : "";
+        side.pos = p;
         bool ok = state == "tracked";
         if (!ok && side.controller == "tracked")
         {
@@ -69,6 +100,31 @@ public class Tracking
         side.controller = state;
         side.hand = hand.Tracked;
         side.wrist_cm = (ok || state == "estimated") && hand.Tracked ? Vector3.Distance(hand.WristPos, p) * 100 : -1;
+    }
+
+    void Log(bool hasP, bool hasF)
+    {
+        string key = $"L {State.left.controller} '{State.left.device}' hand {State.left.hand} | " +
+                     $"R {State.right.controller} '{State.right.device}' hand {State.right.hand} | " +
+                     $"prosthetic used {hasP}, free controller used {hasF}, free by {State.free}, " +
+                     $"multimodal {State.multimodal}, focused {Application.isFocused}";
+        bool changed = key != lastKey;
+        if (!changed && Time.time - loggedAt < 1) return;
+        loggedAt = Time.time;
+        lastKey = key;
+        line.Clear();
+        line.Append("[track] ").Append(Time.time.ToString("0.00")).Append(changed ? " CHANGE " : " ").Append(key);
+        foreach (var (name, s) in new[] { ("L", State.left), ("R", State.right) })
+            line.Append($" | {name} isTracked {s.isTracked} flags {s.flags} pos {s.pos.x:0.000} {s.pos.y:0.000} {s.pos.z:0.000}" +
+                        $" wrist {s.wrist_cm:0}cm losses {s.losses}");
+        if (!changed)
+        {
+            InputDevices.GetDevices(devices);
+            line.Append(" | devices:");
+            foreach (var d in devices) line.Append(' ').Append(Describe(d));
+            line.Append($" | fps {1 / Mathf.Max(Time.smoothDeltaTime, 1e-4f):0}, ").Append(Extra);
+        }
+        Debug.Log(line.ToString());
     }
 
     public string Text() =>
