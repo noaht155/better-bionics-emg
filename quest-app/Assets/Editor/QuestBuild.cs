@@ -113,6 +113,9 @@ public class QuestBuild : IPostGenerateGradleAndroidProject
         openxr.GetFeature<OculusTouchControllerProfile>().enabled = true;
         openxr.GetFeature<HandTracking>().enabled = true;
         openxr.GetFeature<Multimodal>().enabled = true;
+        // The detached paths use the Touch Plus profile, so the headset picks it for Touch Plus controllers: it needs
+        // the held controllers' bindings too, or a controller in the hand has no device (2026-11-27)
+        openxr.GetFeature<MetaQuestTouchPlusControllerProfile>().enabled = true;
         openxr.GetFeature<DetachedControllers>().enabled = true;
         // Passthrough, through ARFoundation's camera on Meta's OpenXR runtime
         openxr.GetFeature<ARSessionFeature>().enabled = true;

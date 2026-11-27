@@ -2795,7 +2795,13 @@ levels: r 0.995 to 0.999 per session, mean difference 0.005 to 0.013, a clench l
   (the only one the app read) lost it; a hand on it makes it held again. The system menus don't use that mode.
   `DetachedControllers.cs` binds the detached paths (Touch Plus profile, so no clash with the Touch profile on the
   hand paths) and `App.ProstheticPose` falls back to it. The log (`[track]` in `adb logcat -s Unity`) shows held and
-  detached state, the devices and raw flags each second. Not yet run on the headset.
+  detached state, the devices and raw flags each second. On the headset (Noah): the strapped controller now
+  follows (detached, tracked). But no held controller device existed at all: binding the detached paths with the
+  Touch Plus profile made the headset pick that profile for the hand paths too, where nothing was bound, so a
+  controller in the hand was invisible and Adjust with the controller fell back to the pinch ray. Unity's Touch
+  Plus profile is on now as well (Unity merges both features' bindings per profile), and the free hand goes by its
+  controller whenever the headset reports it held (the 15 cm wrist check is gone: wrists showed 13 to 29 cm from
+  their controllers).
 
 ## Open
 

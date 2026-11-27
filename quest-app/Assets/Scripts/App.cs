@@ -24,8 +24,6 @@ public class App : MonoBehaviour
     const float AdjustReach = 0.06f, HandLength = 0.18f;
     // The thumbstick pushes the carried hand away or pulls it in this fast (m/s)
     const float AdjustPushSpeed = 0.4f;
-    // A tracked wrist this close to the free controller holds it (m)
-    const float HeldM = 0.15f;
     // The ghost hand comes in from rest to the cue's pose over this long, as the page's target hand does
     const float FollowInS = 1.0f;
     // The prosthetic palm this far from the controller's hand pose (m, readout 17) shows a ghost hand there, so it is
@@ -998,11 +996,9 @@ public class App : MonoBehaviour
         bool hasP = ProstheticPose(out var pp, out var pq);
         Vector3 fp = default;
         Quaternion fq = Quaternion.identity;
-        // The free hand goes by its controller while it holds one. With hands and controllers tracked together
-        // (Multimodal) the headset can report the hand holding a controller as tracked too, so a controller at the
-        // wrist wins over the hand
-        bool hasF = Pose(FreeNode, out fp, out fq)
-                    && (!tracked.Tracked || Vector3.Distance(tracked.WristPos, fp) < HeldM);
+        // The free hand goes by its controller while it holds one: the hand's node only has a controller while the
+        // headset sees it held (a put down one is detached, DetachedControllers), and the hand can show as tracked too
+        bool hasF = Pose(FreeNode, out fp, out fq);
         freeBare = tracked.Tracked && !hasF;
         controllerModels[0].gameObject.SetActive(hasP && showControllers);
         controllerModels[1].gameObject.SetActive(hasF && showControllers);
