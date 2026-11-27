@@ -299,6 +299,8 @@ class QuestLens(BaseModel):
     k2: float = Field(ge=-1, le=1)
     x: float = Field(ge=0, le=1)
     y: float = Field(ge=0, le=1)
+    # How the eye's picture sits turned on its display (radians)
+    roll: float = Field(0.0, ge=-0.5, le=0.5)
     box: list[float] = Field(min_length=4, max_length=4)
     lines: int = Field(ge=0)
     error: float = Field(ge=0)

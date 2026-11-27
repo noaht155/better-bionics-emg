@@ -196,13 +196,19 @@ function closeVideo() {
 // things like the menu sit differently for each eye). measureLens fits the warp from the headset's dot grid and
 // saves it; until then Noah's Quest 3 as measured on 2026-11-27 (161 dots, rows 7.4 % of their spacing off straight
 // before, 2.4 % after)
-let lens = { k1: -0.221, k2: 0.031, x: 0.2868, y: 0.5076, box: [-1.4, 0.86, -1.438, 1.538] };
+let lens = { k1: -0.221, k2: 0.031, x: 0.2868, y: 0.5076, roll: 0, box: [-1.535, 0.882, -1.438, 1.538] };
+// How far up and down the view goes (lens radii): more than a wide crop (Noah: zoom out more), so narrow black bars
+// at the sides and a little black in the corners past the round edge
+const VIEW_HALF_HEIGHT = 1.0;
 const LENS_R = 0.5;
 fetch("/api/vr/lens").then((r) => r.json()).then((l) => { if (l.k1 != null) lens = l; }).catch(() => {});
 const FLAT_SHADER = `precision mediump float;
-  varying vec2 p; uniform sampler2D tex; uniform vec2 size, centre; uniform vec4 box; uniform float radius, k1, k2;
+  varying vec2 p; uniform sampler2D tex; uniform vec2 size, centre; uniform vec4 box;
+  uniform float radius, k1, k2, roll;
   void main() {
-    vec2 u = vec2(mix(box.x, box.y, p.x * 0.5 + 0.5), mix(box.z, box.w, p.y * 0.5 + 0.5));
+    vec2 v = vec2(mix(box.x, box.y, p.x * 0.5 + 0.5), mix(box.z, box.w, p.y * 0.5 + 0.5));
+    // Level: the eye's picture sits turned by roll on its display
+    vec2 u = vec2(cos(roll) * v.x - sin(roll) * v.y, sin(roll) * v.x + cos(roll) * v.y);
     float r2 = dot(u, u);
     vec2 s = centre + vec2(u.x, -u.y) * (1.0 + k1 * r2 + k2 * r2 * r2) * radius;
     gl_FragColor = texture2D(tex, s / size);
@@ -231,7 +237,7 @@ function flatView(gl) {
   for (const [k, v] of [[gl.TEXTURE_MIN_FILTER, gl.LINEAR], [gl.TEXTURE_MAG_FILTER, gl.LINEAR],
     [gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE], [gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE]]) gl.texParameteri(gl.TEXTURE_2D, k, v);
   const at = (name) => gl.getUniformLocation(prog, name);
-  return { gl, size: at("size"), centre: at("centre"), box: at("box"), radius: at("radius"), k1: at("k1"), k2: at("k2") };
+  return { gl, size: at("size"), centre: at("centre"), box: at("box"), radius: at("radius"), k1: at("k1"), k2: at("k2"), roll: at("roll") };
 }
 
 function drawVideoFrame(frame) {
@@ -251,16 +257,18 @@ function drawVideoFrame(frame) {
   gl.clearColor(0, 0, 0, 1);
   gl.clear(gl.COLOR_BUFFER_BIT);
   const [left, right] = lens.box;
-  const half = Math.min((right - left) * h / w, lens.box[3] - lens.box[2]) / 2;
+  const half = Math.min(VIEW_HALF_HEIGHT, (lens.box[3] - lens.box[2]) / 2);
   const [bottom, top] = [-half, half];
-  const vh = Math.min(h, w * 2 * half / (right - left));
-  gl.viewport(0, (h - vh) / 2, w, vh);
+  const aspect = (right - left) / (2 * half);
+  const vw = Math.min(w, h * aspect), vh = vw / aspect;
+  gl.viewport((w - vw) / 2, (h - vh) / 2, vw, vh);
   gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, flat.copy);
   gl.uniform2f(flat.size, fw, fh);
   gl.uniform2f(flat.centre, lens.x * fw, lens.y * fh);
   gl.uniform1f(flat.radius, LENS_R * fh);
   gl.uniform1f(flat.k1, lens.k1);
   gl.uniform1f(flat.k2, lens.k2);
+  gl.uniform1f(flat.roll, lens.roll ?? 0);
   gl.uniform4f(flat.box, left, right, bottom, top);
   gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
   video.frames += 1;
@@ -408,12 +416,26 @@ function nelderMead(f, x0, scale, steps = 400) {
 }
 
 // The view out to where the left eye's picture ends, through the lens centre: its left edge, the middle of the
-// frame (the other eye starts there), the top and the bottom; left and right pulled in a little so the cut-down
-// height doesn't reach the round edge's black (-1.4 and 0.86 of -1.54 and 0.88 on Noah's Quest). Not the dots'
-// extent: the grid doesn't fill the view and the picture came out cropped (Noah, 2026-11-27)
+// frame (the other eye starts there), the top and the bottom. Not the dots' extent: the grid doesn't fill the view
+// and the picture came out cropped (Noah, 2026-11-27)
 function eyeBox(l, w, h) {
-  return [0.91 * toU(l, [6, l.y * h], w, h)[0], 0.975 * toU(l, [w / 2 - 4, l.y * h], w, h)[0],
+  return [toU(l, [6, l.y * h], w, h)[0], toU(l, [w / 2 - 4, l.y * h], w, h)[0],
     toU(l, [l.x * w, h - 4], w, h)[1], toU(l, [l.x * w, 4], w, h)[1]];
+}
+
+// How far the grid's rows and columns are turned once flat (radians), the median over all of them, each folded to
+// within 45 degrees of level or upright. The grid is fixed to the head, so this is how the eye's picture sits turned
+// on its display (Noah: the view was tilted)
+function gridRoll(l, dots, lines, w, h) {
+  const u = dots.map((d) => toU(l, d, w, h));
+  const angles = lines.map((line) => {
+    const a = u[line[0]], b = u[line[line.length - 1]];
+    let t = Math.atan2(b[1] - a[1], b[0] - a[0]);
+    while (t > Math.PI / 4) t -= Math.PI / 2;
+    while (t < -Math.PI / 4) t += Math.PI / 2;
+    return t;
+  }).sort((p, q) => p - q);
+  return angles[Math.floor(angles.length / 2)] || 0;
 }
 
 async function measureLens() {
@@ -453,12 +475,14 @@ async function measureLens() {
     }
     const after = cost([l.k1, l.k2, l.x, l.y]);
     l.box = eyeBox(l, w, h);
+    l.roll = gridRoll(l, dots, grouped.lines, w, h);
     l.lines = grouped.lines.length;
     l.error = after;
     if (!(await postShowing("/api/vr/lens", l, "vr-error"))) return;
     lens = l;
     say(`Measured from ${dots.length} dots in ${grouped.lines.length} rows and columns: they sat ${pct(before)} of the `
-      + `spacing between dots off straight before, ${pct(after)} now. Saved, used from now on.`);
+      + `spacing between dots off straight before, ${pct(after)} now, turned ${(l.roll * 180 / Math.PI).toFixed(1)} `
+      + `degrees. Saved, used from now on.`);
   } finally {
     $("vr-lens").disabled = false;
   }

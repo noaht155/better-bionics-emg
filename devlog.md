@@ -2851,6 +2851,10 @@ levels: r 0.995 to 0.999 per session, mean difference 0.005 to 0.013, a clench l
   (the menu folded where they met: near things sit differently for each eye). Now one eye cropped wide like Meta's
   cast: the eye's full width (-1.4 to 0.86 lens radii, just inside the round edge) and the height cut to fill the
   canvas round the lens centre, so no black and no seam; the top and bottom of the eye are cut off.
+- Tilted, and zoom out more (Noah): the measurement now also finds how far the head-fixed grid's rows sit turned
+  once flat (`gridRoll`, the median over rows and columns) and the view turns it back (`roll`). The view goes
+  1.0 lens radii up and down over the eye's full width, letterboxed: narrow bars at the sides, a little black in
+  the corners. Needs a new measurement for the tilt.
 
 ## Open
 
