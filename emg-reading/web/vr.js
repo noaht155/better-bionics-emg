@@ -191,9 +191,10 @@ function closeVideo() {
 // The headset records what goes to its lenses: each eye pre-warped (barrel) so the lens undoes it. The left eye is
 // flattened back on the GPU: an output point u (in lens radii from the lens centre) comes from u (1 + K r^2) in the
 // recording. K, the lens centre and the radius were fitted by eye on a 1280x720 recording until the room's straight
-// edges came out straight (2026-11-27: -0.10 to -0.14 straight, -0.18 bends the other way). SPAN is how far out the
-// view goes, in lens radii, kept inside the round eye image
-const LENS = { K: -0.12, X: 0.254, Y: 0.5, R: 0.5, SPAN: 0.8 };
+// edges came out straight (2026-11-27: -0.10 to -0.14 straight, -0.18 bends the other way). SPAN_X and SPAN_Y are how
+// far the view goes out, in lens radii: the whole eye (Noah: show as much as it can), wider meets the gap between the
+// eyes, taller the eye's edge. Letterboxed in the canvas, so nothing is cut to fit its shape
+const LENS = { K: -0.12, X: 0.254, Y: 0.5, R: 0.5, SPAN_X: 0.95, SPAN_Y: 0.8 };
 const FLAT_SHADER = `precision mediump float;
   varying vec2 p; uniform sampler2D tex; uniform vec2 size, centre, extent; uniform float radius, k;
   void main() {
@@ -236,13 +237,17 @@ function drawVideoFrame(frame) {
   const { gl } = flat;
   const fw = frame.displayWidth, fh = frame.displayHeight;
   gl.viewport(0, 0, w, h);
+  gl.clearColor(0, 0, 0, 1);
+  gl.clear(gl.COLOR_BUFFER_BIT);
+  const aspect = LENS.SPAN_X / LENS.SPAN_Y;
+  const vw = Math.min(w, h * aspect), vh = vw / aspect;
+  gl.viewport((w - vw) / 2, (h - vh) / 2, vw, vh);
   gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, frame);
   gl.uniform2f(flat.size, fw, fh);
   gl.uniform2f(flat.centre, LENS.X * fw, LENS.Y * fh);
   gl.uniform1f(flat.radius, LENS.R * fh);
   gl.uniform1f(flat.k, LENS.K);
-  // The wider side gets SPAN, the other its share, so the view keeps the canvas's shape
-  gl.uniform2f(flat.extent, LENS.SPAN * Math.min(1, w / h), LENS.SPAN * Math.min(1, h / w));
+  gl.uniform2f(flat.extent, LENS.SPAN_X, LENS.SPAN_Y);
   gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
   frame.close();
   video.frames += 1;
