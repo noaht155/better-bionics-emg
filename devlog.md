@@ -2888,12 +2888,10 @@ Now: haptics
   pausing a recording, desk height by hand, touch haptics and the grip squeeze; from 2026-11-26 the laptop's point
   pulse, the hover tick and buzz, the link coming back after the headset was off, and the icon. The VR tab's
   Headset video shows the headset's picture live (`adb logcat` for the log).
-- Quest strapped controller mount (Noah, 2026-11-27): the app keeps losing the left controller. Touch Plus tracks
-  by IR LEDs under the face plate and one at the handle's base; the mount's top cap covers the face's top and the
-  bottom ring the base. Redesign holding the handle only: a collar just under the face as the shelf, an upward stop
-  through the strap point, the handle's end and the face left open (a phone's front camera shows the LEDs flashing
-  while the headset tracks). Then check the Setup page's Tracking line, the "Hands with controllers" switch and
-  Adjust with the controller, which haven't been tried with a working mount.
+- Quest strapped controller (2026-11-27): try the detached controller build (`DetachedControllers.cs`) with the
+  current mount: the Setup page's Tracking line should say "tracked (not held)" for it, and `[track]` lines in
+  `adb logcat -s Unity` show held and detached state. If it still drops out, the mount (it covers the face's top
+  and the handle's base, where the Touch Plus IR LEDs are) comes next. Then Adjust with the controller.
 - Motor pickup: run `diagnostics/motor_pickup.py` with the motor band below the pads, relaxed and with a steady
   clench.
 - Haptics: decide on LRAs vs coin motors. LRAs need an AC drive at their resonance (about 170 to 235 Hz), which is
