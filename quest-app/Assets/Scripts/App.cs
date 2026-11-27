@@ -208,6 +208,7 @@ public class App : MonoBehaviour
         ghostRight = Resources.Load<TextAsset>("sim/ghost_right").text;
         SimView.SurfaceFriction = meta.surface_friction;
         settings = Settings.Load();
+        Multimodal.Set(settings.handsWithControllers);
         current = new Link.Params
         {
             @object = meta.@object, mass_scale = meta.mass_scale, max_force = meta.max_force, assist = meta.assist,
@@ -340,6 +341,12 @@ public class App : MonoBehaviour
         menu.Section(setup, "Free hand");
         freeText = menu.Paragraph(setup, "", 0.013f, true);
         menu.Section(setup, "Tracking");
+        menu.Toggle(setup, "Hands with controllers", () => settings.handsWithControllers, () =>
+        {
+            settings.handsWithControllers = !settings.handsWithControllers;
+            settings.Save();
+            Multimodal.Set(settings.handsWithControllers);
+        });
         trackingText = menu.Paragraph(setup, "", 0.012f, true, 4);
 
         help = menu.AddPage("Help");
@@ -895,7 +902,11 @@ public class App : MonoBehaviour
         p = default;
         q = Quaternion.identity;
         if (!d.isValid) return false;
-        if (!eye && d.TryGetFeatureValue(CommonUsages.isTracked, out bool on) && !on) return false;
+        // A position the headset only estimates (part of the ring hidden, as on the strapped controller) still counts,
+        // as in the headset's own menus
+        if (!eye && d.TryGetFeatureValue(CommonUsages.isTracked, out bool on) && !on
+            && !(d.TryGetFeatureValue(CommonUsages.trackingState, out InputTrackingState state)
+                 && (state & InputTrackingState.Position) != 0)) return false;
         return d.TryGetFeatureValue(eye ? CommonUsages.centerEyePosition : CommonUsages.devicePosition, out p)
                && d.TryGetFeatureValue(eye ? CommonUsages.centerEyeRotation : CommonUsages.deviceRotation, out q);
     }

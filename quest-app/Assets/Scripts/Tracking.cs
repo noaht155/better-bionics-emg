@@ -10,7 +10,8 @@ public class Tracking
     [Serializable]
     public class Side
     {
-        // "tracked", "rotation only" (position lost, turning still followed), "lost" or "off" (not connected or asleep)
+        // "tracked", "estimated" (position only estimated, e.g. part of the ring hidden), "rotation only" (position
+        // lost, turning still followed), "lost" or "off" (not connected or asleep)
         public string controller = "off";
         public bool hand;
         public int losses;
@@ -51,7 +52,7 @@ public class Tracking
             d.TryGetFeatureValue(CommonUsages.isTracked, out bool on);
             d.TryGetFeatureValue(CommonUsages.trackingState, out InputTrackingState flags);
             bool position = (flags & InputTrackingState.Position) != 0 && d.TryGetFeatureValue(CommonUsages.devicePosition, out p);
-            state = on && position ? "tracked" : (flags & InputTrackingState.Rotation) != 0 ? "rotation only" : "lost";
+            state = position ? on ? "tracked" : "estimated" : (flags & InputTrackingState.Rotation) != 0 ? "rotation only" : "lost";
         }
         bool ok = state == "tracked";
         if (!ok && side.controller == "tracked")
@@ -67,7 +68,7 @@ public class Tracking
         side.lost_s = lostAt >= 0 ? Time.time - lostAt : 0;
         side.controller = state;
         side.hand = hand.Tracked;
-        side.wrist_cm = ok && hand.Tracked ? Vector3.Distance(hand.WristPos, p) * 100 : -1;
+        side.wrist_cm = (ok || state == "estimated") && hand.Tracked ? Vector3.Distance(hand.WristPos, p) * 100 : -1;
     }
 
     public string Text() =>

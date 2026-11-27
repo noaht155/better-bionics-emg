@@ -24,6 +24,8 @@ public class Settings
     public bool helpSeen;
     // The controls card by the desk
     public bool controlsCard = true;
+    // Hand tracking on the hand without a controller (Multimodal); off, the headset tracks controllers only
+    public bool handsWithControllers = true;
 
     public static Settings Load()
     {
@@ -37,6 +39,7 @@ public class Settings
         s.passthrough = PlayerPrefs.GetInt("passthrough", 0) == 1;
         s.helpSeen = PlayerPrefs.GetInt("help_seen", 0) == 1;
         s.controlsCard = PlayerPrefs.GetInt("controls_card", 1) == 1;
+        s.handsWithControllers = PlayerPrefs.GetInt("hands_with_controllers", 1) == 1;
         return s;
     }
 
@@ -51,6 +54,7 @@ public class Settings
         PlayerPrefs.SetInt("passthrough", passthrough ? 1 : 0);
         PlayerPrefs.SetInt("help_seen", helpSeen ? 1 : 0);
         PlayerPrefs.SetInt("controls_card", controlsCard ? 1 : 0);
+        PlayerPrefs.SetInt("hands_with_controllers", handsWithControllers ? 1 : 0);
         PlayerPrefs.Save();
     }
 

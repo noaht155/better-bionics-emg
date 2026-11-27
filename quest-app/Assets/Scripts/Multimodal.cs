@@ -36,7 +36,12 @@ public class Multimodal : OpenXRFeature
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
     delegate int ResumeTracking(ulong session, ref ResumeInfo info);
 
-    ResumeTracking resume;
+    // XR_TYPE_SIMULTANEOUS_HANDS_AND_CONTROLLERS_TRACKING_PAUSE_INFO_META, same struct layout as the resume info
+    const int PauseInfoType = 1000532003;
+    static ResumeTracking resume, pause;
+    static ulong session;
+    // Whether it should be on (Settings.handsWithControllers), also for the next session
+    static bool wanted = true;
 
     // What happened, for the menu's status line
     public static string Status { get; private set; } = "not started";
@@ -52,15 +57,26 @@ public class Multimodal : OpenXRFeature
         int result = getProc(instance, "xrResumeSimultaneousHandsAndControllersTrackingMETA", out var function);
         if (result == 0 && function != IntPtr.Zero) resume = Marshal.GetDelegateForFunctionPointer<ResumeTracking>(function);
         else Status = "resume function missing (" + result + ")";
+        result = getProc(instance, "xrPauseSimultaneousHandsAndControllersTrackingMETA", out function);
+        if (result == 0 && function != IntPtr.Zero) pause = Marshal.GetDelegateForFunctionPointer<ResumeTracking>(function);
         return true;
     }
 
     // The runtime turns it off with every new session
-    protected override void OnSessionBegin(ulong session)
+    protected override void OnSessionBegin(ulong xrSession)
     {
-        if (resume == null) return;
-        var info = new ResumeInfo { type = ResumeInfoType };
-        int result = resume(session, ref info);
-        Status = result == 0 ? "on" : "resume failed (" + result + ")";
+        session = xrSession;
+        Set(wanted);
+    }
+
+    // On or off now while a session runs, otherwise when one begins
+    public static void Set(bool on)
+    {
+        wanted = on;
+        var f = on ? resume : pause;
+        if (session == 0 || f == null) return;
+        var info = new ResumeInfo { type = on ? ResumeInfoType : PauseInfoType };
+        int result = f(session, ref info);
+        Status = result != 0 ? (on ? "resume" : "pause") + " failed (" + result + ")" : on ? "on" : "off";
     }
 }

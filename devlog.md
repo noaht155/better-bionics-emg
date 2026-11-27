@@ -2782,6 +2782,12 @@ levels: r 0.995 to 0.999 per session, mean difference 0.005 to 0.013, a clench l
 - Menu (Noah: it clashed with the desk, too much text): 80 % size, and it opens with its lower edge at least 12 cm
   over the desk top (lifted up to just under the eyes). Explanations cut to a line or two (Record intro gone, Setup
   and Help shortened, status lines to a few words).
+- Left (strapped) controller: the headset's own menu follows it fine, the app kept losing it (Noah; the mount
+  covers a bit of the top of the ring). Two suspects, not yet told apart: the app dropped every pose the headset
+  only estimates (isTracked off, position still valid), which the system menus keep using, so those now count
+  (`App.Pose`), and the readout shows them as "estimated"; and hand tracking of the free left hand beside its
+  controller (Multimodal), now a Setup switch, "Hands with controllers" (kept on the headset; off pauses
+  `XR_META_simultaneous_hands_and_controllers`, so the free hand needs its controller).
 
 ## Open
 
