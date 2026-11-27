@@ -420,15 +420,24 @@ public class Ui
     // Placement
 
     // Opens within reach for a fingertip, a little below the eyes, tilted back towards the face
-    public void Open(Transform head)
+    // Size of the panel in the world (1: as built)
+    public float Scale = 1;
+
+    // above: the world height the panel's lower edge is lifted to if it would open lower, up to just under the eyes
+    public void Open(Transform head, float above = float.NegativeInfinity)
     {
         var forward = Vector3.ProjectOnPlane(head.forward, Vector3.up).normalized;
         if (forward.sqrMagnitude < 0.5f) forward = Vector3.forward;
         // A wide panel opens further out so both columns fit in view
         root.position = head.position + forward * (columnH > 0 ? 0.5f : 0.42f) + Vector3.down * 0.18f;
         root.rotation = Quaternion.LookRotation(forward, Vector3.up) * Quaternion.Euler(25, 0, 0);
+        root.localScale = Vector3.one * Scale;
         root.gameObject.SetActive(true);
         opened = 0;
+        float low = float.PositiveInfinity;
+        foreach (var r in root.GetComponentsInChildren<Renderer>()) low = Mathf.Min(low, r.bounds.min.y);
+        float lift = Mathf.Min(above - low, head.position.y - 0.1f - root.position.y);
+        if (lift > 0) root.position += Vector3.up * lift;
     }
 
     public void Close() => root.gameObject.SetActive(false);

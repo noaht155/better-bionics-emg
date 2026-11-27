@@ -2779,6 +2779,9 @@ levels: r 0.995 to 0.999 per session, mean difference 0.005 to 0.013, a clench l
   off, how often and how long it lost tracking, each real hand and its wrist's distance to the controller, what the
   free hand goes by and where the adjusting ray points. On the Setup page and on the VR tab, which also lists each
   controller change with its time.
+- Menu (Noah: it clashed with the desk, too much text): 80 % size, and it opens with its lower edge at least 12 cm
+  over the desk top (lifted up to just under the eyes). Explanations cut to a line or two (Record intro gone, Setup
+  and Help shortened, status lines to a few words).
 
 ## Open
 

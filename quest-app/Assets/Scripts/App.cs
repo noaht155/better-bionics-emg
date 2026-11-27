@@ -280,7 +280,7 @@ public class App : MonoBehaviour
 
     void BuildMenu()
     {
-        menu = new Ui(uiMaterial, true, 0.28f);
+        menu = new Ui(uiMaterial, true, 0.28f) { Scale = 0.8f };
         var play = menu.AddPage("Play");
         menu.Section(play, "Status");
         linkText = menu.Paragraph(play, "", 0.014f, false);
@@ -311,8 +311,6 @@ public class App : MonoBehaviour
 
         var rec = menu.AddPage("Record");
         menu.Section(rec, "Protocol F");
-        menu.Paragraph(rec, "The laptop records as it does from the Record tab, with the setup of your last session. " +
-                            "Each cue shows on the card over the desk.", 0.013f, true, 3);
         menu.Primary(rec, "Quick calibration", () => SendRecord("start", true));
         menu.Buttons(rec, ("Full session", () => SendRecord("start", false)));
         menu.Section(rec, "Session");
@@ -333,16 +331,14 @@ public class App : MonoBehaviour
         sideText = menu.Paragraph(setup, "", 0.014f, false);
         menu.Buttons(setup, ("Left arm", () => SetSide(true)), ("Right arm", () => SetSide(false)));
         menu.Section(setup, "Placing its hand");
-        menu.Paragraph(setup, "Turn on passthrough to see your arm. With adjusting on, point the other controller at " +
-                              "the virtual hand, hold the trigger and move it to where it should sit on the strapped " +
-                              "controller. The thumbstick pushes it away or pulls it in.",
-            0.013f, true, 5);
+        menu.Paragraph(setup, "Point at the hand and hold the trigger to move it. Thumbstick: nearer or further.",
+            0.013f, true, 2);
         menu.Toggle(setup, "Adjust with the controller", () => adjusting, () => adjusting = !adjusting);
         menu.Toggle(setup, "Passthrough", () => settings.passthrough, () => SetPassthrough(!settings.passthrough));
         menu.Toggle(setup, "Show controllers", () => showControllers, () => showControllers = !showControllers);
         menu.Buttons(setup, ("Reset the hand", ResetOffset));
         menu.Section(setup, "Free hand");
-        freeText = menu.Paragraph(setup, "", 0.013f, true, 2);
+        freeText = menu.Paragraph(setup, "", 0.013f, true);
         menu.Section(setup, "Tracking");
         trackingText = menu.Paragraph(setup, "", 0.012f, true, 4);
 
@@ -353,21 +349,15 @@ public class App : MonoBehaviour
             StartTour();
         });
         menu.Section(help, "This menu");
-        menu.Paragraph(help, "Open and close it with B or Y on the free hand's controller, the Menu button at the " +
-                             "desk's corner, or with your bare hand: palm towards your face, thumb on the middle fingertip.",
-            0.013f, true, 4);
-        menu.Paragraph(help, "Touch it with a fingertip, or point the controller and pull the trigger. Pinch or grip " +
-                             "the bar under it to move it.", 0.013f, true, 3);
+        menu.Paragraph(help, "B or Y, or palm to your face with the thumb on the middle fingertip.", 0.013f, true, 2);
+        menu.Paragraph(help, "Touch it, or point and pull the trigger. Move it by the bar under it.", 0.013f, true, 2);
         menu.Section(help, "Hands");
-        menu.Paragraph(help, "The prosthetic hand sits on the controller strapped to that arm and its fingers follow " +
-                           "the EMG control on the laptop. A grey hand shows where your arm is when the desk or an " +
-                           "object holds the hand back.", 0.013f, true, 4);
-        menu.Paragraph(help, "The free hand is your real hand, or a controller in it: grip and trigger close it to pick " +
-                           "things up.", 0.013f, true, 3);
+        menu.Paragraph(help, "The prosthetic hand follows the laptop's EMG control. Grey hand: where your arm is.",
+            0.013f, true, 2);
+        menu.Paragraph(help, "Free hand: grip and trigger close it.", 0.013f, true);
         menu.Toggle(help, "Controls card at the desk", () => settings.controlsCard, () => ShowControls(!settings.controlsCard));
         menu.Section(help, "Leaving");
-        menu.Paragraph(help, "Quit is at the bottom of Play. Taking the headset off pauses the app, and after 10 " +
-                             "minutes off it closes.", 0.013f, true, 3);
+        menu.Paragraph(help, "Quit is on Play. Headset off pauses, 10 minutes off closes.", 0.013f, true);
         menu.Show(play);
         menu.Close();
     }
@@ -505,8 +495,11 @@ public class App : MonoBehaviour
     void ToggleMenu()
     {
         if (menu.Visible) menu.Close();
-        else menu.Open(head);
+        else menu.Open(head, MenuAbove());
     }
+
+    // The menu's lower edge stays this far over the desk top, so it doesn't sink into the desk and what's on it
+    float MenuAbove() => deskRoot.position.y + 0.12f;
 
     void SendRecord(string action, bool quick = false) =>
         link.Send(JsonUtility.ToJson(new RecordMessage { record = new RecordAction { action = action, quick = quick } }));
@@ -701,7 +694,7 @@ public class App : MonoBehaviour
             return;
         }
         if (!menu.ShowPage(page)) return;
-        if (!menu.Visible) menu.Open(head);
+        if (!menu.Visible) menu.Open(head, MenuAbove());
         sounds.Play(Sounds.Kind.Tick, menu.root.position);
     }
 
@@ -1347,11 +1340,10 @@ public class App : MonoBehaviour
         forceText.text = $"{current.max_force:0} N";
         heightText.text = handHeight ? "pinch to set"
             : $"{settings.deskHeight * 100:0} cm";
-        sideText.text = settings.prostheticLeft ? "Left: the controller strapped to the left forearm"
-            : "Right: the controller strapped to the right forearm";
+        sideText.text = settings.prostheticLeft ? "Left forearm" : "Right forearm";
         trackingText.text = tracking.Text();
-        freeText.text = freeBare ? "Tracked from your real hand, nothing to set."
-            : "Not seen. Hold it in view, or hold a controller in it.";
+        freeText.text = freeBare ? "Your real hand" : tracking.State.free == "controller" ? "The controller in it"
+            : "Not seen";
         recordText.text = record == null ? "Laptop not connected"
             : recording ? $"Cue {record.index + 1} of {record.count}" + (record.paused ? ", paused" : "")
             : "Not recording";
