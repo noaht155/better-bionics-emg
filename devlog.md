@@ -2801,7 +2801,12 @@ levels: r 0.995 to 0.999 per session, mean difference 0.005 to 0.013, a clench l
   controller in the hand was invisible and Adjust with the controller fell back to the pinch ray. Unity's Touch
   Plus profile is on now as well (Unity merges both features' bindings per profile), and the free hand goes by its
   controller whenever the headset reports it held (the 15 cm wrist check is gone: wrists showed 13 to 29 cm from
-  their controllers).
+  their controllers). Checked on the headset (Noah): Adjust with the controller works, and the log shows each
+  controller moving between held and detached as it's picked up or let go, the strapped one followed throughout.
+- Recording in the headset (Noah): during a timed cue the bare hand no longer reaches the panels or opens the menu
+  (its signs set off pinches); paused or on a cue waiting for Continue it works as before. Cue sounds (Record page
+  switch, on by default): rising notes when a sign starts, falling for rest or a break, soft pips over a timed cue's
+  last 3 s (cues of 4 s or more), a low tone on a pause, three notes at the end. Not yet heard on the headset.
 
 ## Open
 

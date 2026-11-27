@@ -313,6 +313,11 @@ public class App : MonoBehaviour
         menu.Primary(rec, "Quick calibration", () => SendRecord("start", true));
         menu.Buttons(rec, ("Full session", () => SendRecord("start", false)));
         menu.Section(rec, "Session");
+        menu.Toggle(rec, "Cue sounds", () => settings.cueSounds, () =>
+        {
+            settings.cueSounds = !settings.cueSounds;
+            settings.Save();
+        });
         recordText = menu.Paragraph(rec, "", 0.014f, false);
         recordError = menu.Paragraph(rec, "", 0.013f, false, 2);
         sessionButtons = menu.ButtonsWithLabels(rec, ("Pause", PauseOrContinue), ("Mark bad", () => SendRecord("bad")),
@@ -1028,25 +1033,29 @@ public class App : MonoBehaviour
         prevMenuButton = menuButton;
         // With the tracked hand: palm turned to the face and the thumb on the middle fingertip. The index pinch there is
         // the headset's own menu
-        bool menuGesture = freeBare && tracked.MiddlePinching
+        // While a timed cue runs the bare hand is making signs, so its pinches and touches don't reach the panels and
+        // don't open the menu (Noah, 2026-11-27); paused, or on a cue waiting for Continue, it works as usual
+        bool signing = record != null && record.running && !record.paused && record.seconds > 0;
+        bool bareInput = freeBare && !signing;
+        bool menuGesture = bareInput && tracked.MiddlePinching
                            && Vector3.Dot(tracked.PalmNormal, (head.position - tracked.WristPos).normalized) > 0.5f;
         if (menuGesture && !prevMenuGesture) ToggleMenu();
         prevMenuGesture = menuGesture;
-        Vector3? tip = freeBare ? tracked.IndexTip : (Vector3?)null;
+        Vector3? tip = bareInput ? tracked.IndexTip : (Vector3?)null;
         // Pointing: the controller's ray, or with the bare hand a ray from about the shoulder through the pinch, as
         // the Quest's own menus do, selected by pinching
         Ray? pointer = null;
         // Pulled past 0.7, let go under 0.4, so a trigger held near one level doesn't flicker
         bool down = triggerDown = triggerDown ? trigger > 0.4f : trigger > 0.7f;
         if (hasF) pointer = new Ray(fp, fq * Vector3.forward);
-        else if (freeBare)
+        else if (bareInput)
         {
             var side = Vector3.ProjectOnPlane(head.right, Vector3.up).normalized * (FreeIsRight ? 1 : -1);
             var shoulder = head.position + Vector3.down * 0.15f + side * 0.15f;
             pointer = SteadyRay(tracked.IndexKnuckle, (tracked.IndexKnuckle - shoulder).normalized);
             down = tracked.Pinching;
         }
-        if (hasF || !freeBare) rayWarm = false;
+        if (hasF || !bareInput) rayWarm = false;
         bool grabHandle = freeBare ? tracked.Pinching : grip > GrabOn;
         float length = 0;
         bool clicked = false, hovered = false;
@@ -1299,8 +1308,52 @@ public class App : MonoBehaviour
     // The cue card and ghost hand while the laptop records
     bool Training => record != null && record.running && record.has_target;
 
+    // The cue sounds' state: the cue and countdown second last played, and whether it was running or paused
+    int soundCue = -1, soundCount;
+    bool soundRunning, soundPaused;
+
+    // Sounds through a recording, so the cues can be followed without watching the card: rising notes when a sign
+    // starts, falling ones for rest or a break, soft pips over a timed cue's last 3 s, a low tone on a pause and three
+    // notes at the end
+    void CueSounds()
+    {
+        bool running = record != null && record.running;
+        bool ended = soundRunning && !running;
+        soundRunning = running;
+        if (!settings.cueSounds)
+        {
+            soundCue = -1;
+            return;
+        }
+        if (ended)
+        {
+            sounds.Play(Sounds.Kind.Done, head.position);
+            soundCue = -1;
+            return;
+        }
+        if (!running) return;
+        if (record.paused && !soundPaused) sounds.Play(Sounds.Kind.Pause, head.position);
+        soundPaused = record.paused;
+        if (record.index != soundCue)
+        {
+            soundCue = record.index;
+            soundCount = 0;
+            bool rest = record.label == "rest" || record.kind == "break";
+            sounds.Play(rest ? Sounds.Kind.Rest : Sounds.Kind.Go, head.position);
+            return;
+        }
+        if (record.paused || record.seconds < 4) return;
+        int left = Mathf.CeilToInt(record.seconds - record.elapsed);
+        if (left >= 1 && left <= 3 && left != soundCount)
+        {
+            soundCount = left;
+            sounds.Play(Sounds.Kind.Count, head.position);
+        }
+    }
+
     void ShowRecording()
     {
+        CueSounds();
         bool running = record != null && record.running;
         if (running && tour.Running) tour.End();
         ShowControl(!running && controlFrame != null && controlFrame.driven ? controlFrame : null);

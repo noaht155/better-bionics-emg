@@ -26,6 +26,8 @@ public class Settings
     public bool controlsCard = true;
     // Hand tracking on the hand without a controller (Multimodal); off, the headset tracks controllers only
     public bool handsWithControllers = true;
+    // Sounds through a recording (App.CueSounds)
+    public bool cueSounds = true;
 
     public static Settings Load()
     {
@@ -40,6 +42,7 @@ public class Settings
         s.helpSeen = PlayerPrefs.GetInt("help_seen", 0) == 1;
         s.controlsCard = PlayerPrefs.GetInt("controls_card", 1) == 1;
         s.handsWithControllers = PlayerPrefs.GetInt("hands_with_controllers", 1) == 1;
+        s.cueSounds = PlayerPrefs.GetInt("cue_sounds", 1) == 1;
         return s;
     }
 
@@ -55,6 +58,7 @@ public class Settings
         PlayerPrefs.SetInt("help_seen", helpSeen ? 1 : 0);
         PlayerPrefs.SetInt("controls_card", controlsCard ? 1 : 0);
         PlayerPrefs.SetInt("hands_with_controllers", handsWithControllers ? 1 : 0);
+        PlayerPrefs.SetInt("cue_sounds", cueSounds ? 1 : 0);
         PlayerPrefs.Save();
     }
 
