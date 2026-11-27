@@ -8,7 +8,10 @@ const BAR_M = 0.05;
 const PX_PER_M = 1400;
 const MAX_COPY_PX_PER_M = 1300;
 const PULSE_MS = 3000;
-const PANEL_NAMES = { menu: "Menu", card: "Cue card", dock: "Menu button", tour: "Tour" };
+const PANEL_NAMES = {
+  menu: "Menu", card: "Cue card", dock: "Menu button", tour: "Tour", board: "Model output", finish: "Finish card",
+  controls: "Controls card",
+};
 
 const css = (name) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
 const C = {
@@ -23,6 +26,33 @@ const pointed = new Map();
 function roundRect(ctx, x, y, w, h, r) {
   ctx.beginPath();
   ctx.roundRect(x, y, w, h, r);
+}
+
+// A panel's text as the headset shows it, without TextMeshPro's tags, wrapped to its box's width
+function drawText(ctx, it, X, Y, s) {
+  ctx.font = `${it.on ? "600 " : ""}${it.s * s}px ${SANS}`;
+  ctx.fillStyle = it.c || C.text;
+  ctx.textBaseline = "top";
+  ctx.textAlign = it.a === 0.5 ? "center" : it.a === 1 ? "right" : "left";
+  const x = it.a === 0.5 ? X(it.x + it.w / 2) : it.a === 1 ? X(it.x + it.w) : X(it.x);
+  const lineH = it.s * 1.35 * s, maxW = it.w * s, bottom = Y(it.b) + lineH;
+  let y = Y(it.y);
+  for (const para of it.t.replace(/<[^>]*>/g, "").split("\n")) {
+    let line = "";
+    for (const word of para.split(" ")) {
+      const next = line ? `${line} ${word}` : word;
+      if (line && ctx.measureText(next).width > maxW) {
+        ctx.fillText(line, x, y);
+        y += lineH;
+        line = word;
+      } else {
+        line = next;
+      }
+    }
+    if (y > bottom) return;
+    ctx.fillText(line, x, y);
+    y += lineH;
+  }
 }
 
 function fitText(ctx, text, max) {
@@ -80,6 +110,15 @@ function drawPanel(ctx, p, s, now) {
         ctx.fillStyle = it.k === "primary" ? C.bg : C.text;
         ctx.textAlign = "center";
         ctx.fillText(fitText(ctx, it.n, w - 6), left + w / 2, top + h / 2);
+        break;
+      case "text":
+        drawText(ctx, it, X, Y, s);
+        break;
+      case "bar":
+        ctx.fillStyle = C.raised;
+        ctx.fillRect(left, Y(it.y) - h / 2, w, h);
+        ctx.fillStyle = C.accent;
+        ctx.fillRect(left, Y(it.y) - h / 2, w * it.v, h);
         break;
       case "toggle":
         ctx.font = `${0.015 * s}px ${SANS}`;

@@ -312,7 +312,7 @@ class VrMenu(BaseModel):
 
 
 class VrPoint(BaseModel):
-    panel: Literal["menu", "card", "dock", "tour"]
+    panel: Literal["menu", "card", "dock", "tour", "board", "finish", "controls"]
     page: str = Field("", max_length=40)
     name: str = Field(..., min_length=1, max_length=80)
 

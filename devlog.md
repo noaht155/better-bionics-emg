@@ -2857,6 +2857,14 @@ levels: r 0.995 to 0.999 per session, mean difference 0.005 to 0.013, a clench l
   the corners. Needs a new measurement for the tilt. That full width smeared the left edge (Noah): past the
   dots the fitted warp is a guess. The view now stops where the dots reached, and the dot finder takes dimmer dots
   (sum over 240, was 450) so the darker ones near the lens edge count and the measured area grows.
+- Noah dropped the headset video (each fix made it worse) for the 3D view, with every panel on it: the headset
+  now describes the model board, the finish card and the controls card too, and every text and progress bar on
+  a panel (`Ui.Describe`: k text with its box, size, colour, alignment; k bar), which `vrpanels.js` draws, so the
+  predictions show on the laptop. Checked with a fake board on a test copy. The video code stays.
+- Finish card didn't show for Noah, only its sound. Likely his app.py then was from before the last-session
+  summary (the headset needs it to show the card); after his restart it sends it (`ended` 0 until a session
+  ends). The headset now logs `[finish]` lines saying why it shows or waits. Cue sounds came out uneven: they
+  were 3D sounds at the head's centre, now plain 2D (`Sounds`, one AudioSource).
 
 ## Open
 

@@ -166,12 +166,16 @@ public class App : MonoBehaviour
     readonly double[] simPos = new double[3], simQuat = new double[4], headSim = new double[3];
     readonly float[] freeAngles = new float[Sim.Joints], ghostAngles = new float[Sim.Joints];
     readonly View viewOut = new View { head = new float[9], held = new int[2] };
-    readonly Ui.PanelOut[] panelsOut = { new Ui.PanelOut(), new Ui.PanelOut(), new Ui.PanelOut(), new Ui.PanelOut() };
+    readonly Ui.PanelOut[] panelsOut =
+    {
+        new Ui.PanelOut(), new Ui.PanelOut(), new Ui.PanelOut(), new Ui.PanelOut(), new Ui.PanelOut(), new Ui.PanelOut(),
+        new Ui.PanelOut()
+    };
     Tour tour;
     // The card at the end of a recording (Finish.cs): shown when a recording this headset saw running ends, once per
     // session (the laptop's last session's end time)
     Finish finish;
-    bool sawRecording;
+    bool sawRecording, finishWaitLogged;
     double lastEnded = -1;
     // What the tour's steps wait for
     bool cubeSpawned, menuMoved, menuWasGrabbed;
@@ -832,7 +836,12 @@ public class App : MonoBehaviour
     Ui.PanelOut[] PanelsInView()
     {
         var shown = new List<Ui.PanelOut>();
-        var all = new[] { (menu, "menu"), (card, "card"), (dock, "dock"), (tour.card, "tour") };
+        // Every panel, the model's board and the finish card too (Noah: all the info panels on the laptop)
+        var all = new[]
+        {
+            (menu, "menu"), (card, "card"), (dock, "dock"), (tour.card, "tour"), (board, "board"), (finish.ui, "finish"),
+            (controls, "controls")
+        };
         for (int i = 0; i < all.Length; i++)
         {
             var (ui, name) = all[i];
@@ -1418,8 +1427,17 @@ public class App : MonoBehaviour
             sawRecording = true;
             if (finish.Visible) finish.Close();
         }
+        if (!running && sawRecording && (last == null || last.ended == lastEnded) && !finishWaitLogged)
+        {
+            // The laptop sends the summary a moment after the session stops; logged once, for finding a card that
+            // never shows (adb logcat -s Unity)
+            Debug.Log($"[finish] recording ended, waiting for the laptop's summary (last {(last == null ? "missing" : last.ended.ToString())})");
+            finishWaitLogged = true;
+        }
         if (last != null && last.ended != lastEnded)
         {
+            Debug.Log($"[finish] last session ended {last.ended}, saw it running {sawRecording}, running {running}");
+            finishWaitLogged = false;
             if (sawRecording && !running && last.ended > 0) finish.Show(last, card.root);
             lastEnded = last.ended;
             if (!running) sawRecording = false;

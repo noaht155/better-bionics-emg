@@ -3,16 +3,22 @@ using UnityEngine;
 // Short sounds for the menu and the recording's cues, made at start so there are no audio files: a click when a press
 // goes through, a softer tick when a hold starts and a faint one when the ray or a fingertip moves onto a control; for
 // the cues (App.CueSounds) rising notes for a sign, falling ones for rest, a soft countdown pip, a low pause tone and
-// three notes at the end. Played where the head is, quiet.
+// three notes at the end. Quiet, and not placed in space: played as 3D sounds at the head they came out uneven, a
+// sound inside the head has no side for the headset's spatial audio to put it on (Noah: inconsistent cue sounds).
 public class Sounds
 {
     public enum Kind { Click, Tick, Hover, Go, Rest, Count, Pause, Done }
 
     const int Rate = 48000;
     readonly AudioClip click, tick, hover, go, rest, count, pause, done;
+    readonly AudioSource source;
 
     public Sounds()
     {
+        source = new GameObject("sounds").AddComponent<AudioSource>();
+        source.spatialBlend = 0;
+        source.playOnAwake = false;
+        Object.DontDestroyOnLoad(source.gameObject);
         // A click: a quick rising blip, two tones a fifth apart. A tick: one higher, shorter, softer tone
         click = Tone("click", 0.045f, 0.35f, (t, d) => Mathf.Lerp(880, 1320, t / d));
         tick = Tone("tick", 0.02f, 0.18f, (t, d) => 1760);
@@ -31,7 +37,7 @@ public class Sounds
             Kind.Click => click, Kind.Tick => tick, Kind.Hover => hover, Kind.Go => go, Kind.Rest => rest,
             Kind.Count => count, Kind.Pause => pause, _ => done
         };
-        AudioSource.PlayClipAtPoint(clip, at, 1);
+        source.PlayOneShot(clip);
     }
 
     // Notes one after another, 0.11 s apart, each fading on its own

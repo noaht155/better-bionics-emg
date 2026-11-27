@@ -59,6 +59,9 @@ public class Ui
         public string n, k, t;
         public float x, y, w, h, lx, v;
         public bool on;
+        // Text items (k "text"): colour, font size, bottom of the box and alignment (0 left, 0.5 centre, 1 right)
+        public string c;
+        public float s, b, a;
     }
 
     [Serializable]
@@ -318,7 +321,7 @@ public class Ui
     public TextMeshPro Slider(Page page, string label, float min, float max, float step, Func<float> get, Action<float> set)
     {
         float y = page.y - RowH / 2;
-        Label(page.root, new Vector3(-Width / 2 + Pad, y, 0), label, 0.015f, Ui.Text, inter, TextAlignmentOptions.Left);
+        namesDrawn.Add(Label(page.root, new Vector3(-Width / 2 + Pad, y, 0), label, 0.015f, Ui.Text, inter, TextAlignmentOptions.Left));
         var value = Label(page.root, new Vector3(Width / 2 - Pad, y, 0), "", 0.013f, Ui.Text, mono, TextAlignmentOptions.Right);
         value.rectTransform.pivot = new Vector2(1, 0.5f);
         var e = new Element
@@ -338,7 +341,7 @@ public class Ui
     public void Toggle(Page page, string label, Func<bool> on, Action flip)
     {
         float y = page.y - RowH / 2;
-        Label(page.root, new Vector3(-Width / 2 + Pad, y, 0), label, 0.015f, Ui.Text, inter, TextAlignmentOptions.Left);
+        namesDrawn.Add(Label(page.root, new Vector3(-Width / 2 + Pad, y, 0), label, 0.015f, Ui.Text, inter, TextAlignmentOptions.Left));
         var e = new Element
         {
             kind = Kind.Toggle, page = page, centre = new Vector2(Width / 2 - Pad - 0.02f, y), size = new Vector2(0.04f, 0.022f),
@@ -391,14 +394,23 @@ public class Ui
     public void Gap(Page page, float h = 0.008f) => page.y -= h;
 
     // A progress bar across the panel in the gradient; returns what sets it, 0 to 1
+    // Toggles' and sliders' names: the laptop draws those from the element itself
+    readonly HashSet<TextMeshPro> namesDrawn = new HashSet<TextMeshPro>();
+
+    // The progress bars and how full each is, for Describe
+    readonly List<(Page page, float y, float[] value)> bars = new List<(Page, float, float[])>();
+
     public Action<float> Progress(Page page)
     {
         float y = page.y - 0.006f, w = Width - 2 * Pad, left = -Width / 2 + Pad;
         Shape(page.root, LControl, new Vector3(0, y, 0), new Vector2(w, 0.004f), 0.002f, Raised);
         var fill = Shape(page.root, LFill, Vector3.zero, Vector2.one, 0.002f, Accent, true);
         page.y -= 0.016f;
+        var value = new float[1];
+        bars.Add((page, y, value));
         return t =>
         {
+            value[0] = Mathf.Clamp01(t);
             float fw = Mathf.Max(0.004f, w * Mathf.Clamp01(t));
             fill.sharedMesh = GradientBar(new Vector2(fw, 0.004f), 0.002f);
             fill.transform.localPosition = new Vector3(left + fw / 2, y, -0.0005f);
@@ -630,6 +642,30 @@ public class Ui
                 o.hold = e.fired ? 0 : e.hold / HoldS;
             }
             items.Add(item);
+        }
+        foreach (var (page, y, value) in bars)
+            if (page == shown)
+                items.Add(new ItemOut { k = "bar", x = 0, y = y, w = Width - 2 * Pad, h = 0.004f, v = value[0] });
+        // Every other text showing (paragraphs, readouts and their captions, the board's rows, the cue): what it says,
+        // its box, size, colour and alignment, so the laptop's copy shows all of it (Noah, 2026-11-27)
+        var drawn = new HashSet<TextMeshPro>(namesDrawn);
+        foreach (var e in elements)
+            if (e.label != null) drawn.Add(e.label);
+        foreach (var (_, label, _) in sectionLabels) drawn.Add(label);
+        var corners = new Vector3[4];
+        foreach (var t in body.GetComponentsInChildren<TextMeshPro>())
+        {
+            if (drawn.Contains(t) || string.IsNullOrEmpty(t.text) || t.alpha < 0.05f) continue;
+            t.rectTransform.GetWorldCorners(corners);
+            Vector3 topLeft = body.InverseTransformPoint(corners[1]), bottomRight = body.InverseTransformPoint(corners[3]);
+            var align = t.alignment;
+            float a = align == TextAlignmentOptions.Center || align == TextAlignmentOptions.Top ? 0.5f
+                : align == TextAlignmentOptions.Right || align == TextAlignmentOptions.TopRight ? 1 : 0;
+            items.Add(new ItemOut
+            {
+                k = "text", t = t.text, x = topLeft.x, y = topLeft.y, w = bottomRight.x - topLeft.x, b = bottomRight.y,
+                s = t.fontSize / 10, a = a, on = t.font == interBold, c = "#" + ColorUtility.ToHtmlStringRGB(t.color)
+            });
         }
         o.items = items.ToArray();
     }
