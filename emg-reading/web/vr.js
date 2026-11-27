@@ -191,10 +191,12 @@ function closeVideo() {
 // The headset records what goes to its lenses: each eye pre-warped (barrel) so the lens undoes it. The left eye is
 // flattened back on the GPU: an output point u (in lens radii, R half the frame's height, from the lens centre at
 // x, y of the frame, y up) comes from the recording at centre + u (1 + k1 r^2 + k2 r^4) R. box is the part of u shown
-// (left, right, bottom, top): out to the eye picture's edges (eyeBox), letterboxed in the canvas. measureLens fits the
-// warp from the headset's dot grid and saves it; until then Noah's Quest 3 as measured on 2026-11-27 (161 dots, rows
-// 7.4 % of their spacing off straight before, 2.4 % after)
-let lens = { k1: -0.221, k2: 0.031, x: 0.2868, y: 0.5076, box: [-1.535, 0.882, -1.438, 1.538] };
+// (left, right, bottom, top): the eye picture's full width (eyeBox), its height cut to fill the canvas round the lens
+// centre, like Meta's own cast (Noah: no black, see what the patient sees; both eyes joined left a seam where near
+// things like the menu sit differently for each eye). measureLens fits the warp from the headset's dot grid and
+// saves it; until then Noah's Quest 3 as measured on 2026-11-27 (161 dots, rows 7.4 % of their spacing off straight
+// before, 2.4 % after)
+let lens = { k1: -0.221, k2: 0.031, x: 0.2868, y: 0.5076, box: [-1.4, 0.86, -1.438, 1.538] };
 const LENS_R = 0.5;
 fetch("/api/vr/lens").then((r) => r.json()).then((l) => { if (l.k1 != null) lens = l; }).catch(() => {});
 const FLAT_SHADER = `precision mediump float;
@@ -248,10 +250,11 @@ function drawVideoFrame(frame) {
   gl.viewport(0, 0, w, h);
   gl.clearColor(0, 0, 0, 1);
   gl.clear(gl.COLOR_BUFFER_BIT);
-  const [left, right, bottom, top] = lens.box;
-  const aspect = (right - left) / (top - bottom);
-  const vw = Math.min(w, h * aspect), vh = vw / aspect;
-  gl.viewport((w - vw) / 2, (h - vh) / 2, vw, vh);
+  const [left, right] = lens.box;
+  const half = Math.min((right - left) * h / w, lens.box[3] - lens.box[2]) / 2;
+  const [bottom, top] = [-half, half];
+  const vh = Math.min(h, w * 2 * half / (right - left));
+  gl.viewport(0, (h - vh) / 2, w, vh);
   gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, flat.copy);
   gl.uniform2f(flat.size, fw, fh);
   gl.uniform2f(flat.centre, lens.x * fw, lens.y * fh);
@@ -405,10 +408,11 @@ function nelderMead(f, x0, scale, steps = 400) {
 }
 
 // The view out to where the left eye's picture ends, through the lens centre: its left edge, the middle of the
-// frame (the other eye starts there), the top and the bottom. Not the dots' extent: the grid doesn't fill the view
-// and the picture came out cropped (Noah, 2026-11-27). The corners past the round edge stay black
+// frame (the other eye starts there), the top and the bottom; left and right pulled in a little so the cut-down
+// height doesn't reach the round edge's black (-1.4 and 0.86 of -1.54 and 0.88 on Noah's Quest). Not the dots'
+// extent: the grid doesn't fill the view and the picture came out cropped (Noah, 2026-11-27)
 function eyeBox(l, w, h) {
-  return [toU(l, [6, l.y * h], w, h)[0], toU(l, [w / 2 - 4, l.y * h], w, h)[0],
+  return [0.91 * toU(l, [6, l.y * h], w, h)[0], 0.975 * toU(l, [w / 2 - 4, l.y * h], w, h)[0],
     toU(l, [l.x * w, h - 4], w, h)[1], toU(l, [l.x * w, 4], w, h)[1]];
 }
 

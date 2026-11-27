@@ -2847,6 +2847,10 @@ levels: r 0.995 to 0.999 per session, mean difference 0.005 to 0.013, a clench l
   the raw eye: same desk, hands, menu and walls, straight edges, black only in the corners past the lens. Noah's
   screenshot that "didn't look the same" was the 3D view: after a reload Chrome kept the switch on Headset video
   without telling the page; the view now follows the switch at load.
+- Full eye looked odd (Noah): one eye is tall and round-edged. Both eyes joined into one wide view left a seam
+  (the menu folded where they met: near things sit differently for each eye). Now one eye cropped wide like Meta's
+  cast: the eye's full width (-1.4 to 0.86 lens radii, just inside the round edge) and the height cut to fill the
+  canvas round the lens centre, so no black and no seam; the top and bottom of the eye are cut off.
 
 ## Open
 
