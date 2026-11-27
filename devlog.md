@@ -2854,7 +2854,9 @@ levels: r 0.995 to 0.999 per session, mean difference 0.005 to 0.013, a clench l
 - Tilted, and zoom out more (Noah): the measurement now also finds how far the head-fixed grid's rows sit turned
   once flat (`gridRoll`, the median over rows and columns) and the view turns it back (`roll`). The view goes
   1.0 lens radii up and down over the eye's full width, letterboxed: narrow bars at the sides, a little black in
-  the corners. Needs a new measurement for the tilt.
+  the corners. Needs a new measurement for the tilt. That full width smeared the left edge (Noah): past the
+  dots the fitted warp is a guess. The view now stops where the dots reached, and the dot finder takes dimmer dots
+  (sum over 240, was 450) so the darker ones near the lens edge count and the measured area grows.
 
 ## Open
 

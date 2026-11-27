@@ -196,7 +196,7 @@ function closeVideo() {
 // things like the menu sit differently for each eye). measureLens fits the warp from the headset's dot grid and
 // saves it; until then Noah's Quest 3 as measured on 2026-11-27 (161 dots, rows 7.4 % of their spacing off straight
 // before, 2.4 % after)
-let lens = { k1: -0.221, k2: 0.031, x: 0.2868, y: 0.5076, roll: 0, box: [-1.535, 0.882, -1.438, 1.538] };
+let lens = { k1: -0.221, k2: 0.031, x: 0.2868, y: 0.5076, roll: 0, box: [-1.125, 0.712, -0.953, 1.103] };
 // How far up and down the view goes (lens radii): more than a wide crop (Noah: zoom out more), so narrow black bars
 // at the sides and a little black in the corners past the round edge
 const VIEW_HALF_HEIGHT = 1.0;
@@ -281,7 +281,8 @@ function drawVideoFrame(frame) {
 // dots cover: all of the eye the recording shows
 function findDots(img, w, h) {
   const seen = new Uint8Array(w * h), dots = [];
-  const bright = (i) => img[4 * i] + img[4 * i + 1] + img[4 * i + 2] > 450;
+  // Low enough for the dots near the lens's edge, which come out darker (the measurement missed them at 450)
+  const bright = (i) => img[4 * i] + img[4 * i + 1] + img[4 * i + 2] > 240;
   // The left eye only, the right half is the other eye
   for (let y = 0; y < h; y++) for (let x = 0; x < w / 2; x++) {
     const start = y * w + x;
@@ -474,7 +475,11 @@ async function measureLens() {
       l = { ...l, k1: v[0], k2: v[1], x: v[2], y: v[3] };
     }
     const after = cost([l.k1, l.k2, l.x, l.y]);
-    l.box = eyeBox(l, w, h);
+    // Only as far as the dots reached: past them the fitted warp is a guess and smeared the edge (Noah, 2026-11-27)
+    const eye = eyeBox(l, w, h), u = dots.map((d) => toU(l, d, w, h));
+    const reach = [Math.min(...u.map((p) => p[0])), Math.max(...u.map((p) => p[0])),
+      Math.min(...u.map((p) => p[1])), Math.max(...u.map((p) => p[1]))];
+    l.box = [Math.max(eye[0], reach[0]), Math.min(eye[1], reach[1]), Math.max(eye[2], reach[2]), Math.min(eye[3], reach[3])];
     l.roll = gridRoll(l, dots, grouped.lines, w, h);
     l.lines = grouped.lines.length;
     l.error = after;
